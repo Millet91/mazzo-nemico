@@ -207,6 +207,26 @@ describe('Generatore · tentativi e seme di riserva', () => {
   });
 });
 
+describe('Generatore · barili di polvere (m1-ritmo §9)', () => {
+  it('3-4 barili, appoggiati al suolo in piano, sopra il mare e ad almeno 200 px da ogni spawn', () => {
+    const B = BIL.barili;
+    const problemi: string[] = [];
+    for (const m of MAPPE) {
+      const sup = superficie(m.terreno.maschera);
+      const barili = m.barili ?? [];
+      if (barili.length < B.min || barili.length > B.max) problemi.push(`seme ${m.semeUsato}: ${barili.length} barili`);
+      for (const b of barili) {
+        for (let x = b.x - 10; x <= b.x + 10; x++) if (sup[x] !== b.y) problemi.push(`seme ${m.semeUsato}: barile (${b.x}, ${b.y}) non in piano`);
+        if (b.y > m.terreno.mare - 60) problemi.push(`seme ${m.semeUsato}: barile (${b.x}, ${b.y}) troppo vicino al mare`);
+        for (const p of [...m.spawn[0], ...m.spawn[1]]) {
+          if (Math.sqrt((b.x - p.x) ** 2 + (b.y - p.y) ** 2) < B.distanzaMinimaSpawn) problemi.push(`seme ${m.semeUsato}: barile (${b.x}, ${b.y}) vicino a (${p.x}, ${p.y})`);
+        }
+      }
+    }
+    expect(problemi).toEqual([]);
+  });
+});
+
 describe('Generatore · decorazioni e altri campi', () => {
   it('decorazioni sulla superficie e lontane dagli spawn (06 §7.7)', () => {
     for (const m of MAPPE.slice(0, 50)) {

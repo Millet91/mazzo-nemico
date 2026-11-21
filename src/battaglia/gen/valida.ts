@@ -3,6 +3,8 @@
 
 import { MATERIALE, type MappaGenerata } from '../../core/tipi';
 import { superficie } from './analisi';
+import { postoBarile } from './barili';
+import { BIL } from '../../contenuti/bilanciamento';
 import { ISOLA, MONDO, REGOLE } from './parametri';
 import { controllaInsieme, controllaPosto, zona, type Posto } from './spawn';
 
@@ -90,6 +92,15 @@ export function validaMappa(mappa: MappaGenerata): string[] {
       if (typeof c === 'string') err.push(`spawn del lato ${lato} in (${p.x}, ${p.y}): ${c}`);
       else if (c.y !== p.y) err.push(`spawn del lato ${lato} in (${p.x}, ${p.y}): piedi non sul terreno (${c.y})`);
       else posti[aDestra ? 1 : 0].push(c);
+    }
+  }
+  // barili (06 §7.4, m1-ritmo §9)
+  const barili = mappa.barili ?? [];
+  if (barili.length < BIL.barili.min || barili.length > BIL.barili.max) err.push(`${barili.length} barili invece di ${BIL.barili.min}-${BIL.barili.max}`);
+  for (const b of barili) {
+    if (postoBarile(sup, t.mare, b.x) !== b.y) err.push(`barile in (${b.x}, ${b.y}): non in piano sul suolo o troppo vicino al mare`);
+    for (const p of [...mappa.spawn[0], ...mappa.spawn[1]]) {
+      if (Math.sqrt((b.x - p.x) ** 2 + (b.y - p.y) ** 2) < BIL.barili.distanzaMinimaSpawn) err.push(`barile in (${b.x}, ${b.y}) a meno di ${BIL.barili.distanzaMinimaSpawn} px dallo spawn (${p.x}, ${p.y})`);
     }
   }
   if (err.length) return err;

@@ -64,8 +64,6 @@ const SCIA_PROIETTILE_MS = 2000 / 60;
 export interface OpzioniDisegno {
   /** mostra anello e traiettoria (turno del giocatore umano, fase azione) */
   mira: boolean;
-  /** anello di mira acceso (il dito sta trascinando la fionda) */
-  fiondaAttiva: boolean;
 }
 
 export class ScenaBattaglia {
@@ -95,7 +93,8 @@ export class ScenaBattaglia {
   private readonly puntini: Sprite[] = [];
   private readonly anelloTerra: Sprite;
   private readonly freccia: Sprite;
-  private readonly anelloMira = new Graphics();
+  /** corta freccia oro sopra il pirata nella direzione di mira (00 §9.16) */
+  private readonly frecciaMira = new Graphics();
   private tempo = 0;
   private scala = 1;
   private chiaveTraiettoria = '';
@@ -138,10 +137,13 @@ export class ScenaBattaglia {
     }
     for (const p of s.pirati) this.creaPirata(p);
 
-    this.anelloMira.circle(0, 0, BIL.mira.anelloPx).stroke({ width: 2, color: hex(PALETTE.oro), alpha: 0.55 })
-      .circle(0, 0, BIL.mira.anelloPx).fill({ color: hex(PALETTE.oro), alpha: 0.06 });
-    this.anelloMira.visible = false;
-    this.schermo.addChild(this.anelloMira, this.freccia, this.effetti.schermo);
+    // freccia verso destra (angolo 0): asta da 22 a 44 px dal centro del pirata, punta fino a 56 px
+    this.frecciaMira
+      .moveTo(22, 0).lineTo(46, 0).stroke({ width: 7, color: hex(PALETTE.inchiostro), alpha: 0.45, cap: 'round' })
+      .moveTo(22, 0).lineTo(46, 0).stroke({ width: 4, color: hex(PALETTE.oro), cap: 'round' })
+      .poly([44, -8, 58, 0, 44, 8]).fill(hex(PALETTE.oro)).stroke({ width: 1.5, color: hex(PALETTE.oroOmbra) });
+    this.frecciaMira.visible = false;
+    this.schermo.addChild(this.frecciaMira, this.freccia, this.effetti.schermo);
   }
 
   private creaPirata(p: Pirata): void {
@@ -290,12 +292,14 @@ export class ScenaBattaglia {
       this.freccia.scale.set(1.3);
     }
 
-    // anello di mira (100 px CSS attorno al pirata attivo)
-    this.anelloMira.visible = !!attivo && o.mira;
-    if (attivo && o.mira) {
+    // freccia di mira: parte dal pirata attivo e punta dove si tira (si vede anche nel turno dell'IA che mira)
+    const mostraFreccia = !!attivo && t.fase === 'azione' && !s.esito && t.arma !== 'sciabola';
+    this.frecciaMira.visible = mostraFreccia;
+    if (attivo && mostraFreccia) {
       const c = aSchermo(attivo.x, attivo.y);
-      this.anelloMira.position.set(c.x, c.y);
-      this.anelloMira.alpha = o.fiondaAttiva ? 1 : 0.6;
+      this.frecciaMira.position.set(c.x, c.y);
+      // mezzi gradi: 0 = destra, 180 = su; sullo schermo la y va in basso
+      this.frecciaMira.rotation = -(t.mira.mezziGradi / 2) * (Math.PI / 180);
     }
 
     this.aggiornaProiettili(deltaMS);

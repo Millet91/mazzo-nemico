@@ -1,31 +1,7 @@
-// Passata di ritmo (m1-ritmo): fionda al rilascio, scossa e zoom della camera, scala dei numeri di danno.
+// Passata di ritmo (m1-ritmo): scossa e zoom della camera, scala dei numeri di danno.
 import { describe, expect, it } from 'vitest';
-import { ANNULLA_PX, esitoRilascio, impostaFiondaAlRilascio, fiondaSparaAlRilascio } from '../../src/battaglia/render/input';
 import { Camera, SCOSSA_MAX_PX } from '../../src/battaglia/render/camera';
 import { scalaNumero } from '../../src/battaglia/render/effetti';
-
-describe('fionda che spara al rilascio', () => {
-  const m = { mezziGradi: 90, potenza: 60 };
-  it('annulla se si rilascia entro 24 px dal centro dell\'anello', () => {
-    expect(esitoRilascio(0, 0, m).t).toBe('annulla');
-    expect(esitoRilascio(ANNULLA_PX - 1, 0, m).t).toBe('annulla');
-    expect(esitoRilascio(10, -20, m).t).toBe('annulla');
-  });
-  it('spara con la mira del trascinamento oltre i 24 px', () => {
-    expect(esitoRilascio(ANNULLA_PX + 1, 0, m)).toEqual({ t: 'spara', mira: m });
-  });
-  it('sotto il 5% di potenza non spara', () => {
-    expect(esitoRilascio(40, 0, { mezziGradi: 0, potenza: 4 }).t).toBe('niente');
-    expect(esitoRilascio(40, 0, { mezziGradi: 0, potenza: 5 }).t).toBe('spara');
-    expect(esitoRilascio(40, 0, null).t).toBe('niente');
-  });
-  it('i Comandi classici spengono lo sparo al rilascio', () => {
-    expect(fiondaSparaAlRilascio()).toBe(true);
-    impostaFiondaAlRilascio(false);
-    expect(fiondaSparaAlRilascio()).toBe(false);
-    impostaFiondaAlRilascio(true);
-  });
-});
 
 describe('scossa e zoom della camera', () => {
   it('la scossa sposta la vista e si spegne in 250 ms senza muovere il centro', () => {

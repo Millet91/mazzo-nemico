@@ -50,7 +50,6 @@ export class Regista {
   private config: ConfigBattaglia | null = null;
   private stacca: (() => void)[] = [];
   private segui: 'pirata' | 'proiettile' | 'libera' = 'pirata';
-  private fiondaAttiva = false;
   private eraInPausa = false;
   private prova: Prova | null = null;
   /** ms di fermo immagine rimasti */
@@ -87,11 +86,6 @@ export class Regista {
     if (p) this.camera.vola(p.x, p.y, 0);
     this.input = new InputBattaglia(this.app.canvas, {
       camera: this.camera,
-      pirataMirabile: () => this.pirataMirabile(),
-      mira: (m) => partita.comandoUmano({ t: 'mira', ...m }),
-      miraAttuale: () => ({ ...partita.s.turno.mira }),
-      fuoco: () => partita.comandoUmano({ t: 'fuoco' }),
-      fionda: (a) => { this.fiondaAttiva = a; },
       ricentra: () => this.ricentra(),
       cameraManuale: () => { this.segui = 'libera'; },
     });
@@ -117,7 +111,6 @@ export class Regista {
     this.scena = null;
     this.partita?.chiudi();
     this.partita = null;
-    this.fiondaAttiva = false;
     if (this.sfondo) this.sfondo.radice.visible = true;
   }
 
@@ -136,13 +129,6 @@ export class Regista {
     if (!s) return;
     const p = s.pirati.find((x) => x.id === s.turno.pirata);
     if (p) { this.segui = 'pirata'; this.camera.vola(p.x, p.y, 300); }
-  }
-
-  private pirataMirabile(): { x: number; y: number } | null {
-    const pa = this.partita;
-    if (!pa || pa.toccaIa || pa.s.esito || pa.s.turno.fase !== 'azione') return null;
-    const p = pa.s.pirati.find((x) => x.id === pa.s.turno.pirata && x.stato === 'vivo');
-    return p ? this.camera.schermoDaMondo(p.x, p.y) : null;
   }
 
   aggiorna(deltaGrezzo: number): void {
@@ -179,7 +165,7 @@ export class Regista {
 
   private opzioniDisegno() {
     const pa = this.partita!;
-    return { mira: !pa.toccaIa && pa.s.turno.fase === 'azione' && !pa.s.esito, fiondaAttiva: this.fiondaAttiva };
+    return { mira: !pa.toccaIa && pa.s.turno.fase === 'azione' && !pa.s.esito };
   }
 
   /**

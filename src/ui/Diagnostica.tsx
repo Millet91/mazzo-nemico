@@ -8,7 +8,7 @@ import { T } from '../testi/it';
 import { tocco } from '../piattaforma/haptics';
 
 type ModuloReplay = { rigiocaReplay?: (r: Replay, m: MappaGenerata) => unknown };
-type ModuloFps = { provaFps?: () => Promise<Record<string, number>> };
+type ModuloFps = { provaFps?: () => Promise<Record<string, number>>; provaSuperata?: (r: never) => boolean };
 
 const REPLAY = import.meta.glob<Replay>('../../tests/replay/*.json', { import: 'default' });
 const MODULI_REPLAY = import.meta.glob<ModuloReplay>('../battaglia/sim/replay.ts');
@@ -75,16 +75,18 @@ async function provaFps() {
   occupato = true;
   try {
     let prova: ModuloFps['provaFps'];
+    let superata: ModuloFps['provaSuperata'];
     for (const carica of Object.values(MODULI_FPS)) {
       const m = await carica();
-      if (typeof m.provaFps === 'function') { prova = m.provaFps; break; }
+      if (typeof m.provaFps === 'function') { prova = m.provaFps; superata = m.provaSuperata; break; }
     }
     if (!prova) { statoFps.value = T.diagnostica.nonPronto; return; }
     statoFps.value = T.diagnostica.provaInCorso;
     provaAttiva.value = true;
     const r = await prova().finally(() => (provaAttiva.value = false));
     const n = (...chiavi: string[]) => { for (const k of chiavi) if (typeof r[k] === 'number') return r[k]; return 0; };
-    statoFps.value = T.diagnostica.provaRisultato(
+    const voto = superata ? (superata(r as never) ? '✅ ' : '❌ ') : '';
+    statoFps.value = voto + T.diagnostica.provaRisultato(
       Math.round(n('medio', 'fpsMedio')), Math.round(n('minimo', 'fpsMinimo')),
       n('frameLenti', 'lenti', 'frameOltre20ms'), n('msSimPerTick', 'msSim', 'simMs'));
   } catch (e) {

@@ -1,8 +1,10 @@
 // L4 dell'HUD di battaglia (agente D, piano QA §2): menu → Schermaglia, HUD nei 3 formati con i controlli su
 // misure e bordi (tasti ≥ 64, FUOCO 80, 56 px dal bordo corto, 16 dal basso, 12 tra i tasti), griglia armi,
 // pausa, esito, mancini, turno dell'IA, multitouch (caso 22) e tasto indietro (caso 23).
-// Finché il ciclo di gioco (B) non è unito, la battaglia si guida da qui con una VistaBattaglia finta sul bus
-// (gancio ?prova di ui/App.tsx), che all'azione 'esci' si svuota come fa B. Gli screenshot a seme fisso al tick 0 e 600 arrivano dopo l'unione di A, B e C.
+// Due tipi di prova: (1) con la battaglia vera del ciclo di gioco (B), partendo da Schermaglia; (2) con una
+// VistaBattaglia finta scritta sul bus (gancio ?prova di ui/App.tsx) senza richiesta di battaglia, così B non parte
+// e si provano a colpo sicuro misure, griglia, pausa ed esito. Gli screenshot a seme fisso al tick 0 e 600 arrivano
+// dopo l'unione di A e C (oggi sim e mappa sono ancora segnaposto).
 import { test, expect, type Page } from '@playwright/test';
 
 const FORMATI = [
@@ -24,10 +26,10 @@ function vista(p: Record<string, unknown> = {}) {
   };
 }
 
-/** Apre il gioco con il gancio di prova, preme Schermaglia e pubblica una vista finta. Registra comandi e azioni. */
+/** Apre il gioco con il gancio di prova e pubblica una vista finta (senza richiesta: B resta fermo). Registra comandi e azioni. */
 async function entraInBattaglia(page: Page, v = vista()) {
   await page.goto('/?prova');
-  await page.locator('#schermaglia').click();
+  await expect(page.locator('#schermaglia')).toBeVisible();
   await page.evaluate((v) => {
     const w = window as unknown as { __kaboom: any; registro: { comandi: unknown[]; azioni: unknown[] } };
     w.registro = { comandi: [], azioni: [] };
@@ -85,7 +87,8 @@ async function controllaTasti(page: Page, larghezza: number, altezza: number) {
   }
 }
 
-test('il menu ha Schermaglia e manda la battaglia di M1 sul bus', async ({ page }) => {
+test('Schermaglia avvia la battaglia vera di M1 e si esce dalla pausa', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 360 });
   await page.goto('/?prova');
   await expect(page.locator('#schermaglia')).toContainText('Schermaglia');
   await page.locator('#schermaglia').click();
@@ -93,11 +96,19 @@ test('il menu ha Schermaglia e manda la battaglia di M1 sul bus', async ({ page 
   expect(cfg.squadre[0]).toMatchObject({ ciurma: 'teschio', controllo: 'umano', pirati: 3 });
   expect(cfg.squadre[1]).toMatchObject({ ciurma: 'marina', controllo: 'ia', livelloIa: 'mozzo', pirati: 3 });
   expect(cfg.timerSecondi).toBe(30);
-  // finché il ciclo di gioco non pubblica la vista si vede il caricamento, con la pausa per uscire
-  await expect(page.getByText('La ciurma sta salpando')).toBeVisible();
+  // il ciclo di gioco pubblica la vista: HUD vero, titolo e menu nascosti, comandi nel turno del Teschio
+  await expect(page.getByTestId('hud')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('heading', { name: 'Kaboom Ahoy!' })).toBeHidden();
+  await expect(page.locator('#tasto-fuoco')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByTestId('squadra-0')).toHaveAttribute('aria-label', /Teschio Rosso: 210 PV, 3 in piedi/);
+  await page.screenshot({ path: 'test-results/screenshot/battaglia-vera-20x9.png' });
+  await controllaTasti(page, 800, 360);
   await page.locator('#pausa').click();
+  await expect(page.getByTestId('pausa')).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__kaboom.bus.battagliaInPausa.value)).toBe(true);
   await page.locator('#esci').click();
   await expect(page.locator('#schermaglia')).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__kaboom.bus.battaglia.value)).toBeNull();
   // seme nuovo a ogni partita
   await page.locator('#schermaglia').click();
   const cfg2 = await page.evaluate(() => (window as any).__kaboom.bus.richiestaBattaglia.value);
@@ -275,18 +286,20 @@ test('esito: pergamena con superstiti e turni, Rigioca e Menu', async ({ page })
       expect(b.h).toBeGreaterThanOrEqual(48);
     }
   }
-  const prima = await page.evaluate(() => (window as any).__kaboom.bus.richiestaBattaglia.value.seme);
-  await page.locator('#rigioca').click();
-  const dopo = await page.evaluate(() => (window as any).__kaboom.bus.richiestaBattaglia.value);
-  expect(dopo).not.toBeNull();
-  expect(dopo.seme).not.toBe(prima);
+  // Menu torna al menu
+  await page.locator('#menu').click();
+  await expect(page.locator('#schermaglia')).toBeVisible();
   expect((await registro(page)).azioni.at(-1)).toEqual({ t: 'esci' });
 
+  // sconfitta a tempo, poi Rigioca: chiude e chiede una battaglia nuova
   await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; },
     vista({ fase: 'fine', esito: { vincitore: 1, motivo: 'tempo', superstiti: [1, 2], pvTotali: [30, 90], turni: 18, annegati: [0, 0] } }));
   await expect(page.getByTestId('esito')).toContainText('Sconfitta');
-  await page.locator('#menu').click();
-  await expect(page.locator('#schermaglia')).toBeVisible();
+  await expect(page.getByTestId('esito')).toContainText('Tempo scaduto');
+  await page.locator('#rigioca').click();
+  const dopo = await page.evaluate(() => (window as any).__kaboom.bus.richiestaBattaglia.value);
+  expect(dopo).not.toBeNull();
+  expect(dopo.squadre[1].ciurma).toBe('marina');
 });
 
 test('Impostazioni: mancini e Diagnostica', async ({ page }) => {
@@ -299,13 +312,12 @@ test('Impostazioni: mancini e Diagnostica', async ({ page }) => {
   await page.locator('#apri-diagnostica').click();
   await page.locator('#rigioca-replay').click();
   await expect(page.getByTestId('stato-replay')).toBeVisible();
-  await page.locator('#prova-fps').click();
-  await expect(page.getByTestId('stato-fps')).toBeVisible();
+  // la prova FPS dura 60 s (battaglia dimostrativa di B): qui si controlla solo che il pulsante ci sia
+  await expect(page.locator('#prova-fps')).toBeVisible();
   await page.screenshot({ path: 'test-results/screenshot/diagnostica-20x9.png' });
   // la preferenza resta dopo il riavvio e specchia l'HUD
   await page.reload();
-  await page.locator('#schermaglia').click();
-  await page.evaluate(() => { (window as any).__kaboom.bus.battaglia.value = null; });
+  await expect(page.locator('#schermaglia')).toBeVisible();
   await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; }, vista());
   await expect(page.locator('.hud.mancini')).toBeVisible();
 });

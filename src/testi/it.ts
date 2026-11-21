@@ -18,6 +18,13 @@ export const it = {
     carrieraSottoContinua: (capitolo: number) => `Continua · Capitolo ${capitolo}`,
     tornaMenu: 'Torna al menu',
   },
+  /** testi fissi del kit dipinto (src/ui/kit/): i testi delle scene e dei premi li passa la Campagna */
+  kit: {
+    nuovo: 'Nuovo!',
+    continua: 'Evviva!',
+    avanti: 'Avanti',
+    salta: 'Salta',
+  },
   impostazioni: {
     titolo: 'Impostazioni',
     chiudi: 'Chiudi',

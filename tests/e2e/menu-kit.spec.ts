@@ -33,3 +33,32 @@ test('menu: Carriera grande, Schermaglia sotto, Carriera porta alla mappa e si t
   expect(await page.evaluate(() => (window as any).__kaboom.gestisciIndietro())).toBe(true);
   await expect(carriera).toBeVisible();
 });
+
+test('kit: premio "Nuovo!" con due premi e scena su pergamena (vetrina)', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 360 });
+  await page.goto('/?vetrina-kit');
+  await page.locator('#v-nuovo').click();
+  const premio = page.getByTestId('car-premio');
+  await expect(premio).toContainText('Nuovo!');
+  await expect(premio.locator('.kit-nuovo-premio')).toHaveCount(2);
+  const ok = await page.locator('#car-premio-ok').boundingBox();
+  expect(ok!.y + ok!.height).toBeLessThanOrEqual(360);
+  await page.screenshot({ path: 'test-results/screenshot/kit-nuovo-20x9.png' });
+  await page.locator('#car-premio-ok').click();
+  await expect(premio).toBeHidden();
+
+  await page.locator('#v-scena').click();
+  const scena = page.getByTestId('car-scena');
+  const prima = await scena.locator('.kit-scena-testo').textContent();
+  await page.locator('#car-avanti').click();
+  // un tocco su Avanti fa avanzare di UNA battuta (non due: il tocco non arriva anche alla pergamena)
+  const dopo = await scena.locator('.kit-scena-testo').textContent();
+  expect(dopo).not.toBe(prima);
+  await page.locator('#car-avanti').click();
+  expect(await scena.locator('.kit-scena-testo').textContent()).toBe(prima);
+  const r = await scena.locator('.kit-scena-foglio').boundingBox();
+  expect(r!.height).toBeLessThan(180);
+  await page.screenshot({ path: 'test-results/screenshot/kit-scena-20x9.png' });
+  await page.locator('#car-salta').click();
+  await expect(scena).toBeHidden();
+});

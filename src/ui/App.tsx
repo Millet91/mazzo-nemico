@@ -13,6 +13,7 @@ import { SceltaSchermaglia } from './battaglia/SceltaSchermaglia';
 import { sbloccaAudio } from '../piattaforma/audio';
 import { Diagnostica, provaAttiva, statoFps } from './Diagnostica';
 import { PulsanteKit, PulsanteTondo, applicaKit, urlKit } from './kit';
+import { VetrinaKit, vetrinaKit } from './kit/Vetrina';
 import { caricaPreferenzeHud, comandiClassici, impostaComandiClassici, impostaMancini, impostaVolumeHud, impostaZoomMira, mancini, piratiSchermaglia, volume, zoomMira } from './preferenze';
 
 // avvio dell'HUD (main.tsx non è una cartella dell'HUD): preferenze salvate, banner e vibrazioni della battaglia
@@ -216,6 +217,7 @@ export function App() {
         )}
       </main>
       ))}
+      {!battaglia && vetrinaKit && <VetrinaKit />}
       {!battaglia && <PannelloImpostazioni />}
       {!battaglia && <SceltaSchermaglia />}
       {battaglia && provaAttiva.value && <div class="avviso" role="status">{statoFps.value}</div>}

@@ -15,24 +15,25 @@
 Al primo avvio non c'è un menu: dallo splash si entra direttamente nel **Prologo**. Il menu principale si vede per la prima volta solo al secondo avvio.
 
 ### Prologo: "Sbarco a Cala Pappagallo" (battaglia, ~4 min)
-È una mappa fatta a mano nel bioma isola tropicale. Il vento è 0 finché non viene insegnato e il timer è spento. Sono 2 pirati contro 2 marinai della Marina con IA Mozzo e "mano morbida" (sbaglia sempre di almeno 40 px).
+Si gioca sulla mappa dipinta **Cala Pappagallo** (00 §9.18), l'isola da cui poi si salpa verso il cap. 1. Il vento è 0 finché non viene insegnato e il timer è spento. Sono 2 pirati contro 2 marinai della Marina con IA Mozzo e "mano morbida" (sbaglia sempre di almeno 40 px).
 
 | Tempo | Cosa vede il giocatore | Cosa tocca | Cosa impara |
 |---|---|---|---|
 | 0:00 | splash da 2 s, poi una scialuppa che sbarca (4 s, si salta con un tocco) | — | tono e tema |
-| 0:10 | il proprio pirata e una cassa a 150 px; visibili solo **◀ ▶** | tiene premuto ▶ | **camminare** |
-| 0:25 | un gradino di 20 px blocca il passaggio; appare **SALTA** | SALTA | **saltare** (il doppio tocco si insegna dopo, con un suggerimento) |
+| 0:10 | il proprio pirata e una cassa a 150 px; visibile solo il **joystick di sinistra**, con una mano fantasma che lo spinge | spinge il joystick a destra | **camminare** |
+| 0:25 | un gradino di 20 px blocca il passaggio; la mano fantasma spinge il joystick in diagonale in alto | joystick in diagonale | **saltare** |
 | 0:35 | raccoglie la cassa ("Rum: +PV"), poi la camera mostra il primo marinaio | — | casse, PV |
-| 0:45 | appare l'anello di mira con la traiettoria completa e la mano fantasma che "tira la fionda" | trascina dall'anello all'indietro e rilascia | **mira**: angolo e potenza; la mira resta impostata |
-| 1:05 | appare **FUOCO**, che pulsa | FUOCO | **sparare**; il terreno esplode (**distruttibile**) |
-| 1:10 | fumetto "Scappa! Hai 3 secondi" con un contatore grande | ◀ ▶ | **ritirata** |
+| 0:45 | appare il **joystick di mira** a destra con la traiettoria oro completa; la mano fantasma ne sposta il pomello | sposta il pomello: direzione = angolo, distanza = potenza | **mira**; lasciato il dito, la mira resta |
+| 1:05 | **FUOCO** al centro del joystick di mira pulsa | FUOCO | **sparare**; il terreno esplode (**distruttibile**) |
+| 1:10 | fumetto "Scappa! Hai 3 secondi" con un contatore grande | joystick di sinistra | **fuga** |
 | 1:20 | turno nemico, il colpo cade vicino e toglie 15 PV | — | **turni alternati**, danno, barra PV |
-| 1:40 | turno 2: appare il **vento** (+4), la freccia si illumina e la traiettoria ora si piega; appaiono **▲▼** | mira, ritocco con ▲▼, FUOCO | **vento**, mira fine |
+| 1:40 | turno 2: appare il **vento** (+4), la freccia si illumina e la traiettoria ora si piega | pomello di mira, FUOCO | **vento**, mira fine |
+| 1:55 | fumetto "Due dita per lo zoom" con la mano fantasma che pizzica lo schermo | pinch | **zoom** e camera |
 | 2:30 | il secondo marinaio sta sul bordo della scogliera; appare **ARMA**, che pulsa | ARMA → Sciabola | **griglia armi**, armi diverse |
-| 2:50 | cammina fino al marinaio e usa FUOCO | — | **spinta**: il marinaio vola in mare, "Da Davy Jones!" |
+| 2:50 | cammina fino al marinaio e usa FUOCO | — | **spinta**: il marinaio vola in mare, «Vai dai pesci!» |
 | 3:10 | fumetto "Il mare è il tuo cannone migliore" | — | **mare = morte immediata** |
 | 3:30 | l'ultimo marinaio si nasconde in una buca; il giocatore riceve 1 Granata | ARMA → Granata, tocca il chip miccia, FUOCO | **miccia e rimbalzi** |
-| 4:00 | vittoria e scheda di fine battaglia semplificata (superstiti, "Cala Pappagallo è tua") | Continua | esito di una battaglia |
+| 4:00 | vittoria e scheda di fine battaglia semplificata (superstiti, "Cala Pappagallo è tua"), poi la scena c0.partenza: si salpa da Cala Pappagallo verso il cap. 1 (00 §9.18) | Continua | esito di una battaglia |
 
 Pan, zoom e doppio tocco per ricentrare **non** si insegnano qui: li coprono i suggerimenti (§3).
 

@@ -38,7 +38,9 @@ for (const f of FORMATI) {
     await controllaPulsanti(page, f.width);
 
     // 5 tocchi sulla versione accendono il contatore FPS
-    for (let i = 0; i < 5; i++) await page.getByTestId('versione').click();
+    // i 5 tocchi devono stare entro 800 ms l'uno dall'altro: con swiftshader e la suite intera un click di
+    // Playwright può durare quasi un secondo (il canvas si ridisegna), quindi si toccano dalla pagina, di fila
+    await page.getByTestId('versione').evaluate((el) => { for (let i = 0; i < 5; i++) (el as HTMLElement).click(); });
     await expect(page.getByTestId('fps')).toBeVisible();
   });
 }

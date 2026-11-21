@@ -24,9 +24,13 @@ test('menu: Carriera grande, Schermaglia sotto, Carriera porta alla mappa e si t
   await page.screenshot({ path: 'test-results/screenshot/menu-p2-20x9.png' });
 
   await carriera.click();
-  expect(await page.evaluate(() => (window as any).__kaboom.bus.schermata.value)).toBe('mondo');
+  // la prima volta la Campagna apre la scena di copione c1.inizio sopra la mappa: si salta
+  expect(['mondo', 'scena']).toContain(await page.evaluate(() => (window as any).__kaboom.bus.schermata.value));
+  const salta = page.getByRole('button', { name: 'Salta' });
+  if (await salta.isVisible()) await salta.click();
+  await expect.poll(() => page.evaluate(() => (window as any).__kaboom.bus.schermata.value)).toBe('mondo');
   await expect(carriera).toBeHidden();
-  await page.locator('#torna-menu').click();
+  await page.locator('#car-menu').click();
   await expect(carriera).toBeVisible();
 
   await carriera.click();

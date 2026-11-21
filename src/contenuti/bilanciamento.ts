@@ -130,6 +130,8 @@ export const BIL = {
 
   /** IA di battaglia (01 §8; 05 n. 19) */
   ia: {
+    /** errorePotenza: errore uniforme inteso sulla GITTATA (±15% di gittata ≈ ±7,5% di potenza, perché la gittata va col
+     *  quadrato della potenza). erroreGradi: uniforme sull'angolo. Taratura finale col simulatore (giocatore batte Mozzo all'85%). */
     /** l'IA sceglie solo tra le armi di `armi` che hanno munizioni nella sua Squadra */
     punteggio: { uccisione: 60, annegamento: 80, dannoAmico: -1.5, dannoSe: -2, seInMare: -200, sogliaMinima: 10 },
     livelli: {

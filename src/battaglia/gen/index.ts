@@ -7,6 +7,7 @@
 // Pipeline (06 §1 corretta da 00 §2.2), per il bioma Isola tropicale:
 //  1. specchio orizzontale 50% dal seme;  2. profilo procedurale da parametri (spiagge, 1-2 colline) + rumore 1D;
 //  3. grotte a metaball;  4. strati (24 px sabbia, terra, roccia sotto 160 px);  5. 1-2 massi di roccia;
+//  5b. 1-2 scale o liane per lato su gradoni scavati apposta (design/comandi/scale-e-liane.md);
 //  6. 5 spawn per lato con requisiti ed equità (06 §4);  7. validazione anti-frustrazione (06 §7).
 // Se la validazione fallisce si riprova con seme+1, fino a 8 tentativi; poi si usa il seme di riserva già validato.
 // In M1 esiste solo l'Isola: per gli altri biomi si usa lo stesso terreno (il campo `bioma` resta quello chiesto).
@@ -21,11 +22,14 @@ import { BIL } from '../../contenuti/bilanciamento';
 import { piazzaBarili } from './barili';
 import { controllaInsieme, distanzaMare, postiValidi, type Posto } from './spawn';
 import { validaMassa } from './valida';
+import { controllaAppiglio, piazzaAppigli, type AppiglioMappa } from './appigli';
 
 const { w: W } = MONDO;
 
 /** Quante combinazioni di spawn si provano su un terreno prima di cambiare seme. */
 const SCELTE_SPAWN = 60;
+/** barili e decorazioni non si piazzano così vicino a una scala o a una liana (non toccano il gradone) */
+const LONTANO_DA_APPIGLI = 50;
 
 /**
  * Sceglie fino a n posti distanti almeno REGOLE.distanzaCompagni, in ordine casuale. Con `vicinoA` preferisce i posti
@@ -52,7 +56,7 @@ function impacca(posti: Posto[]): number {
   return n;
 }
 
-function decorazioni(s: ConRng, sup: Int32Array, mare: number, spawn: Punto[]): Decorazione[] {
+function decorazioni(s: ConRng, sup: Int32Array, mare: number, spawn: Punto[], appigli: AppiglioMappa[]): Decorazione[] {
   const out: Decorazione[] = [];
   const piazza = (tipo: Decorazione['tipo'], quante: number) => {
     for (let i = 0, prove = 0; i < quante && prove < 30; prove++) {
@@ -60,6 +64,7 @@ function decorazioni(s: ConRng, sup: Int32Array, mare: number, spawn: Punto[]): 
       if (sup[x] >= mare - 30) continue;
       if (Math.abs(sup[x - 8] - sup[x + 8]) > 10) continue;
       if (spawn.some((p) => Math.abs(p.x - x) < REGOLE.decorazioniLontanoDaSpawn)) continue;
+      if (appigli.some((a) => Math.abs(a.x - x) < LONTANO_DA_APPIGLI)) continue;
       if (out.some((d) => Math.abs(d.x - x) < 50)) continue;
       out.push({ tipo, x, y: sup[x], scala: intero(s, 80, 120) / 100, specchio: probabilita(s, 0.5) });
       i++;
@@ -78,11 +83,16 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
   const specchiata = probabilita(s, 0.5);
   const { maschera } = terrenoIsola(s);
   if (validaMassa(maschera, mare).length) return null;
+  // scale e liane: i gradoni si scavano prima di scegliere gli spawn, così gli spawn li vedono già
+  let appigli = piazzaAppigli(s, maschera, mare);
+  if (!appigli) return null;
+  if (validaMassa(maschera, mare).length) return null;
+  const lontanoDaAppigli = (x: number) => appigli!.every((a) => Math.abs(a.x - x) >= REGOLE.appiglioLontanoDaSpawn);
   const sup = superficie(maschera);
   const n = REGOLE.spawnPerLato;
   const candidati: [Posto[], Posto[]] = [[], []];
   for (const lato of [0, 1] as const) {
-    const tutti = postiValidi(maschera, sup, mare, lato === 1);
+    const tutti = postiValidi(maschera, sup, mare, lato === 1).filter((p) => lontanoDaAppigli(p.x));
     if (impacca(tutti) < n) return null;
     if (REGOLE.sciabolaVieta) {
       // meglio i posti da cui la sciabola non butta in mare, se bastano
@@ -112,11 +122,12 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
 
   const piedi = (p: Posto): Punto => ({ x: p.x, y: p.y });
   let sx = scelti[0].map(piedi), dx = scelti[1].map(piedi);
-  let barili = piazzaBarili(s, maschera, sup, mare, [...sx, ...dx]);
+  let barili = piazzaBarili(s, maschera, sup, mare, [...sx, ...dx], appigli.map((a) => a.x), LONTANO_DA_APPIGLI);
   if (barili.length < BIL.barili.min) return null;
   // le spianate dei barili toccano la maschera: si ricontrollano linee di tiro e colpi
   if (controllaInsieme(maschera, sup, mare, scelti, true).length) return null;
-  let decor = decorazioni(s, sup, mare, [...sx, ...dx]);
+  if (appigli.some((a) => controllaAppiglio(maschera, mare, a).length)) return null;
+  let decor = decorazioni(s, sup, mare, [...sx, ...dx], appigli);
   if (specchiata) {
     specchiaMaschera(maschera);
     const sp = (p: Punto): Punto => ({ x: W - 1 - p.x, y: p.y });
@@ -124,6 +135,7 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
     dx = dx.map(sp);
     decor = decor.map((d) => ({ ...d, x: W - 1 - d.x, specchio: !d.specchio })).reverse();
     barili = barili.map((b) => ({ x: W - 1 - b.x, y: b.y })).reverse();
+    appigli = appigli.map((a) => ({ ...a, x: W - 1 - a.x })).reverse();
   }
   // lato 0 (attaccante) = il gruppo scelto a sinistra; con lo specchio finisce a destra.
   // Ordine: dal più interno al più esterno. La sim usa i primi N posti, quindi con meno di 5 pirati
@@ -141,6 +153,7 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
     specchiata,
     decorazioni: decor,
     barili,
+    appigli,
   };
 }
 

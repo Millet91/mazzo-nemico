@@ -9,6 +9,7 @@ import { superficie } from '../../src/battaglia/gen/analisi';
 import { zona } from '../../src/battaglia/gen/spawn';
 import { ISOLA, REGOLE, SEME_RISERVA } from '../../src/battaglia/gen/parametri';
 import { misuraMare } from '../../src/battaglia/gen/misura';
+import { controllaAppiglio, distanzaAppiglio } from '../../src/battaglia/gen/appigli';
 import { BIL } from '../../src/contenuti/bilanciamento';
 import { MATERIALE, type MappaGenerata, type RichiestaMappa } from '../../src/core/tipi';
 import { impronta } from './impronta';
@@ -224,6 +225,50 @@ describe('Generatore · barili di polvere (m1-ritmo §9)', () => {
       }
     }
     expect(problemi).toEqual([]);
+  });
+});
+
+describe('Generatore · scale e liane (design/comandi/scale-e-liane.md)', () => {
+  it('da 2 a 4 per mappa, uguali per lato e specchiate: stesso tipo e stessa lunghezza, x a specchio', () => {
+    for (const m of MAPPE) {
+      const a = m.appigli!;
+      expect(a.length).toBeGreaterThanOrEqual(REGOLE.appigliMin);
+      expect(a.length).toBeLessThanOrEqual(REGOLE.appigliMax);
+      expect(a.length % 2).toBe(0);
+      for (let i = 0; i < a.length / 2; i++) {
+        const sx = a[i], dx = a[a.length - 1 - i];
+        expect(sx.x).toBeLessThan(W / 2);
+        expect(dx.x).toBe(W - 1 - sx.x);
+        expect(dx.tipo).toBe(sx.tipo);
+        expect(dx.yBasso - dx.yAlto).toBe(sx.yBasso - sx.yAlto);
+      }
+    }
+    const tipi = new Set(MAPPE.flatMap((m) => m.appigli!.map((a) => a.tipo)));
+    expect([...tipi].sort()).toEqual(['liana', 'scala']);
+  });
+
+  it('lunghe 60-220 px, nell\'aria, piede sul suolo lontano dal mare, cima su un piano largo 24 px, ≥ 40 px dagli spawn', () => {
+    for (const m of MAPPE) {
+      for (const a of m.appigli!) {
+        expect(a.yBasso - a.yAlto).toBeGreaterThanOrEqual(REGOLE.appiglioCorto);
+        expect(a.yBasso - a.yAlto).toBeLessThanOrEqual(REGOLE.appiglioLungo);
+        expect(controllaAppiglio(m.terreno.maschera, m.terreno.mare, a)).toEqual([]);
+        for (const p of [...m.spawn[0], ...m.spawn[1]]) expect(distanzaAppiglio(a, p)).toBeGreaterThanOrEqual(REGOLE.appiglioLontanoDaSpawn);
+      }
+    }
+  });
+
+  it('il validatore scarta un appiglio dentro il terreno, uno di troppo da un lato, uno vicino a uno spawn', () => {
+    const m = MAPPE[0], a = m.appigli!;
+    const dentro: MappaGenerata = { ...m, appigli: a.map((x, i) => (i === 0 ? { ...x, yAlto: x.yAlto + 40, yBasso: x.yBasso + 40 } : x)) };
+    expect(validaMappa(dentro).length).toBeGreaterThan(0);
+    const zoppa: MappaGenerata = { ...m, appigli: a.slice(1) };
+    expect(validaMappa(zoppa).length).toBeGreaterThan(0);
+    const p = m.spawn[0][0];
+    const vicina: MappaGenerata = { ...m, appigli: [...a.slice(0, -1), { ...a[a.length - 1], x: p.x + 10 }] };
+    expect(validaMappa(vicina).length).toBeGreaterThan(0);
+    // senza il campo (mappe fatte a mano di prima) non si controlla nulla
+    expect(validaMappa({ ...m, appigli: undefined })).toEqual([]);
   });
 });
 

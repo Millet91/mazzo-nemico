@@ -46,6 +46,15 @@ export const REGOLE = {
   tentativi: 8,
   /** decorazioni a non più di questa distanza da uno spawn non si piazzano (06 §7.7) */
   decorazioniLontanoDaSpawn: 40,
+  /** scale e liane (design/comandi/scale-e-liane.md): 2-4 per mappa, uguali per lato, lunghe 60-220 px, mai entro
+   *  40 px da uno spawn; la cima arriva entro 8 px da un piano largo almeno 24 px */
+  appigliMin: 2,
+  appigliMax: 4,
+  appiglioCorto: 60,
+  appiglioLungo: 220,
+  appiglioLontanoDaSpawn: 40,
+  appiglioPiano: 24,
+  appiglioCima: 8,
 } as const;
 
 /** Parametri del bioma Isola tropicale (06 §2, 00 §2.2). */

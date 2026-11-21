@@ -6,6 +6,7 @@
 - `spawn.ts` — requisiti dei posti (06 §4), equità tra i lati, regole anti-frustrazione (06 §7).
 - `valida.ts` — `validaMappa(mappa)`: elenco dei problemi di una mappa qualsiasi (vuoto = valida). Lo usano generatore e test.
 - `barili.ts` — 3-4 barili di polvere (m1-ritmo §9): in piano (spiana un gradino se serve), sopra il mare, ≥ 200 px dagli spawn.
+- `appigli.ts` — scale e liane (design/comandi/scale-e-liane.md): 1-2 per lato, specchiate. Scava sui fianchi delle colline un gradone (parete verticale per la scala, labbro sporgente per la liana), prima degli spawn. `controllaAppiglio` lo usa anche il validatore.
 - `misura.ts` — `misuraMare(mappe)`: quanti spawn finiscono in mare spinti verso la riva (misura del Lead design).
 - `analisi.ts` — superficie, voli balistici semplificati (un punto, senza rimbalzi), linea di tiro, camminata.
 - `parametri.ts` — tutti i numeri del livello e il seme di riserva. Fisica, mare e armi si leggono da `BIL` e `ARMA`.

@@ -1,5 +1,5 @@
 // QA M1 · caso 22 di 13 col doppio joystick fisso (scelta del proprietario 21/11), sulla battaglia vera e con
-// tocchi veri (CDP): un pollice tiene il joystick di movimento, l'altro trascina la mira e poi tocca FUOCO →
+// tocchi veri (CDP): un pollice tiene il joystick di movimento, l'altro trascina la mira e poi tocca FUOCO (tasto staccato dalla mira) →
 // il colpo parte. Ogni tocco resta del controllo dove comincia, quindi i due diti non si disturbano.
 // Proprietario: Lead test/QA (riscritto dall'HUD per il passaggio dalla fionda al doppio joystick).
 import { test, expect } from '@playwright/test';
@@ -35,8 +35,8 @@ test('caso 22: joystick di movimento tenuto + mira trascinata + FUOCO → il col
   await tocca('touchStart', [{ ...mov, id: 1 }]);
   await tocca('touchMove', [joy]);
   // secondo pollice sulla corona di mira (fuori da FUOCO), trascinato in su
-  await tocca('touchStart', [joy, { x: mira.x - 55, y: mira.y, id: 2 }]);
-  for (let i = 1; i <= 5; i++) await tocca('touchMove', [joy, { x: mira.x - 55, y: mira.y - 10 * i, id: 2 }]);
+  await tocca('touchStart', [joy, { x: mira.x - 30, y: mira.y, id: 2 }]);
+  for (let i = 1; i <= 5; i++) await tocca('touchMove', [joy, { x: mira.x - 30, y: mira.y - 10 * i, id: 2 }]);
   await tocca('touchEnd', [joy]);
   // il movimento è ancora tenuto: FUOCO col secondo pollice
   await tocca('touchStart', [joy, { ...fuoco, id: 3 }]);

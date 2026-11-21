@@ -71,7 +71,7 @@ Una battaglia dura 3-5 min; con preparazione, esito e animazioni vale **5 min** 
 
 ## 2. Mappe dei capitoli
 
-Il Prologo è una battaglia singola su mappa a mano (00 §2.2). Il Capitolo 7 usa le 21 rotte di 02 tra A, D ed E: A1-A2, A1-A3, A1-A4, A2-A4, A3-A5, A4-A5, A4-D1, A5-D3, D1-D2, D1-D3, D2-D3, D2-D5, D3-D4, D4-D5, D4-E2, E1-E2, E1-E3, E2-E3, E2-E5, E3-E4, E4-E5. Il Capitolo 8 usa le 47 rotte di 02 §1 senza modifiche.
+Il Prologo è una battaglia singola sulla mappa a mano **Cala Pappagallo** (00 §2.2 e §9.18): è l'isola di partenza, e vinta la battaglia si salpa da lì verso il cap. 1. Il Capitolo 7 usa le 21 rotte di 02 tra A, D ed E: A1-A2, A1-A3, A1-A4, A2-A4, A3-A5, A4-A5, A4-D1, A5-D3, D1-D2, D1-D3, D2-D3, D2-D5, D3-D4, D4-D5, D4-E2, E1-E2, E1-E3, E2-E3, E2-E5, E3-E4, E4-E5. Il Capitolo 8 usa le 47 rotte di 02 §1 senza modifiche.
 
 **Verifica.** Tutte le mappe (cap. 1-8 e la lista di 02) sono state controllate con uno script Python: rotte **bidirezionali**, ogni mappa **connessa**, le regioni sono una partizione esatta delle isole, nessun nome ripetuto (né dentro un capitolo né tra i 39 isolotti nuovi), grado minimo 2. Risultato: tutto in regola. Conteggi: cap. 1 12 rotte, 2: 15, 3: 18, 4: 19, 5: 21, 6: 21, 7: 21, 8: 47.
 

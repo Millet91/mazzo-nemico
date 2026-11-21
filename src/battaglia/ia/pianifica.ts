@@ -19,6 +19,7 @@ import { ARMA } from '../../contenuti/armi';
 import { casuale } from '../../core/rng';
 import { coseno, normalizza, seno } from '../../core/trig';
 import { passiSicuri, riparato } from './terreno';
+import { lineaLibera, tracciaTiro } from './traccia';
 
 /** La funzione che prova un tiro: in gioco è `simulaColpo` della sim; nei test si può contare o sostituire. */
 export type Simulatore = (s: StatoBattaglia, piano: PianoColpo) => EsitoColpo;
@@ -48,11 +49,12 @@ interface Linea {
 
 /** Quante simulazioni tenere da parte per controllare il tiro con l'errore umano. */
 const RISERVA_ERRORE = 4;
-/** Angoli di alzo (gradi sopra l'orizzontale) provati per arma, dal più promettente. */
-const ALZI: Partial<Record<IdArma, number[]>> = {
-  cannone: [45, 30, 60, 20, 70, 38, 52],
-  granata: [40, 60, 25, 50],
-};
+/** Armi a parabola: per ognuna si cercano gli alzi buoni con la traccia veloce (traccia.ts). */
+const BALISTICHE: IdArma[] = ['cannone', 'granata'];
+/** Alzi provati con la traccia, in gradi sopra l'orizzontale: dai tiri tesi ai pallonetti per gli ostacoli. */
+const ALZI_TRACCIA = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80];
+/** Linee per coppia (arma, bersaglio): le migliori secondo la traccia. */
+const LINEE_PER_MIRA = 2;
 /** La fuga dura BIL.turno.fugaTick: il tratto di strada da controllare. */
 const PASSI_FUGA = Math.ceil(BIL.turno.fugaTick * BIL.pirata.camminata);
 /** Oltre questa distanza dall'impatto non serve scappare. */
@@ -92,24 +94,28 @@ export function decidiCon(s: StatoBattaglia, livello: LivelloIa, simula: Simulat
     if (armi.includes('sciabola') && Math.abs(dx) <= (ARMA.sciabola.portata ?? 30) + BIL.pirata.capsulaLarghezza && Math.abs(dy) <= BIL.pirata.capsulaAltezza)
       prova({ pirata: io.id, arma: 'sciabola', mezziGradi: dir > 0 ? 0 : 360, potenza: 0 });
     if (rimasti <= 0) break;
-    if (armi.includes('pistola') && dx * dx + dy * dy <= (ARMA.pistola.portata ?? 500) ** 2)
+    if (armi.includes('pistola') && dx * dx + dy * dy <= (ARMA.pistola.portata ?? 500) ** 2 && lineaLibera(s, io, b))
       prova({ pirata: io.id, arma: 'pistola', mezziGradi: angoloVerso(dx, -dy), potenza: 0 });
   }
 
   // ── 2. linee balistiche: prima un tiro per linea (al massimo metà del budget), poi le correzioni ──
   const linee: Linea[] = [];
   const maxLinee = Math.max(1, Math.floor(rimasti / 2));
-  const balistiche = armi.filter((a) => ALZI[a]);
-  const giri = Math.max(0, ...balistiche.map((a) => ALZI[a]!.length));
-  // prima i barili di polvere che scoppierebbero sui nemici (e non sui nostri), poi i nemici
+  const balistiche = armi.filter((a) => BALISTICHE.includes(a));
+  // prima i barili di polvere che scoppierebbero sui nemici (e non sui nostri), poi i nemici.
+  // Per ogni mira e arma la traccia veloce sceglie gli alzi che arrivano davvero (scavalcando gli ostacoli)
+  // e ne tara la potenza: le simulazioni vere servono solo a confermare e a dare il punteggio.
   const mire: Punto[] = [...bariliUtili(s, io, nemici), ...bersagli];
-  for (let i = 0; i < giri && linee.length < maxLinee; i++)
-    for (const b of mire) for (const arma of balistiche) {
-      const alzo = ALZI[arma]![i];
-      if (alzo === undefined || linee.length >= maxLinee) continue;
-      const l = nuovaLinea(s, io, b, arma, alzo);
-      if (l) linee.push(l);
+  const candidate: { l: Linea; mancato: number; ordine: number }[] = [];
+  mire.forEach((b, ordine) => {
+    for (const arma of balistiche) {
+      const fattoreVento = ARMA[arma].vento ? vista.vento : 0;
+      for (const c of lineeVerso(s, io, b, arma, fattoreVento)) candidate.push({ ...c, ordine });
     }
+  });
+  // le linee che arrivano sul bersaglio prima; a parità, i bersagli più importanti
+  candidate.sort((a, b) => Math.min(a.mancato, 200) - Math.min(b.mancato, 200) + (a.ordine - b.ordine) * 15);
+  for (const c of candidate) if (linee.length < maxLinee) linee.push(c.l);
 
   for (const l of linee) {
     if (rimasti <= 0) break;
@@ -131,7 +137,16 @@ export function decidiCon(s: StatoBattaglia, livello: LivelloIa, simula: Simulat
   const sicure = ordinate.filter((p) => !suicida(io, p.esito));
   const buone = sicure.filter((p) => p.punti > soglia).slice(0, par.sceltaTraMigliori);
   if (buone.length) scelta = buone[Math.floor(casuale(rng) * buone.length)];
-  else scelta = sicure[0] ?? ordinate[0];
+  else {
+    // nessun tiro utile: almeno quello che cade più vicino a un nemico (non il primo provato, che può essere
+    // un tiro teso contro un ostacolo)
+    const vicinanza = (p: Prova) => {
+      const imp = p.esito.impatto;
+      if (!imp) return Infinity;
+      return Math.min(...nemici.map((n) => (n.x - imp.x) ** 2 + (n.y - imp.y) ** 2)) - p.punti * 1000;
+    };
+    scelta = sicure.slice().sort((a, b) => vicinanza(a) - vicinanza(b))[0] ?? ordinate[0];
+  }
   const copertura = !buone.length;
 
   if (!scelta) {
@@ -141,14 +156,23 @@ export function decidiCon(s: StatoBattaglia, livello: LivelloIa, simula: Simulat
   }
 
   // ── 4. errore umano, controllato con le simulazioni di riserva ──
+  // Si scarta un errore che rende il tiro suicida, e anche uno che lo fa sbattere contro l'ostacolo che il
+  // tiro scelto scavalcava (impatto ad almeno 100 px e un quarto della strada prima): un pirata vede il muro che ha davanti.
   let finale = scelta.colpo;
   let impatto = scelta.esito.impatto;
+  const distanza = (p: Punto | null) => (p ? Math.sqrt((p.x - io.x) ** 2 + (p.y - io.y) ** 2) : Infinity);
+  const previsto = distanza(scelta.esito.impatto);
+  let ripiego: { colpo: PianoColpo; impatto: Punto | null } | null = null;
   for (let tentativo = 0; tentativo < Math.max(1, riserva); tentativo++) {
     const sbagliato = conErrore(scelta.colpo, par, rng);
     if (riserva === 0) { finale = sbagliato; break; }
     const esito = simula(vista, sbagliato);
-    if (!suicida(io, esito)) { finale = sbagliato; impatto = esito.impatto; break; }
+    if (suicida(io, esito)) continue;
+    const bloccato = previsto !== Infinity && distanza(esito.impatto) < Math.min(previsto - 100, previsto * 0.75);
+    if (!bloccato) { finale = sbagliato; impatto = esito.impatto; ripiego = null; break; }
+    ripiego ??= { colpo: sbagliato, impatto: esito.impatto };
   }
+  if (ripiego) { finale = ripiego.colpo; impatto = ripiego.impatto; }
 
   // ── 5. fuga dopo lo sparo ──
   let fuga: -1 | 0 | 1 = 0;
@@ -260,20 +284,48 @@ export function potenzaPer(dx: number, h: number, alzoMezziGradi: number): numbe
   return (v / BIL.fisica.velocitaMaxProiettile) * 100;
 }
 
-function nuovaLinea(s: StatoBattaglia, io: Pirata, b: Punto, arma: IdArma, alzoGradi: number): Linea | null {
-  void s;
+/**
+ * Le linee di tiro migliori verso `b` con l'arma data: prova gli alzi di ALZI_TRACCIA, parte dalla potenza
+ * della gittata e la corregge con la traccia veloce (che vede il terreno e il vento), poi tiene le
+ * LINEE_PER_MIRA che finiscono più vicino al bersaglio. Un alzo che sbatte contro un ostacolo finisce lontano
+ * e viene scartato: così, se c'è un muro in mezzo, restano i pallonetti che ci passano sopra.
+ */
+function lineeVerso(s: StatoBattaglia, io: Pirata, b: Punto, arma: IdArma, vento: number): { l: Linea; mancato: number }[] {
   const dir: -1 | 1 = b.x >= io.x ? 1 : -1;
   const dx = Math.abs(b.x - io.x);
-  if (dx < 20) return null; // troppo vicino per un tiro a parabola
-  const alzo = alzoGradi * 2;
-  const p = potenzaPer(dx, io.y - b.y, alzo);
-  if (p === null || p > 115) return null;
-  const l: Linea = {
-    arma, bersaglio: b, dir, mezziGradi: normalizza(dir > 0 ? alzo : 360 - alzo),
-    potenza: limita(Math.round(p), 5, 100), prove: 0, finita: false,
-  };
-  if (ARMA[arma].miccia) l.miccia = micciaPer(arma, dx, l.potenza, alzo);
-  return l;
+  if (dx < 20) return []; // troppo vicino per un tiro a parabola
+  const dT = (b.x - io.x) * dir;
+  const out: { l: Linea; mancato: number; alzo: number }[] = [];
+  for (const gradi of ALZI_TRACCIA) {
+    const alzo = gradi * 2;
+    const mezziGradi = normalizza(dir > 0 ? alzo : 360 - alzo);
+    const p0 = potenzaPer(dx, io.y - b.y, alzo);
+    if (p0 === null || p0 > 110) continue;
+    let p = limita(p0, 5, 100);
+    let tr = tracciaTiro(s, io.x, io.y, mezziGradi, p, vento);
+    for (let i = 0; i < 3; i++) {
+      const dI = (tr.fine.x - io.x) * dir;
+      if (Math.abs(dI - dT) < 6 || dI < dT * 0.6) break; // centrato, o fermato da un ostacolo: la potenza non basta
+      const nuova = limita(p * Math.sqrt(dT / Math.max(dI, 1)), 5, 100);
+      if (Math.abs(nuova - p) < 0.5) break;
+      p = nuova;
+      tr = tracciaTiro(s, io.x, io.y, mezziGradi, p, vento);
+    }
+    const mancato = Math.sqrt((tr.fine.x - b.x) ** 2 + (tr.fine.y - b.y) ** 2) + (tr.perso ? 300 : 0);
+    const potenza = limita(Math.round(p), 5, 100);
+    const l: Linea = { arma, bersaglio: b, dir, mezziGradi, potenza, prove: 0, finita: false };
+    if (ARMA[arma].miccia) l.miccia = micciaDaTick(arma, tr.tick);
+    out.push({ l, mancato, alzo: gradi });
+  }
+  // migliori per distanza dal bersaglio; a parità (entro 10 px) l'alzo più vicino a 45°
+  out.sort((a, b) => (Math.abs(a.mancato - b.mancato) > 10 ? a.mancato - b.mancato : Math.abs(a.alzo - 45) - Math.abs(b.alzo - 45)));
+  return out.slice(0, LINEE_PER_MIRA);
+}
+
+/** Miccia (s interi) che fa esplodere la granata poco dopo il primo contatto col terreno. */
+function micciaDaTick(arma: IdArma, tick: number): number {
+  const m = ARMA[arma].miccia!;
+  return limita(Math.ceil(tick / 60), m.min, m.max);
 }
 
 /** Miccia (s interi) che fa esplodere la granata più o meno all'arrivo sul bersaglio. */

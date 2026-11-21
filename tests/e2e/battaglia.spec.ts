@@ -329,3 +329,27 @@ test('Impostazioni: mancini e Diagnostica', async ({ page }) => {
   await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; }, vista());
   await expect(page.locator('.hud.mancini')).toBeVisible();
 });
+
+// Piano QA §2 L4: HUD della battaglia vera a seme fisso, al tick 0 e al tick 600 (10 s: il timer parte dopo 2 s,
+// quindi a 600 tick ne restano 22). Gli screenshot vanno negli artifact della CI.
+test('battaglia vera a seme fisso: tick 0 e tick 600', async ({ page }) => {
+  test.setTimeout(60000);
+  for (const f of FORMATI) {
+    await page.setViewportSize({ width: f.width, height: f.height });
+    await page.goto('/?prova');
+    await page.locator('#schermaglia').click();
+    await page.evaluate(() => {
+      const b = (window as any).__kaboom.bus;
+      b.richiestaBattaglia.value = { ...b.richiestaBattaglia.value, seme: 20261121 };
+    });
+    await expect(page.locator('#tasto-fuoco')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('timer')).toHaveText('30');
+    await page.screenshot({ path: `test-results/screenshot/battaglia-seme-tick0-${f.nome}.png` });
+    await controllaTasti(page, f.width, f.height);
+    await expect(page.getByTestId('timer')).toHaveText('22', { timeout: 20000 });
+    await page.screenshot({ path: `test-results/screenshot/battaglia-seme-tick600-${f.nome}.png` });
+    await page.locator('#pausa').click();
+    await page.locator('#esci').click();
+    await expect(page.locator('#schermaglia')).toBeVisible();
+  }
+});

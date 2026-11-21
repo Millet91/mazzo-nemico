@@ -105,7 +105,7 @@ function braccio(r: Renderer): Forma {
 
 export type IdForma =
   | 'braccio' | 'lampo' | 'palla' | 'granata' | 'frammento' | 'barile' | 'mina' | 'lapide'
-  | 'cerchio' | 'nuvola' | 'anello' | 'cerchietto' | 'cappello' | 'cassa' | 'paracadute' | 'freccia' | 'puntino' | 'palma' | 'masso' | 'rovina' | 'cespuglio' | 'segnaposto';
+  | 'cerchio' | 'nuvola' | 'anello' | 'cerchietto' | 'puntinoMira' | 'mirino' | 'cappello' | 'cassa' | 'paracadute' | 'freccia' | 'puntino' | 'palma' | 'masso' | 'rovina' | 'cespuglio' | 'segnaposto';
 
 export class Forme {
   private readonly ciurme = new Map<IdCiurma, Forma>();
@@ -141,6 +141,18 @@ export class Forme {
     })()));
     this.altre.set('cappello', forma(r, g()
       .ellipse(0, 0, 11, 3).fill(dark).poly([-7, 0, -5, -8, 5, -8, 7, 0]).fill(dark).circle(0, -4, 2).fill(BIANCO)));
+    // traiettoria (Lead design): puntino oro r 3,5 con contorno inchiostro 1,5; mirino rosso alla fine
+    this.altre.set('puntinoMira', forma(r, g().circle(0, 0, 3.5).fill(hex('#FFC83D')).stroke({ width: 1.5, color: hex('#2B1B10') })));
+    this.altre.set('mirino', forma(r, (() => {
+      const m = g();
+      const rosso = hex(PALETTE.pericolo), scuro = hex('#2B1B10');
+      for (const [w, c] of [[5.5, scuro], [3, rosso]] as const) {
+        m.circle(0, 0, 10).stroke({ width: w, color: c });
+        m.moveTo(-16, 0).lineTo(-5, 0).moveTo(5, 0).lineTo(16, 0).moveTo(0, -16).lineTo(0, -5).moveTo(0, 5).lineTo(0, 16)
+          .stroke({ width: w, color: c, cap: 'round' });
+      }
+      return m.circle(0, 0, 2.5).fill(rosso);
+    })()));
     this.altre.set('cerchietto', forma(r, g().circle(0, 0, 7).stroke({ width: 2, color: BIANCO })));
     this.altre.set('mina', forma(r, g().ellipse(0, 0, 7, 4).fill(hex('#E8B4B8')).stroke({ width: 1, color: dark })));
     // lapide-barilotto con il cappello (00 §1.4)

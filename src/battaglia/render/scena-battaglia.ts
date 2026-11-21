@@ -23,6 +23,10 @@ const MEZZA_CAPSULA = BIL.pirata.capsulaAltezza / 2;
 /** durata della morte del segnaposto: 10 f a 12 fps (11 §5) */
 const MORTE_MS = 833;
 const PUNTI_TRAIETTORIA = 60;
+/** traiettoria ben leggibile (Lead design, PR #37): puntini oro di 3,5 px di schermo a ogni zoom, uno ogni ~12 px */
+const PASSO_PUNTINI_PX = 12;
+const MAX_PUNTINI = 220;
+const ALFA_MIN_PUNTINI = 0.7;
 /** sotto questa scala (px CSS per px di mondo) i nomi dei pirati non si scrivono */
 const SCALA_MIN_NOMI = 0.9;
 
@@ -91,6 +95,9 @@ export class ScenaBattaglia {
   private readonly proiettili = new Map<number, { sp: Sprite; paracadute: Sprite | null; scia: number }>();
   private readonly fineTraiettoria: Sprite;
   private readonly puntini: Sprite[] = [];
+  /** punti della traiettoria in px di mondo (ricalcolati solo quando cambia la mira) */
+  private puntiTraiettoria: Punto[] = [];
+  private readonly contenitoreTraiettoria = new Container();
   private readonly anelloTerra: Sprite;
   private readonly freccia: Sprite;
   /** corta freccia oro sopra il pirata nella direzione di mira (00 §9.16) */
@@ -126,15 +133,16 @@ export class ScenaBattaglia {
     this.freccia = sprite(this.forme.get('freccia'));
     this.mondo.addChild(this.anelloTerra, this.strato.pirati, this.strato.proiettili, this.strato.traiettoria, this.effetti.mondo, this.acqua);
 
-    this.fineTraiettoria = sprite(this.forme.get('cerchietto'));
-    this.fineTraiettoria.visible = false;
-    this.strato.traiettoria.addChild(this.fineTraiettoria);
-    for (let i = 0; i < PUNTI_TRAIETTORIA; i++) {
-      const p = sprite(this.forme.get('puntino'));
+    // la traiettoria sta nello strato schermo: misura costante a ogni zoom
+    for (let i = 0; i < MAX_PUNTINI; i++) {
+      const p = sprite(this.forme.get('puntinoMira'));
       p.visible = false;
       this.puntini.push(p);
-      this.strato.traiettoria.addChild(p);
+      this.contenitoreTraiettoria.addChild(p);
     }
+    this.fineTraiettoria = sprite(this.forme.get('mirino'));
+    this.fineTraiettoria.visible = false;
+    this.contenitoreTraiettoria.addChild(this.fineTraiettoria);
     for (const p of s.pirati) this.creaPirata(p);
 
     // freccia verso destra (angolo 0): asta da 22 a 44 px dal centro del pirata, punta fino a 56 px
@@ -143,7 +151,7 @@ export class ScenaBattaglia {
       .moveTo(22, 0).lineTo(46, 0).stroke({ width: 4, color: hex(PALETTE.oro), cap: 'round' })
       .poly([44, -8, 58, 0, 44, 8]).fill(hex(PALETTE.oro)).stroke({ width: 1.5, color: hex(PALETTE.oroOmbra) });
     this.frecciaMira.visible = false;
-    this.schermo.addChild(this.frecciaMira, this.freccia, this.effetti.schermo);
+    this.schermo.addChild(this.contenitoreTraiettoria, this.frecciaMira, this.freccia, this.effetti.schermo);
   }
 
   private creaPirata(p: Pirata): void {
@@ -303,7 +311,7 @@ export class ScenaBattaglia {
     }
 
     this.aggiornaProiettili(deltaMS);
-    this.aggiornaTraiettoria(o.mira && !!attivo);
+    this.aggiornaTraiettoria(o.mira && !!attivo, aSchermo);
     this.effetti.aggiorna(deltaMS, aSchermo);
   }
 
@@ -434,7 +442,7 @@ export class ScenaBattaglia {
     });
   }
 
-  private aggiornaTraiettoria(mostra: boolean): void {
+  private aggiornaTraiettoria(mostra: boolean, aSchermo: (x: number, y: number) => Punto): void {
     if (!mostra) {
       if (this.chiaveTraiettoria) { for (const p of this.puntini) p.visible = false; this.fineTraiettoria.visible = false; this.chiaveTraiettoria = ''; }
       return;
@@ -442,24 +450,48 @@ export class ScenaBattaglia {
     const s = this.s;
     const attivo = s.pirati.find((p) => p.id === s.turno.pirata);
     const chiave = `${s.turno.mira.mezziGradi}|${s.turno.mira.potenza}|${s.turno.arma}|${s.turno.miccia}|${s.vento}|${attivo?.x.toFixed(1)}|${attivo?.y.toFixed(1)}`;
-    if (chiave === this.chiaveTraiettoria) return;
-    this.chiaveTraiettoria = chiave;
-    const punti = traiettoria(s, PUNTI_TRAIETTORIA);
-    // intera a Mozzo (e nei tutorial), altrimenti solo il primo 30% (00 §3)
-    const n = s.config.traiettoriaCompleta ? punti.length : Math.ceil(punti.length * BIL.mira.traiettoria);
-    for (let i = 0; i < this.puntini.length; i++) {
-      const d = this.puntini[i];
-      if (i < n && i < punti.length) {
-        d.visible = true;
-        d.position.set(punti[i].x, punti[i].y);
-        d.alpha = 0.95 - (0.6 * i) / Math.max(1, n);
-        d.scale.set(i % 2 ? 0.55 : 0.75);
-      } else d.visible = false;
+    if (chiave !== this.chiaveTraiettoria) {
+      this.chiaveTraiettoria = chiave;
+      const punti = traiettoria(s, PUNTI_TRAIETTORIA);
+      // intera a Mozzo (e nei tutorial), altrimenti solo il primo 30% (00 §3)
+      const n = s.config.traiettoriaCompleta ? punti.length : Math.ceil(punti.length * BIL.mira.traiettoria);
+      this.puntiTraiettoria = punti.slice(0, n);
     }
-    // granata a traiettoria intera: un cerchietto dove esplode con la miccia scelta (m1-ritmo §8)
+    // ogni frame (la camera si muove): un puntino ogni ~12 px di schermo lungo la linea
+    const punti = this.puntiTraiettoria;
+    let usati = 0;
+    if (punti.length) {
+      let prima = aSchermo(punti[0].x, punti[0].y);
+      let resto = 0;
+      let totale = 0;
+      for (let i = 1; i < punti.length; i++) {
+        const q = aSchermo(punti[i].x, punti[i].y);
+        totale += Math.hypot(q.x - prima.x, q.y - prima.y);
+        prima = q;
+      }
+      prima = aSchermo(punti[0].x, punti[0].y);
+      let fatta = 0;
+      for (let i = 1; i < punti.length && usati < MAX_PUNTINI; i++) {
+        const q = aSchermo(punti[i].x, punti[i].y);
+        const seg = Math.hypot(q.x - prima.x, q.y - prima.y);
+        while (resto <= seg && usati < MAX_PUNTINI) {
+          const k = seg > 0 ? resto / seg : 0;
+          const d = this.puntini[usati++];
+          d.visible = true;
+          d.position.set(prima.x + (q.x - prima.x) * k, prima.y + (q.y - prima.y) * k);
+          d.alpha = 1 - (1 - ALFA_MIN_PUNTINI) * Math.min(1, (fatta + resto) / Math.max(1, totale));
+          resto += PASSO_PUNTINI_PX;
+        }
+        resto -= seg;
+        fatta += seg;
+        prima = q;
+      }
+    }
+    for (let i = usati; i < this.puntini.length; i++) if (this.puntini[i].visible) this.puntini[i].visible = false;
+    // a traiettoria intera: mirino rosso dove il colpo tocca il terreno (o dove esplode la granata)
     const fine = punti[punti.length - 1];
-    this.fineTraiettoria.visible = s.turno.arma === 'granata' && s.config.traiettoriaCompleta && !!fine;
-    if (fine) this.fineTraiettoria.position.set(fine.x, fine.y);
+    this.fineTraiettoria.visible = s.config.traiettoriaCompleta && !!fine;
+    if (fine) { const f = aSchermo(fine.x, fine.y); this.fineTraiettoria.position.set(f.x, f.y); }
   }
 
   private disegnaCielo(camera: Camera, deltaMS: number): void {

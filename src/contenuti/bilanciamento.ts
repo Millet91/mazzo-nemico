@@ -103,6 +103,17 @@ export const BIL = {
 
   lapide: { danno: 10, raggio: 25 },
 
+  /** scale e liane distruttibili (richiesta del proprietario, 21/11/2026) */
+  arrampicata: {
+    /** px/tick: 40 px/s in su, 60 px/s in giù, uguale per scala e liana (design/comandi/scale-e-liane.md) */
+    velocitaSu: 40 / S,
+    velocitaGiu: 60 / S,
+    /** ci si aggrappa entro questi px dal centro del pirata all'appiglio */
+    presa: 8,
+    /** un pezzo di appiglio più corto di così sparisce */
+    pezzoMinimo: 10,
+  },
+
   /** barili di polvere già piazzati dal generatore (m1-ritmo §9; 06 §2 Porto e §7.4) */
   barili: { min: 3, max: 4, danno: 75, raggio: 85, distanzaMinimaSpawn: 200 },
 

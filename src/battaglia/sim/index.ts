@@ -28,6 +28,7 @@ import { inGioco, stacca } from './pirata';
 import { avanza, iniziaTurno, miraIniziale, pirataDelTurno, ritirata } from './turno';
 import { hashDi } from './hash';
 import { creaBarili } from './oggetti';
+import { creaAppigli } from './appigli';
 import { simulaColpo as simula, traiettoria as linea } from './simula';
 
 /** Crea lo stato iniziale. La mappa arriva dal generatore (battaglia/gen). Il turno 1 parte in fase 'inquadra'. */
@@ -44,7 +45,7 @@ export function creaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata): Stato
       pirati.push({
         id: id++, squadra: lato, nome: T.ciurme[sq.ciurma].pirati[i % 5],
         x: p.x, y, vx: 0, vy: 0, vita, vitaMax: vita,
-        verso: 1, aTerra: true, stato: 'vivo', yInizioCaduta: y, dannoNelTurno: 0,
+        verso: 1, aTerra: true, stato: 'vivo', yInizioCaduta: y, dannoNelTurno: 0, appeso: -1,
       });
     }
   }
@@ -65,15 +66,16 @@ export function creaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata): Stato
   const s: StatoBattaglia = {
     versioneRegole: cfg.versioneRegole, config: cfg, rng: semeIniziale(cfg.seme), tick: 0,
     terreno: { ...mappa.terreno, maschera: mappa.terreno.maschera.slice() },
-    vento: 0, squadre: [sq(0), sq(1)], pirati, proiettili: [], prossimoId: 1,
+    vento: 0, squadre: [sq(0), sq(1)], pirati, proiettili: [], appigli: [], prossimoId: 1,
     turno: {
       numero: 0, squadra: 1, pirata: -1, fase: 'inquadra', inizioFase: 0, timerAvviato: false, tickRimasti: 0,
       arma: 'cannone', mira: miraIniziale(1), miccia: BIL.mira.micciaPredefinita,
-      camminata: 0, sparato: false, fermoDa: -1,
+      camminata: 0, arrampicata: 0, sparato: false, fermoDa: -1,
     },
     esito: null,
   };
   creaBarili(s, mappa.barili);
+  creaAppigli(s, mappa.appigli);
   iniziaTurno(s, []); // gli eventi del turno 1 li ripete il primo avanzaTick
   return s;
 }
@@ -105,8 +107,12 @@ export function eseguiComando(s: StatoBattaglia, c: Comando): void {
       }
       break;
     }
+    case 'arrampica': {
+      t.arrampicata = c.dir === -1 || c.dir === 1 ? c.dir : 0; // si aggrappa o sale/scende al prossimo tick
+      break;
+    }
     case 'salta': {
-      if (!p.aTerra) break;
+      if (!p.aTerra && p.appeso < 0) break;
       const sa = c.indietro ? BIL.pirata.saltoIndietro : BIL.pirata.saltoAvanti;
       stacca(p);
       p.vx = sa.vx * p.verso; p.vy = sa.vy; // l'evento `salto` esce al prossimo tick (turno.ts)

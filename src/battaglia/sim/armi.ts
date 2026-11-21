@@ -6,7 +6,7 @@ import { ARMA, type DefArma } from '../../contenuti/armi';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { coseno, daGradi, seno } from '../../core/trig';
 import { solido, scavaCratere, MEZZA_ALTEZZA_PIRATA, MEZZA_LARGHEZZA_PIRATA } from './terreno';
-import { danneggia, stacca } from './pirata';
+import { danneggia, staccaPirata } from './pirata';
 import { dannoArma, direzioneSpinta, esplodi } from './esplosione';
 import { raggio, type Bersaglio, type FisicaProiettile } from './proiettili';
 import { BOCCA_PX } from './costanti';
@@ -95,7 +95,7 @@ export function colpoIstantaneo(s: StatoBattaglia, p: Pirata, eventi: EventoBatt
     const q = s.pirati.find((x) => x.id === r.pirata)!;
     const spinta = ((a.spintaFissa ?? 0) / TICK_AL_SECONDO);
     const dir = direzioneSpinta(p.x, p.y, q.x, q.y);
-    stacca(q);
+    staccaPirata(q, eventi);
     q.vx += dir.x * spinta; q.vy += dir.y * spinta;
     danneggia(q, dannoArma(a.id, s.squadre[p.squadra].ciurma), eventi);
   }
@@ -123,7 +123,7 @@ export function colpoMischia(s: StatoBattaglia, p: Pirata, eventi: EventoBattagl
   eventi.push({ t: 'colpoSciabola', pirata: p.id, colpiti: colpiti.map((q) => q.id) });
   const sp = spintaMischia(a, p.verso);
   for (const q of colpiti) {
-    stacca(q);
+    staccaPirata(q, eventi);
     q.vx += sp.vx; q.vy += sp.vy;
     danneggia(q, dannoArma(a.id, s.squadre[p.squadra].ciurma), eventi);
   }

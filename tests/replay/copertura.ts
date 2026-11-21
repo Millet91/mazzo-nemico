@@ -9,6 +9,8 @@ export const COPERTURA_M1 = [
   'fine:eliminazione', 'fine:tempo', '5v5:fine',
   // passata di ritmo (m1-ritmo §9): barili di polvere e casse Rum/Trappola
   'barile', 'cassaCaduta', 'cassa:rum', 'cassa:trappola',
+  // mappe fatte a mano (#41)
+  'mappa:cala-pappagallo',
 ] as const;
 /** Desiderabile ma raro: si prende se il generatore lo trova. */
 export const COPERTURA_FACOLTATIVA = ['fine:tempo-parita', 'fine:ritirata', 'dannoCaduta'] as const;
@@ -17,6 +19,7 @@ export class Copertura {
   readonly tag = new Set<string>();
   private lapidiNelTurno = 0;
   osserva(s: StatoBattaglia, eventi: readonly EventoBattaglia[]): void {
+    if (s.config.mappaFissa) this.tag.add(`mappa:${s.config.mappaFissa}`);
     for (const e of eventi) {
       switch (e.t) {
         case 'turnoIniziato': this.lapidiNelTurno = 0; break;

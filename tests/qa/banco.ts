@@ -1,11 +1,12 @@
 // Banco di prova del QA: gioca battaglie intere solo con le API congelate (core/tipi, battaglia/sim, gen, ia),
 // in Node e senza Pixi. Lo usano fuzz.test.ts e prestazioni.test.ts. Proprietario: Lead test/QA.
 import { readFileSync } from 'node:fs';
-import type { Comando, ComandoRegistrato, ConfigBattaglia, EventoBattaglia, IdArma, StatoBattaglia } from '../../src/core/tipi';
+import type { Comando, ComandoRegistrato, ConfigBattaglia, EventoBattaglia, IdArma, MappaGenerata, StatoBattaglia } from '../../src/core/tipi';
 import { VERSIONE_REGOLE } from '../../src/core/tipi';
 import { casuale, intero, semeIniziale, type ConRng } from '../../src/core/rng';
 import { creaBattaglia, eseguiComando, avanzaTick, hashStato } from '../../src/battaglia/sim';
 import { generaMappa } from '../../src/battaglia/gen';
+import { mappaFatta } from '../../src/battaglia/mappe';
 import { decidi } from '../../src/battaglia/ia';
 import { BIL, TICK_AL_SECONDO } from '../../src/contenuti/bilanciamento';
 import { ARMI_ATTIVE } from '../../src/contenuti/armi';
@@ -16,10 +17,11 @@ export const SIM_SEGNAPOSTO = readFileSync('src/battaglia/sim/index.ts', 'utf8')
 /** Tetto di sicurezza: oltre questo la battaglia "non finisce" (turno limite × turno più lungo possibile). */
 export const TICK_MAX = BIL.battaglia.turnoLimite * (BIL.camera.inquadraTick + (BIL.turno.timerLungo + 15) * TICK_AL_SECONDO);
 
-export function configCaso(seme: number, perLato?: [number, number]): ConfigBattaglia {
+export function configCaso(seme: number, perLato?: [number, number], mappaFissa?: string): ConfigBattaglia {
   const r: ConRng = { rng: semeIniziale(seme ^ 0x51a5) };
   const a = perLato ?? [intero(r, 1, 5), intero(r, 1, 5)];
   return {
+    ...(mappaFissa ? { mappaFissa } : {}),
     versioneRegole: VERSIONE_REGOLE, seme, bioma: 'isola',
     squadre: [
       { ciurma: 'teschio', ruolo: 'attaccante', controllo: 'umano', pirati: a[0] },
@@ -29,9 +31,15 @@ export function configCaso(seme: number, perLato?: [number, number]): ConfigBatt
   };
 }
 
+/** La mappa di una config come la sceglie la partita (partita.ts): quella fatta a mano se c'è mappaFissa, altrimenti il generatore. */
+export function mappaPer(cfg: ConfigBattaglia): MappaGenerata {
+  const fissa = cfg.mappaFissa ? mappaFatta(cfg.mappaFissa, cfg) : null;
+  if (cfg.mappaFissa && !fissa) throw new Error(`mappa fatta a mano sconosciuta: ${cfg.mappaFissa}`);
+  return fissa ?? generaMappa({ seme: cfg.seme, bioma: cfg.bioma, variante: cfg.variante, piratiPerLato: [cfg.squadre[0].pirati, cfg.squadre[1].pirati] });
+}
+
 export function nuovaBattaglia(cfg: ConfigBattaglia): StatoBattaglia {
-  const mappa = generaMappa({ seme: cfg.seme, bioma: cfg.bioma, piratiPerLato: [cfg.squadre[0].pirati, cfg.squadre[1].pirati] });
-  return creaBattaglia(cfg, mappa);
+  return creaBattaglia(cfg, mappaPer(cfg));
 }
 
 export type Pilota = (s: StatoBattaglia) => Comando[];

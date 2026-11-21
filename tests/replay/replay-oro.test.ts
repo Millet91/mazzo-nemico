@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import type { Replay } from '../../src/core/tipi';
-import { generaMappa } from '../../src/battaglia/gen';
+import { mappaPer } from '../qa/banco';
 import { rigiocaReplay } from '../../src/battaglia/sim/replay';
 import { Copertura, COPERTURA_M1 } from './copertura';
 
@@ -22,8 +22,7 @@ describe("QA · replay d'oro", () => {
   for (const f of FILE) {
     it(f, () => {
       const r = replay(f);
-      const c = r.config;
-      const mappa = generaMappa({ seme: c.seme, bioma: c.bioma, variante: c.variante, piratiPerLato: [c.squadre[0].pirati, c.squadre[1].pirati] });
+      const mappa = mappaPer(r.config);
       const cop = new Copertura();
       const esito = rigiocaReplay(r, mappa, { suEventi: (s, e) => cop.osserva(s, e) });
       expect(esito.differenze).toEqual([]);

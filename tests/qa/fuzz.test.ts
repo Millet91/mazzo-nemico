@@ -57,4 +57,14 @@ describe('QA · IA contro IA', () => {
       if (!SIM_SEGNAPOSTO) expect(p.stato.esito, `seme ${seme}`).not.toBeNull();
     }
   }, 120_000);
+
+  it('Cala Pappagallo (mappa fatta a mano): da 1 a 5 per lato, IA e comandi casuali, senza violazioni', () => {
+    for (const [seme, n] of [[1, 1], [2, 3], [3, 5], [4, 2]] as const) {
+      for (const pilota of [pilotaIa(), pilotaCasuale(seme)]) {
+        const p = gioca(configCaso(seme + 6000, [n, n], 'cala-pappagallo'), pilota);
+        expect(p.violazioni, `seme ${seme}, ${n}v${n}`).toEqual([]);
+        if (!SIM_SEGNAPOSTO) expect(p.stato.esito, `seme ${seme}`).not.toBeNull();
+      }
+    }
+  }, 180_000);
 });

@@ -4,9 +4,8 @@
 // separato con il motivo (13 §2 L2). Proprietario: Lead test/QA.
 import { writeFileSync, readdirSync, unlinkSync } from 'node:fs';
 import type { ComandoRegistrato, ConfigBattaglia } from '../../src/core/tipi';
-import { generaMappa } from '../../src/battaglia/gen';
 import { creaReplay, giocaComandi } from '../../src/battaglia/sim/replay';
-import { configCaso, gioca, pilotaCasuale, pilotaIa, type Pilota } from '../qa/banco';
+import { configCaso, gioca, mappaPer, pilotaCasuale, pilotaIa, type Pilota } from '../qa/banco';
 import { BIL } from '../../src/contenuti/bilanciamento';
 import { Copertura, COPERTURA_M1, COPERTURA_FACOLTATIVA } from './copertura';
 
@@ -15,8 +14,7 @@ const QUANTI = 10;
 
 interface Candidato { nome: string; cfg: ConfigBattaglia; comandi: ComandoRegistrato[]; tag: Set<string>; tick: number }
 
-export const mappaDi = (cfg: ConfigBattaglia) =>
-  generaMappa({ seme: cfg.seme, bioma: cfg.bioma, variante: cfg.variante, piratiPerLato: [cfg.squadre[0].pirati, cfg.squadre[1].pirati] });
+export const mappaDi = mappaPer;
 
 function candidato(nome: string, cfg: ConfigBattaglia, pilota: Pilota): Candidato {
   const p = gioca(cfg, pilota, false);
@@ -46,6 +44,11 @@ for (let seme = 1; seme <= 60; seme++) {
     candidati.push(candidato(`misto-${n}v${n}-${seme}`, configCaso(seme + 1000, [n, n]), misto(seme)));
   }
   candidati.push(candidato(`caso-${seme}`, configCaso(seme + 2000), pilotaCasuale(seme)));
+}
+// mappe fatte a mano (#41): almeno un replay d'oro per ognuna (tag mappa:<id> in COPERTURA_M1)
+for (let seme = 1; seme <= 20; seme++) {
+  candidati.push(candidato(`cala-ia-3v3-${seme}`, configCaso(seme + 4000, [3, 3], 'cala-pappagallo'), pilotaIa()));
+  candidati.push(candidato(`cala-misto-3v3-${seme}`, configCaso(seme + 5000, [3, 3], 'cala-pappagallo'), misto(seme)));
 }
 
 // scelta golosa: a ogni passo il candidato che copre più tag mancanti; a parità il più corto

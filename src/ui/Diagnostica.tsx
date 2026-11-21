@@ -49,6 +49,7 @@ async function rigiocaTutti() {
   try {
     const { rigiocaReplay } = await modulo();
     const { generaMappa } = await import('../battaglia/gen');
+    const { mappaFatta } = await import('../battaglia/mappe');
     if (!rigiocaReplay) { statoReplay.value = T.diagnostica.nonPronto; return; }
     let ok = 0;
     for (let i = 0; i < nomi.length; i++) {
@@ -57,7 +58,9 @@ async function rigiocaTutti() {
       try {
         const r = await REPLAY[nomi[i]]();
         const c = r.config;
-        const mappa = generaMappa({ seme: c.seme, bioma: c.bioma, variante: c.variante, piratiPerLato: [c.squadre[0].pirati, c.squadre[1].pirati] });
+        // come partita.ts: un replay su una mappa fatta a mano (mappaFissa) non si rigenera col generatore
+        const mappa = (c.mappaFissa ? mappaFatta(c.mappaFissa, c) : null)
+          ?? generaMappa({ seme: c.seme, bioma: c.bioma, variante: c.variante, piratiPerLato: [c.squadre[0].pirati, c.squadre[1].pirati] });
         uguale = replayUguale(r, rigiocaReplay(r, mappa));
       } catch (e) { console.error(e); }
       if (uguale) ok++;

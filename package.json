@@ -1,7 +1,7 @@
 {
   "name": "baro",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
@@ -10,8 +10,7 @@
     "preview": "vite preview --host",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "sim": "tsx sim/cli.ts",
-    "assets:check": "tsx scripts/assets-check.ts",
+    "sim": "tsx sim/sim.ts",
     "android:sync": "npm run build && npx cap sync android",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug"
   },

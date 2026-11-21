@@ -17,4 +17,4 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Simulatore (fumo)
-        run: npx tsx sim/cli.ts 20 random,medio
+        run: npm run sim -- 50

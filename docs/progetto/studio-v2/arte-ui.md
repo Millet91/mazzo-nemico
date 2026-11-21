@@ -25,6 +25,7 @@ Build di `claude/m1-integrazione` (c36bb52, con comandi v3 e terreno Magnific), 
 8. **Etichette sobrie (Pacchetto 1, S):** nome solo per il pirata attivo e il bersaglio mirato; gli altri hanno solo barra PV sottile e numero al tocco. Sono 4 numeri in meno sullo schermo.
 9. **Kit UI dipinto (Pacchetto 2, M):** menu con il cielo HD della Cala e il veliero; pannelli a 9 fette in legno e pergamena per mappa del mondo; HUD di battaglia resta in vetro scuro (leggibile). Icone armi dipinte 128 px, tutte con la stessa grammatica. Ordine: HUD resta, menu dopo.
 10. **Regola risoluzione per ogni asset (S):** sprite e icone a 3× (come già `forme.ts`), webp qualità 82, tessere 2048, memoria GPU ≤120 MB, arte mappa nell'APK ≤25 MB.
+11. **Dopo il secondo feedback (ritmo, ambiente, distruzione) — Pacchetto 1, M.** Strutture che crollano (torri, ponti di corda, tettoie) si dipingono **in pezzi separati** (4-8 per struttura, ognuno con maschera propria) così il codice li stacca e li fa cadere con danno; effetti dipinti a sprite sheet: fuoco, fumo, spruzzo d'acqua, polvere di crollo, scintille della miccia; la corda e il ponte hanno un'animazione di dondolio. Barili e casse riconoscibili a colpo d'occhio (rosso = esplode, blu = acqua, giallo = fuoco). Non ho provato la scalata a fondo: il bug delle scale lo riporta il ruolo QA; per l'arte, scale e liane vanno disegnate con appigli visibili (anello chiaro) a 3×.
 
 ## 4. Cosa NON fare
 - Non far generare la Cala da Magnific in un colpo: esce 1024-1500 px e il proxy qui blocca i download, è così che sono nati i ritagli.

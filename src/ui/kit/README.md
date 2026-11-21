@@ -13,3 +13,14 @@ Uso (da `import { … } from '../kit'`):
 
 Regole: HUD di battaglia resta in vetro scuro (non usa il kit); testi sempre da `testi/it.ts`;
 sorgenti a 3× (fetta 72 px → 24 px CSS); webp qualità 0,82.
+
+Novità (Fase A, seconda parte):
+- `<PannelloNuovo premi={[{icona, titolo}]} nota? battuta?={{chi, testo}} onChiudi etichettaPulsante? />`: `icona` è un id arma
+  (es. 'rampino') o un indirizzo (`urlPremio(...)`). Id predefiniti: data-testid `car-premio`, pulsante `#car-premio-ok`.
+- `<PergamenaScena ritratto="gancio" nome testo onAvanti onSalta? etichette?={{avanti, salta}} />`: un tocco sulla pergamena
+  = Avanti. Id predefiniti: `car-scena`, `#car-avanti`, `#car-salta`. `<Ritratto chiave>` = medaglione con l'iniziale finché
+  non ci sono i ritratti dipinti.
+- Pezzi del Tavolo: `PEZZI_MONDO` + `urlPezzoMondo(id)` (pedina rossa/grigia, cartello della Marina, bandierina; a 3×, con ancora).
+- Premi: `urlPremio(premio)` (arma → sua icona, mossa → sua icona, recluta, bandiera) e `urlTipoPremio(t)`.
+- Le classi CSS del kit sono tutte `kit-*` (es. `kit-pergamena`): `.pergamena` è già della fine battaglia.
+- Vetrina di tutti i pezzi: aprire il gioco con `?vetrina-kit`.

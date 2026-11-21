@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { ARMI } from '../../src/contenuti/armi';
-import { ARMI_CON_ICONA, KIT, idIconaArma, type IdKit } from '../../src/ui/kit/risorse';
+import { ARMI_CON_ICONA, KIT, MOSSE_CON_ICONA, PEZZI_MONDO, idIconaArma, urlPremio, urlTipoPremio, type IdKit, type IdPezzoMondo } from '../../src/ui/kit/risorse';
 
 const cartella = new URL('../../public/assets/ui/', import.meta.url);
 
@@ -39,6 +39,29 @@ describe('kit UI dipinto', () => {
       const url = new URL(`${idIconaArma(a)}.webp`, cartella);
       expect(existsSync(url), a).toBe(true);
       expect(misuraWebp(readFileSync(url))).toEqual([128, 128]);
+    }
+  });
+
+  it('pezzi del Tavolo del Timone: file, misure, ancora dentro l\'immagine', () => {
+    for (const id of Object.keys(PEZZI_MONDO) as IdPezzoMondo[]) {
+      const v = PEZZI_MONDO[id], url = new URL(`${id}.webp`, cartella);
+      expect(existsSync(url), id).toBe(true);
+      expect(misuraWebp(readFileSync(url))).toEqual([v.w, v.h]);
+      expect(v.ancora[0]).toBeLessThanOrEqual(v.w);
+      expect(v.ancora[1]).toBeLessThanOrEqual(v.h);
+    }
+  });
+
+  it('icone dei premi: ogni tipo e ogni mossa ha il suo file da 128 px', () => {
+    const urls = [
+      ...MOSSE_CON_ICONA.map((m) => urlPremio({ t: 'mossa', mossa: m })),
+      urlPremio({ t: 'recluta', nome: 'x', aspetto: 'y' }), urlPremio({ t: 'bandiera', id: 'z' }), urlPremio({ t: 'arma', arma: 'rampino' }),
+      ...(['arma', 'mossa', 'recluta', 'bandiera'] as const).map(urlTipoPremio),
+    ];
+    for (const u of urls) {
+      const f = new URL(u.replace('assets/ui/', ''), cartella);
+      expect(existsSync(f), u).toBe(true);
+      expect(misuraWebp(readFileSync(f))).toEqual([128, 128]);
     }
   });
 });

@@ -452,7 +452,100 @@ async function icona(id) {
   const c = tela(128, 128); c.getContext('2d').drawImage(img, 0, 0, 128, 128); return c;
 }
 
+// ─── pezzi del Tavolo del Timone e icone dei premi (stessa grammatica delle armi) ─────────────
+const scarpone = (x, y, r = 0, s = 1) => `<g transform="translate(${x} ${y}) rotate(${r}) scale(${s})">
+  <path d="M-10 -26 L8 -26 L8 0 Q26 2 30 10 Q30 16 24 16 L-12 16 Q-14 4 -10 -26Z" fill="url(#legno)" ${t(4.5)}/>
+  <path d="M-12 10 L28 10" stroke="${O}" stroke-width="4"/><path d="M-11 -18 L8 -18" stroke="#E8B040" stroke-width="3.5"/></g>`;
+const freccia = (d) => `<path d="${d}" fill="none" stroke="${O}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="#FFC83D" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`;
+const PEZZI = {
+  // pedina: disco di legno visto dall'alto, cerchio chiaro al centro per la cifra (scritta dalla scena)
+  pedina_rossa: { w: 144, h: 144, vb: '0 0 144 144', svg: pedina('url(#rosso)') },
+  pedina_grigia: { w: 144, h: 144, vb: '0 0 144 144', svg: pedina('url(#grigio)') },
+  cartello_marina: { w: 144, h: 192, vb: '0 0 144 192', svg: `
+    <ellipse cx="72" cy="184" rx="30" ry="6" fill="url(#ombra)"/>
+    <rect x="64" y="70" width="16" height="114" rx="4" fill="url(#legnoGrigio)" ${t(5)}/>
+    <path d="M14 22 Q72 12 130 22 L126 96 Q72 104 18 96Z" fill="url(#legnoGrigio)" ${t(6)}/>
+    <path d="M22 46 Q72 40 122 46 M22 72 Q72 66 122 72" fill="none" stroke="#5A6470" stroke-width="3"/>
+    <circle cx="28" cy="32" r="5" fill="url(#ferro)" ${t(3)}/><circle cx="116" cy="32" r="5" fill="url(#ferro)" ${t(3)}/>
+    <g transform="translate(72 60) scale(.42) translate(-64 -64)"><circle cx="64" cy="64" r="46" fill="#2B4A6E" ${t(6)}/>
+      <circle cx="64" cy="30" r="8" fill="none" stroke="#E6EEF5" stroke-width="6"/><rect x="59" y="36" width="10" height="52" fill="#E6EEF5"/>
+      <rect x="42" y="44" width="44" height="8" rx="3" fill="#E6EEF5"/><path d="M32 70 Q40 96 64 98 Q88 96 96 70" fill="none" stroke="#E6EEF5" stroke-width="8" stroke-linecap="round"/></g>
+    ${luce(40, 30, 16, 3, -6)}` },
+  bandierina: { w: 96, h: 144, vb: '0 0 96 144', svg: `
+    <ellipse cx="22" cy="138" rx="18" ry="5" fill="url(#ombra)"/>
+    <rect x="16" y="10" width="9" height="128" rx="3" fill="url(#legno)" ${t(4)}/>
+    <circle cx="20.5" cy="10" r="7" fill="url(#ottone)" ${t(3.5)}/>
+    <path d="M25 18 Q52 10 88 20 Q76 36 90 54 Q56 46 25 58Z" fill="url(#rosso)" ${t(5)}/>
+    <path d="M48 28 a9 8 0 1 1 18 0 q0 6 -4 7 l0 4 h-10 l0 -4 q-4 -1 -4 -7z" fill="#FFF1D2" ${t(2.5)}/>
+    <circle cx="53" cy="29" r="2.2" fill="${O}"/><circle cx="61" cy="29" r="2.2" fill="${O}"/>
+    ${luce(46, 22, 10, 2.5, -8)}` },
+  premio_arma: { w: 128, h: 128, vb: '0 0 128 128', svg: `${ombraTerra(64, 114, 44)}
+    <path d="M26 66 L102 66 L106 106 Q64 114 22 106Z" fill="url(#legno)" ${T}/>
+    <path d="M22 66 Q24 36 64 32 Q104 36 106 66Z" fill="url(#legno)" ${T}/>
+    <path d="M24 66 L104 66 M60 32 L60 106 M68 32 L68 106" stroke="${O}" stroke-width="4"/>
+    <path d="M60 32 L60 106 M68 32 L68 106" stroke="url(#ottone)" stroke-width="2.5"/>
+    <rect x="56" y="58" width="16" height="18" rx="3" fill="url(#ottone)" ${t(4)}/><circle cx="64" cy="66" r="3" fill="${O}"/>
+    <path d="M30 60 Q64 50 98 60" fill="none" stroke="#FFE7A3" stroke-width="5" opacity=".9"/>
+    ${scintilla(104, 30, .8)}${scintilla(26, 30, .6)}${luce(42, 46, 10, 4)}` },
+  premio_recluta: { w: 128, h: 128, vb: '0 0 128 128', svg: `${ombraTerra(60, 114, 38)}
+    <path d="M24 112 Q26 80 60 78 Q94 80 96 112Z" fill="#2E5FA8" ${T}/>
+    <path d="M44 82 L60 100 L76 82" fill="#F5F1EA" ${t(4)}/>
+    <circle cx="60" cy="56" r="26" fill="#F0C898" ${T}/>
+    <path d="M32 50 Q34 24 60 24 Q88 24 88 50 Q74 40 60 42 Q44 42 32 50Z" fill="url(#rosso)" ${T}/>
+    <path d="M86 44 L100 50 L92 58" fill="url(#rosso)" ${t(4)}/>
+    <circle cx="52" cy="58" r="3.5" fill="${O}"/><circle cx="70" cy="58" r="3.5" fill="${O}"/>
+    <path d="M50 70 Q60 77 70 70" fill="none" ${t(3.5)}/>
+    <circle cx="100" cy="94" r="18" fill="url(#verde)" ${T}/><path d="M100 84 L100 104 M90 94 L110 94" stroke="#FFF" stroke-width="6" stroke-linecap="round"/>
+    ${luce(46, 32, 8, 4)}` },
+  premio_bandiera: { w: 128, h: 128, vb: '0 0 128 128', svg: `${ombraTerra(36, 116, 26)}
+    <path d="M86 28 Q96 14 90 4 M100 34 Q114 24 108 12" fill="none" stroke="#B8B0A8" stroke-width="7" stroke-linecap="round" opacity=".9"/>
+    <rect x="28" y="12" width="10" height="104" rx="3" fill="url(#legno)" ${t(4.5)}/>
+    <circle cx="33" cy="12" r="7" fill="url(#ottone)" ${t(3.5)}/>
+    <path d="M38 22 Q72 12 112 24 Q98 46 114 70 Q74 58 38 72Z" fill="#26201C" ${t(5)}/>
+    <path d="M62 38 a12 11 0 1 1 24 0 q0 8 -5 9 l0 5 h-14 l0 -5 q-5 -1 -5 -9z" fill="#FFF1D2" ${t(3)}/>
+    <circle cx="69" cy="39" r="3" fill="${O}"/><circle cx="79" cy="39" r="3" fill="${O}"/>
+    ${luce(56, 28, 12, 2.5, -8)}` },
+  mossa_salto_appoggio: { w: 128, h: 128, vb: '0 0 128 128', svg: `${ombraTerra(64, 116, 46)}
+    <path d="M60 116 L60 78 L116 78 L116 116Z" fill="url(#legno)" ${T}/><path d="M60 92 L116 92" stroke="${O}" stroke-width="3"/>
+    ${freccia('M16 108 Q24 40 74 54')}<path d="M64 42 L80 56 L62 66" fill="#FFC83D" ${t(4)}/>
+    ${scarpone(88, 56, 0, 1)}` },
+  mossa_dondolo: { w: 128, h: 128, vb: '0 0 128 128', svg: `${ombraTerra(64, 116, 40)}
+    <rect x="10" y="10" width="108" height="12" rx="5" fill="url(#legno)" ${t(4.5)}/>
+    <path d="M64 22 L96 86" stroke="${O}" stroke-width="9" stroke-linecap="round"/><path d="M64 22 L96 86" stroke="#C89A5A" stroke-width="4" stroke-linecap="round" stroke-dasharray="5 4"/>
+    ${freccia('M24 64 Q40 108 80 104')}<path d="M74 92 L90 104 L74 114" fill="#FFC83D" ${t(4)}/>
+    <circle cx="98" cy="90" r="10" fill="#F0C898" ${t(4.5)}/>` },
+  mossa_scivolata: { w: 128, h: 128, vb: '0 0 128 128', svg: `${ombraTerra(64, 116, 50)}
+    <path d="M8 108 L120 108" stroke="${O}" stroke-width="6" stroke-linecap="round"/>
+    <path d="M12 82 L52 82 M6 94 L46 94 M20 70 L50 70" stroke="#F5F1EA" stroke-width="6" stroke-linecap="round" opacity=".85"/>
+    <path d="M12 82 L52 82 M6 94 L46 94 M20 70 L50 70" fill="none" ${t(2)} opacity=".6"/>
+    ${scarpone(78, 88, -8, 1.15)}
+    <circle cx="104" cy="104" r="5" fill="#E6D5B0" ${t(2.5)}/><circle cx="116" cy="98" r="4" fill="#E6D5B0" ${t(2.5)}/>` },
+  mossa_tuffo: { w: 128, h: 128, vb: '0 0 128 128', svg: `
+    <path d="M6 96 Q24 86 42 96 Q60 86 78 96 Q96 86 122 96 L122 122 L6 122Z" fill="#2FB3C4" ${t(4.5)}/>
+    <path d="M62 92 Q54 70 62 62 M70 92 Q78 70 72 60 M66 90 Q66 72 66 64" fill="none" stroke="#E6FBFF" stroke-width="6" stroke-linecap="round"/>
+    ${freccia('M24 20 Q70 10 70 74')}<path d="M58 66 L70 84 L82 66" fill="#FFC83D" ${t(4)}/>` },
+};
+function pedina(colore) {
+  return `<ellipse cx="72" cy="122" rx="54" ry="14" fill="url(#ombra)"/>
+    <ellipse cx="72" cy="80" rx="58" ry="46" fill="#3B2010" ${t(6)}/>
+    <ellipse cx="72" cy="66" rx="58" ry="46" fill="${colore}" ${t(6)}/>
+    <ellipse cx="72" cy="64" rx="38" ry="29" fill="#F5E6C4" ${t(5)}/>
+    <ellipse cx="72" cy="66" rx="58" ry="46" fill="none" stroke="url(#ottone)" stroke-width="3" opacity=".9"/>
+    ${luce(46, 36, 16, 5, -18)}`;
+}
+const DEFS_PEZZI = DEFS.replace('</defs>', `
+  <radialGradient id="grigio" cx=".3" cy=".3" r=".85"><stop offset="0" stop-color="#D2DAE2"/><stop offset=".5" stop-color="#7C8794"/><stop offset="1" stop-color="#36404C"/></radialGradient>
+  <linearGradient id="legnoGrigio" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C4CCD4"/><stop offset=".6" stop-color="#8A949E"/><stop offset="1" stop-color="#5A6470"/></linearGradient>
+</defs>`);
+async function pezzo(id) {
+  const p = PEZZI[id];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${p.w}" height="${p.h}" viewBox="${p.vb}">${DEFS_PEZZI}<g filter="url(#grana)">${p.svg}</g></svg>`;
+  const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  await img.decode();
+  const c = tela(p.w, p.h); c.getContext('2d').drawImage(img, 0, 0, p.w, p.h); return c;
+}
+
 window.pittoreKit = {
   pannelloCornice, pannelloLegno, pannelloPergamena, pulsanteLegno, pulsanteOro, corniceTonda, sfondoMenu, icona,
-  idIcone: Object.keys(ICONE),
+  idIcone: Object.keys(ICONE), pezzo, idPezzi: Object.keys(PEZZI),
 };

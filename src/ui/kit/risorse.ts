@@ -2,6 +2,7 @@
 // Le immagini le dipinge `node scripts/ui/dipingi-kit.mjs` (in casa, Chromium). Sorgenti a 3×:
 // una fetta di 72 px d'immagine diventa un bordo di 24 px CSS.
 import type { IdArma } from '../../core/tipi';
+import type { IdMossa, Premio } from '../../core/carriera';
 
 export type IdKit =
   | 'ui_pannello_cornice' | 'ui_pannello_legno' | 'ui_pannello_pergamena'
@@ -52,3 +53,30 @@ export function applicaKit(radice: HTMLElement = document.documentElement): void
     radice.style.setProperty(`--kit-${id.slice(3).replace(/_/g, '-')}`, `url("${new URL(urlKit(id), document.baseURI).href}")`);
   }
 }
+
+// ─── Pezzi del Tavolo del Timone (li disegna la scena del mondo, a scala 1/3) ───────────────────
+export type IdPezzoMondo = 'ui_mondo_pedina_rossa' | 'ui_mondo_pedina_grigia' | 'ui_mondo_cartello_marina' | 'ui_mondo_bandierina';
+/** misura e ancora in px d'immagine (3×): pedina = centro della cifra, cartello e bandierina = piede del palo */
+export const PEZZI_MONDO: Record<IdPezzoMondo, { w: number; h: number; ancora: [number, number] }> = {
+  ui_mondo_pedina_rossa: { w: 144, h: 144, ancora: [72, 64] },
+  ui_mondo_pedina_grigia: { w: 144, h: 144, ancora: [72, 64] },
+  ui_mondo_cartello_marina: { w: 144, h: 192, ancora: [72, 186] },
+  ui_mondo_bandierina: { w: 96, h: 144, ancora: [20, 140] },
+};
+export const urlPezzoMondo = (id: IdPezzoMondo) => `assets/ui/${id}.webp`;
+
+// ─── Icone dei premi (128 px) ────────────────────────────────────────────────────────────────────
+export const MOSSE_CON_ICONA: readonly IdMossa[] = ['saltoAppoggio', 'dondolo', 'scivolata', 'tuffo'];
+const sneak = (s: string) => s.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
+/** icona di un premio: arma → la sua icona dipinta, mossa → la sua, recluta e bandiera → icona del tipo */
+export function urlPremio(p: Premio): string {
+  switch (p.t) {
+    case 'arma': return urlIconaArma(p.arma);
+    case 'mossa': return `assets/ui/ui_premio_mossa_${sneak(p.mossa)}.webp`;
+    case 'recluta': return 'assets/ui/ui_premio_recluta.webp';
+    case 'bandiera': return 'assets/ui/ui_premio_bandiera.webp';
+  }
+}
+/** icona generica per TIPO di premio (medaglione sopra l'isola quando non serve il dettaglio) */
+export const urlTipoPremio = (t: Premio['t']) =>
+  t === 'mossa' ? 'assets/ui/ui_premio_mossa_salto_appoggio.webp' : `assets/ui/ui_premio_${t}.webp`;

@@ -27,6 +27,9 @@ const lavori = [
 const idIcone = await page.evaluate(() => window.pittoreKit.idIcone);
 for (const id of idIcone) lavori.push([`ui_arma_${id.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase())}`, 'icona', id]);
 
+const idPezzi = await page.evaluate(() => window.pittoreKit.idPezzi);
+for (const id of idPezzi) lavori.push([id.startsWith('premio_') || id.startsWith('mossa_') ? `ui_${id.startsWith('mossa_') ? 'premio_' + id : id}` : `ui_mondo_${id}`, 'pezzo', id]);
+
 let totale = 0;
 for (const [nome, fn, arg] of lavori) {
   const url = await page.evaluate(async ([f, a, q]) => (await window.pittoreKit[f](a)).toDataURL('image/webp', q), [fn, arg, QUALITA]);

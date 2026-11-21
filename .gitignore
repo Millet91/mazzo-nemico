@@ -3,3 +3,8 @@ dist
 dist-single
 sim-out
 *.log
+android/app/build
+android/build
+android/.gradle
+android/local.properties
+*.apk

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Baro</string>
+    <string name="title_activity_main">Baro</string>
+    <string name="package_name">it.millet91.baro</string>
+    <string name="custom_url_scheme">it.millet91.baro</string>
+</resources>

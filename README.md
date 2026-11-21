@@ -85,3 +85,15 @@ Dove il GDD non diceva abbastanza ho deciso io, così:
 ## Piattaforme
 
 Pensata per il telefono (target da 44 px, Fila verticale sotto i 560 px). L'APK Android si farà con Capacitor sopra la build `dist/`; il core non dipende dal browser.
+
+## App Android (APK di prova)
+
+L'app è la stessa versione web impacchettata con Capacitor (`capacitor.config.ts`, cartella `android/`).
+
+- **Scaricarla**: a ogni push il workflow *APK Android* costruisce `baro-prova.apk` e lo mette nella pre-release
+  [apk-prova](../../releases/tag/apk-prova) (e come artifact del workflow).
+- **Installarla**: apri il link della pre-release dal telefono Android, scarica `baro-prova.apk`, aprilo e consenti
+  "Installa app sconosciute" per il browser quando Android lo chiede. È una build di debug: non passa dal Play Store
+  e Play Protect può mostrare un avviso, si conferma con "Installa comunque".
+- **Costruirla in locale** (serve Android Studio o l'Android SDK): `npm run android:apk`, poi il file è in
+  `android/app/build/outputs/apk/debug/app-debug.apk`.

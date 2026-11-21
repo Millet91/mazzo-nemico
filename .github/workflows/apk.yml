@@ -1,0 +1,50 @@
+# APK Android di prova (debug, Capacitor). Gira a ogni push sul ramo di sviluppo e a mano.
+# Pubblica l'APK come artifact del workflow e nella pre-release "apk-prova", scaricabile dal telefono.
+name: APK Android
+on:
+  push:
+    branches: [main, 'claude/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Build APK di debug
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Rinomina
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk baro-prova.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: baro-prova-apk
+          path: baro-prova.apk
+      - name: Pre-release "apk-prova"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Build di prova interna di Baro (debug, non firmata per lo store). Commit ${GITHUB_SHA::7}, ramo ${GITHUB_REF_NAME}, build ${GITHUB_RUN_NUMBER}."
+          if gh release view apk-prova >/dev/null 2>&1; then
+            gh release upload apk-prova baro-prova.apk --clobber
+            gh release edit apk-prova --notes "$NOTES" --target "$GITHUB_SHA"
+          else
+            gh release create apk-prova baro-prova.apk --prerelease --title "Baro · APK di prova" --notes "$NOTES" --target "$GITHUB_SHA"
+          fi

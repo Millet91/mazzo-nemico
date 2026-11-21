@@ -1,8 +1,9 @@
 // HUD di battaglia (00 §3 e §9.16, design M1 §6, m1-ritmo §1-3), sopra il canvas. Progettato a 800×360 CSS.
 //
 // [II] [PV + emblema A]   ⏱ timer  ~vento~   [PV + emblema B]
-//                                         [ARMA]   [miccia]
-//  ( movimento )                    45° · 60%   ( mira [FUOCO] )
+//                                       [miccia]   45° · 60%
+//                                        [ARMA]
+//  (movimento)                          [FUOCO]    ( mira )
 //
 // Doppio joystick fisso (scelta del proprietario 21/11): vedi Joystick.tsx. Con "Comandi classici":
 // [◀][▶] … [▲][▼] [SALTA][FUOCO] come prima. Mancini: i due lati si scambiano.
@@ -165,10 +166,11 @@ export function Hud({ v }: { v: VistaBattaglia }) {
           <JoystickMovimento />
           {mira && (
             <>
-              <JoystickMira v={v} fuoco={
+              <JoystickMira v={v} />
+              <div class="fuoco-doppio">
                 <Tasto id="tasto-fuoco" label={T.battaglia.fuoco} cls="fuoco testo"
                   giu={() => t.fuoco.tocca(v.numeroTurno)}>{T.battaglia.fuoco}</Tasto>
-              } />
+              </div>
               <div class="sopra-mira">{conMiccia && <ChipMiccia v={v} attivo={mira} />}</div>
               <div class="arma-doppio"><TastoArma v={v} attivo={mira} /></div>
             </>

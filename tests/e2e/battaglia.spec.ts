@@ -73,8 +73,8 @@ async function controllaTasti(page: Page, larghezza: number, altezza: number, mi
   }
   const fuoco = tasti.find((t) => t.id === 'tasto-fuoco');
   if (fuoco) {
-    // 80 con i comandi classici, 64 al centro del joystick di mira
-    expect([64, 80]).toContain(Math.round(fuoco.w));
+    // 80 con i comandi classici, 72 accanto al joystick di mira
+    expect([72, 80]).toContain(Math.round(fuoco.w));
     expect(Math.round(fuoco.h)).toBe(Math.round(fuoco.w));
   }
   // almeno 12 px tra un tasto e l'altro
@@ -299,9 +299,12 @@ test('doppio joystick: movimento a sinistra, mira a destra con FUOCO al centro; 
     expect(Math.abs(f.height - mov.y - 92)).toBeLessThanOrEqual(2);
     expect(Math.abs(f.width - mir.x - 110)).toBeLessThanOrEqual(2);
     expect(Math.abs(f.height - mir.y - 100)).toBeLessThanOrEqual(2);
-    expect(Math.hypot(fuo.x - mir.x, fuo.y - mir.y)).toBeLessThanOrEqual(1);
-    expect(Math.round((await page.locator('.base-joystick.movimento').boundingBox())!.width)).toBe(120);
-    expect(Math.round((await page.locator('.base-joystick.mira').boundingBox())!.width)).toBe(150);
+    // FUOCO staccato dalla mira: fuori dalla base grande (75) con almeno 8 px di margine
+    expect(Math.hypot(fuo.x - mir.x, fuo.y - mir.y)).toBeGreaterThanOrEqual(75 + 36 + 8);
+    // a riposo piccoli (72 e 80), si allargano a 120 e 150 quando li tocchi
+    const larga = async (sel: string) => Math.round((await page.locator(sel).boundingBox())!.width);
+    expect(await larga('.base-joystick.movimento')).toBe(72);
+    expect(await larga('.base-joystick.mira')).toBe(80);
     // pomello di mira a 45°: in alto a destra rispetto al centro
     const pom = await centro(page, 'pomello-mira');
     expect(pom.x).toBeGreaterThan(mir.x);
@@ -311,6 +314,7 @@ test('doppio joystick: movimento a sinistra, mira a destra con FUOCO al centro; 
     const { x: x0, y: y0 } = mov;
     await page.mouse.move(x0, y0);
     await page.mouse.down();
+    await expect.poll(() => larga('.base-joystick.movimento')).toBe(120);
     await page.mouse.move(x0 + 40, y0, { steps: 4 });
     await page.mouse.move(x0 - 40, y0, { steps: 8 });
     await page.mouse.move(x0, y0, { steps: 4 });
@@ -329,10 +333,13 @@ test('doppio joystick: movimento a sinistra, mira a destra con FUOCO al centro; 
 
     // mira: trascinamento sulla corona, relativo al 50%; manda solo `mira`, mai `fuoco`
     await page.evaluate(() => { (window as any).registro.comandi = []; });
-    await page.mouse.move(mir.x - 55, mir.y);
+    await page.mouse.move(mir.x - 35, mir.y);
     await page.mouse.down();
-    await page.mouse.move(mir.x - 55, mir.y - 60, { steps: 6 });
+    await expect.poll(() => larga('.base-joystick.mira')).toBe(150);
+    await page.mouse.move(mir.x - 35, mir.y - 60, { steps: 6 });
+    if (f.nome === '20x9') await page.screenshot({ path: 'test-results/screenshot/mira-aperta-20x9.png' });
     await page.mouse.up();
+    await expect.poll(() => larga('.base-joystick.mira')).toBe(80);
     c = (await registro(page)).comandi;
     expect(c.length).toBeGreaterThan(0);
     expect(c.every((x: any) => x.t === 'mira' && Number.isInteger(x.mezziGradi) && x.potenza >= 0 && x.potenza <= 100)).toBe(true);

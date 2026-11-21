@@ -234,3 +234,69 @@ export function creaJoystick(invia: (c: { t: 'muovi'; dir: -1 | 0 | 1 } | { t: '
     get direzione() { return dir; },
   };
 }
+
+// ─── Doppio joystick fisso (scelta del proprietario 21/11, 00 §9.16) ───
+
+/** misure dei due joystick fissi in px CSS (design/comandi/doppio-joystick.md) */
+export const DOPPIO = {
+  /** joystick di movimento: base 120, centro a 100 dal bordo e 92 dal basso */
+  movimento: { base: 120 },
+  /** joystick di mira: base 150 con FUOCO 64 al centro, centro a 110 dal bordo e 100 dal basso */
+  mira: { base: 150, fuoco: 64, pomello: 36 },
+  /** un tocco vale se parte entro la base più questo margine */
+  margine: 16,
+  /** il pomello di mira si muove al 50% del dito */
+  fattoreMira: 0.5,
+} as const;
+
+const R_BASE_MIRA = DOPPIO.mira.base / 2;
+const R_FUOCO = DOPPIO.mira.fuoco / 2;
+
+/** Posizione del pomello di mira (dal centro, y in giù) per una mira in gradi (0 = destra, 90 = su) e potenza 0-100. */
+export function pomelloDaMira(gradi: number, potenza: number): { x: number; y: number } {
+  const r = R_FUOCO + (R_BASE_MIRA - R_FUOCO) * Math.max(0, Math.min(100, potenza)) / 100;
+  const a = (gradi * Math.PI) / 180;
+  return { x: r * Math.cos(a), y: -r * Math.sin(a) };
+}
+
+/** Mira dal pomello: la direzione dà l'angolo a passi di 0,5° (mezziGradi 0..719), la distanza dal bordo di FUOCO la potenza. */
+export function miraDaPomello(x: number, y: number): { mezziGradi: number; potenza: number } {
+  const gradi = (Math.atan2(-y, x) * 180) / Math.PI;
+  const mezziGradi = ((Math.round(gradi * 2) % 720) + 720) % 720;
+  const d = Math.hypot(x, y);
+  const potenza = Math.round(Math.max(0, Math.min(1, (d - R_FUOCO) / (R_BASE_MIRA - R_FUOCO))) * 100);
+  return { mezziGradi, potenza };
+}
+
+/** Tiene il pomello sulla corona tra FUOCO e il bordo della base. */
+export function limitaPomello(x: number, y: number): { x: number; y: number } {
+  const d = Math.hypot(x, y);
+  if (d === 0) return { x: R_FUOCO, y: 0 };
+  const r = Math.max(R_FUOCO, Math.min(R_BASE_MIRA, d));
+  return { x: (x / d) * r, y: (y / d) * r };
+}
+
+/**
+ * Joystick di mira: il trascinamento è relativo (il pomello si muove al 50% del dito) e parte da dove il pomello
+ * era; al rilascio il pomello resta lì. Manda `mira` solo quando angolo o potenza cambiano.
+ */
+export function creaJoystickMira(invia: (c: { t: 'mira'; mezziGradi: number; potenza: number }) => void) {
+  let partenza = { x: 0, y: 0 };
+  let ultima = '';
+  return {
+    /** inizio del trascinamento dal pomello attuale */
+    inizia(pomello: { x: number; y: number }) {
+      partenza = { ...pomello };
+      const m = miraDaPomello(pomello.x, pomello.y);
+      ultima = `${m.mezziGradi}|${m.potenza}`;
+    },
+    /** dx, dy del dito dall'inizio del trascinamento; restituisce la nuova posizione del pomello */
+    sposta(dx: number, dy: number): { x: number; y: number } {
+      const p = limitaPomello(partenza.x + dx * DOPPIO.fattoreMira, partenza.y + dy * DOPPIO.fattoreMira);
+      const m = miraDaPomello(p.x, p.y);
+      const k = `${m.mezziGradi}|${m.potenza}`;
+      if (k !== ultima) { ultima = k; invia({ t: 'mira', ...m }); }
+      return p;
+    },
+  };
+}

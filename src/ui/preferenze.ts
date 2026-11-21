@@ -10,14 +10,14 @@ interface PreferenzeHud { mancini: boolean; comandiClassici: boolean; volume: nu
 
 /** HUD specchiato per i mancini. */
 export const mancini = signal(false);
-/** tasti ◀ ▶ SALTA ▲ ▼ FUOCO di prima al posto del joystick (m1-ritmo §1) */
+/** tasti ◀ ▶ SALTA ▲ ▼ FUOCO di prima al posto del doppio joystick */
 export const comandiClassici = signal(false);
 /** volume dei suoni 0..1 */
 export const volume = signal(0.8);
 /** pirati per lato nella Schermaglia (giocatore, Marina) */
 export const piratiSchermaglia = signal<[number, number]>([PIRATI_PREDEFINITI, PIRATI_PREDEFINITI]);
 
-/** Avvisato quando cambia la scelta dei comandi (la fionda al rilascio sta nel pezzo di Pixi, vedi Battaglia.tsx). */
+/** Avvisato quando cambia la scelta dei comandi. */
 const ascoltatoriClassici = new Set<(v: boolean) => void>();
 export function suComandiClassici(f: (v: boolean) => void): () => void {
   ascoltatoriClassici.add(f);

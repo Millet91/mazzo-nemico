@@ -73,8 +73,9 @@ async function controllaTasti(page: Page, larghezza: number, altezza: number, mi
   }
   const fuoco = tasti.find((t) => t.id === 'tasto-fuoco');
   if (fuoco) {
-    expect(Math.round(fuoco.w)).toBe(80);
-    expect(Math.round(fuoco.h)).toBe(80);
+    // 80 con i comandi classici, 64 al centro del joystick di mira
+    expect([64, 80]).toContain(Math.round(fuoco.w));
+    expect(Math.round(fuoco.h)).toBe(Math.round(fuoco.w));
   }
   // almeno 12 px tra un tasto e l'altro
   for (let i = 0; i < tasti.length; i++) for (let j = i + 1; j < tasti.length; j++) {
@@ -104,7 +105,8 @@ test('Schermaglia avvia la battaglia vera di M1 e si esce dalla pausa', async ({
   await expect(page.getByTestId('hud')).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole('heading', { name: 'Kaboom Ahoy!' })).toBeHidden();
   await expect(page.locator('#tasto-arma')).toBeVisible({ timeout: 15000 });
-  await expect(page.getByTestId('joystick')).toBeVisible();
+  await expect(page.getByTestId('joystick-movimento')).toBeVisible();
+  await expect(page.getByTestId('joystick-mira')).toBeVisible();
   await expect(page.getByTestId('squadra-0')).toHaveAttribute('aria-label', /Teschio Rosso: 210 PV, 3 in piedi/);
   await page.screenshot({ path: 'test-results/screenshot/battaglia-vera-20x9.png' });
   await controllaTasti(page, 800, 360, 1);
@@ -270,58 +272,89 @@ test('banner di turno', async ({ page }) => {
   await expect(page.getByTestId('banner')).toHaveText('Rum! +25 PV', { timeout: 3000 });
 });
 
-test('joystick: cammina, salta in avanti, salto alto all\'indietro; ARMA rotonda nel colore della ciurma', async ({ page }) => {
+/** centro di un elemento per data-testid */
+async function centro(page: Page, testid: string) {
+  const b = (await page.getByTestId(testid).boundingBox())!;
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2, w: b.width };
+}
+
+test('doppio joystick: movimento a sinistra, mira a destra con FUOCO al centro; ARMA nel colore della ciurma', async ({ page }) => {
   for (const f of FORMATI) {
     await page.setViewportSize({ width: f.width, height: f.height });
     // mira a 45° = pirata girato a destra
     await entraInBattaglia(page, vista({ arma: 'granata' }), false);
-    await expect(page.locator('#tasto-fuoco')).toHaveCount(0);
     await expect(page.locator('#tasto-sinistra')).toHaveCount(0);
     await expect(page.locator('#chip-miccia')).toBeVisible();
-    await controllaTasti(page, f.width, f.height, 2);
+    await expect(page.getByTestId('mira')).toHaveText('45° · 60%');
+    await controllaTasti(page, f.width, f.height, 3);
     const [arma] = await rettangoli(page, '#tasto-arma');
     expect(arma.w).toBeGreaterThanOrEqual(64);
     expect(await page.locator('.cerchio-arma').evaluate((e) => getComputedStyle(e).backgroundColor)).toBe('rgb(229, 72, 77)');
-    const [zona] = await rettangoli(page, '[data-testid="joystick"]');
-    expect(zona.x).toBeGreaterThanOrEqual(24);
-    expect(zona.x + zona.w).toBeLessThanOrEqual(f.width / 2 + 1);
 
-    // a riposo il fantasma sta fermo in basso a sinistra (~100 px dal bordo, 90 dal basso, 25%)
-    const fantasma = page.getByTestId('joystick-fantasma');
-    await expect(fantasma).toBeVisible();
-    const [g] = await rettangoli(page, '[data-testid="joystick-fantasma"]');
-    expect(Math.abs(g.x + g.w / 2 - 100)).toBeLessThanOrEqual(2);
-    expect(Math.abs(f.height - (g.y + g.h / 2) - 90)).toBeLessThanOrEqual(2);
-    expect(await fantasma.evaluate((e) => getComputedStyle(e).opacity)).toBe('0.25');
+    // posizioni fisse: movimento centro a 100 dal bordo e 92 dal basso, mira a 110 dal bordo e 100 dal basso
+    const mov = await centro(page, 'joystick-movimento');
+    const mir = await centro(page, 'joystick-mira');
+    const fuo = await centro(page, 'tasto-fuoco');
+    expect(Math.abs(mov.x - 100)).toBeLessThanOrEqual(2);
+    expect(Math.abs(f.height - mov.y - 92)).toBeLessThanOrEqual(2);
+    expect(Math.abs(f.width - mir.x - 110)).toBeLessThanOrEqual(2);
+    expect(Math.abs(f.height - mir.y - 100)).toBeLessThanOrEqual(2);
+    expect(Math.hypot(fuo.x - mir.x, fuo.y - mir.y)).toBeLessThanOrEqual(1);
+    expect(Math.round((await page.locator('.base-joystick.movimento').boundingBox())!.width)).toBe(120);
+    expect(Math.round((await page.locator('.base-joystick.mira').boundingBox())!.width)).toBe(150);
+    // pomello di mira a 45°: in alto a destra rispetto al centro
+    const pom = await centro(page, 'pomello-mira');
+    expect(pom.x).toBeGreaterThan(mir.x);
+    expect(pom.y).toBeLessThan(mir.y);
 
-    const x0 = zona.x + zona.w / 2, y0 = zona.y + zona.h / 2;
+    // movimento: destra, sinistra, centro (zona morta), su = salto avanti
+    const { x: x0, y: y0 } = mov;
     await page.mouse.move(x0, y0);
     await page.mouse.down();
-    await expect(page.locator('.joystick:not(.fantasma)')).toBeVisible();
-    await expect(fantasma).toHaveCount(0);
-    await page.mouse.move(x0 + 40, y0, { steps: 4 });       // destra
-    await page.mouse.move(x0 - 40, y0, { steps: 8 });       // sinistra
-    await page.mouse.move(x0, y0, { steps: 4 });            // centro: si ferma
-    if (f.nome === '20x9') await page.screenshot({ path: 'test-results/screenshot/joystick-20x9.png' });
-    await page.mouse.move(x0, y0 - 50, { steps: 4 });       // in alto: salto avanti
+    await page.mouse.move(x0 + 40, y0, { steps: 4 });
+    await page.mouse.move(x0 - 40, y0, { steps: 8 });
+    await page.mouse.move(x0, y0, { steps: 4 });
+    await page.mouse.move(x0, y0 - 50, { steps: 4 });
     await page.mouse.move(x0, y0, { steps: 4 });
     await page.mouse.up();
-    await expect(page.locator('.joystick:not(.fantasma)')).toHaveCount(0);
-    await expect(fantasma).toBeVisible();
     let c = (await registro(page)).comandi;
-    // passando dal centro si ferma un attimo (zona morta)
     expect(c).toEqual([{ t: 'muovi', dir: 1 }, { t: 'muovi', dir: 0 }, { t: 'muovi', dir: -1 }, { t: 'muovi', dir: 0 }, { t: 'salta', indietro: false }]);
-
-    // nuovo gesto: l'ultimo passo era a sinistra, quindi il pirata guarda a sinistra; in alto a destra = salto alto all'indietro
+    // ultimo passo a sinistra: in alto a destra = salto alto all'indietro
     await page.evaluate(() => { (window as any).registro.comandi = []; });
     await page.mouse.move(x0, y0);
     await page.mouse.down();
     await page.mouse.move(x0 + 20, y0 - 50, { steps: 6 });
     await page.mouse.up();
+    expect((await registro(page)).comandi).toEqual([{ t: 'salta', indietro: true }]);
+
+    // mira: trascinamento sulla corona, relativo al 50%; manda solo `mira`, mai `fuoco`
+    await page.evaluate(() => { (window as any).registro.comandi = []; });
+    await page.mouse.move(mir.x - 55, mir.y);
+    await page.mouse.down();
+    await page.mouse.move(mir.x - 55, mir.y - 60, { steps: 6 });
+    await page.mouse.up();
     c = (await registro(page)).comandi;
-    expect(c).toEqual([{ t: 'salta', indietro: true }]);
+    expect(c.length).toBeGreaterThan(0);
+    expect(c.every((x: any) => x.t === 'mira' && Number.isInteger(x.mezziGradi) && x.potenza >= 0 && x.potenza <= 100)).toBe(true);
+    const ultima = c[c.length - 1] as { mezziGradi: number; potenza: number };
+    expect(ultima.mezziGradi).toBeGreaterThan(90); // da 45° il pomello sale: angolo più alto
+    if (f.nome === '20x9') await page.screenshot({ path: 'test-results/screenshot/doppio-joystick-20x9.png' });
+
+    // FUOCO: un tocco che parte su FUOCO spara una volta e non muove la mira, anche con doppio tocco
+    await page.evaluate(() => { (window as any).registro.comandi = []; });
+    await page.locator('#tasto-fuoco').dblclick();
+    expect((await registro(page)).comandi).toEqual([{ t: 'fuoco' }]);
     await page.screenshot({ path: `test-results/screenshot/hud-joystick-${f.nome}.png` });
   }
+});
+
+test('doppio joystick: in fuga solo il movimento, nel turno dell\'IA nessuno', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 360 });
+  await entraInBattaglia(page, vista({ fase: 'fuga' }), false);
+  await expect(page.getByTestId('joystick-movimento')).toBeVisible();
+  await expect(page.getByTestId('joystick-mira')).toHaveCount(0);
+  await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; }, vista({ tocca: 'ia', iaPensa: true }));
+  await expect(page.getByTestId('joystick-movimento')).toHaveCount(0);
 });
 
 test('Schermaglia: da 1 a 5 pirati per lato, scelta salvata', async ({ page }) => {
@@ -440,11 +473,12 @@ test('Impostazioni: mancini, comandi classici, volume e Diagnostica', async ({ p
   await expect(page.locator('#schermaglia')).toBeVisible();
   await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; }, vista());
   await expect(page.locator('.hud.mancini')).toBeVisible();
-  // con i mancini il joystick sta a destra
-  const [zona] = await rettangoli(page, '[data-testid="joystick"]');
-  expect(zona.x).toBeGreaterThanOrEqual(400 - 1);
-  const [g] = await rettangoli(page, '[data-testid="joystick-fantasma"]');
-  expect(Math.abs(800 - (g.x + g.w / 2) - 100)).toBeLessThanOrEqual(2);
+  // con i mancini i due joystick si scambiano (stessi data-testid)
+  const mov = await centro(page, 'joystick-movimento');
+  const mir = await centro(page, 'joystick-mira');
+  expect(Math.abs(800 - mov.x - 100)).toBeLessThanOrEqual(2);
+  expect(Math.abs(mir.x - 110)).toBeLessThanOrEqual(2);
+  await page.screenshot({ path: 'test-results/screenshot/mancini-20x9.png' });
 });
 
 // Piano QA §2 L4: HUD della battaglia vera a seme fisso, al tick 0 e al tick 600 (10 s: il timer parte dopo 2 s,

@@ -261,23 +261,38 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 .tasto.arma .icona-arma { font-size: 36px; filter: drop-shadow(0 2px 2px #0008); }
 .tasto.veloce.acceso { background: var(--oro); color: var(--inchiostro); text-shadow: none; border-color: var(--oro-ombra); }
 
-/* joystick (m1-ritmo §1): zona nella metà bassa a sinistra, a destra con i mancini; lascia 24 px al gesto indietro */
-.zona-joystick {
-  position: absolute; left: 24px; bottom: 0; width: calc(50% - 24px); height: 58%;
-  pointer-events: auto; touch-action: none;
+/* doppio joystick fisso (scelta del proprietario 21/11, design/comandi/doppio-joystick.md).
+   Ogni zona è un cerchio di base + 16 px di margine; con l'area sicura predefinita (bordo 56, basso 16):
+   movimento centro a 100 dal bordo e 92 dal basso, mira centro a 110 dal bordo e 100 dal basso. */
+.zona-comando {
+  position: absolute; border-radius: 50%; pointer-events: auto; touch-action: none; display: grid; place-items: center;
 }
-.hud.mancini .zona-joystick { left: auto; right: 24px; }
-.joystick {
-  position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
-  background: rgba(19, 41, 58, .35); border: 2px solid rgba(255, 255, 255, .25); pointer-events: none;
+.zona-movimento { width: 152px; height: 152px; left: calc(var(--bordo-corto) - 32px); bottom: var(--sicura-b); }
+.zona-mira { width: 182px; height: 182px; right: calc(var(--bordo-corto) - 37px); bottom: calc(var(--sicura-b) - 7px); }
+.hud.mancini .zona-movimento { left: auto; right: calc(var(--bordo-corto) - 32px); }
+.hud.mancini .zona-mira { right: auto; left: calc(var(--bordo-corto) - 37px); }
+.base-joystick {
+  position: relative; border-radius: 50%; pointer-events: none;
+  background: rgba(19, 41, 58, .55); border: 2px solid rgba(255, 255, 255, .25);
 }
-/* fantasma a riposo: centro a ~100 px dal bordo e 90 dal basso, 25% */
-.joystick.fantasma { margin: 0; left: 20px; bottom: 34px; opacity: .25; }
-.hud.mancini .joystick.fantasma { left: auto; right: 20px; }
-.joystick .pomello {
+.base-joystick.movimento { width: 120px; height: 120px; }
+.base-joystick.mira { width: 150px; height: 150px; display: grid; place-items: center; }
+.base-joystick .pomello {
   position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%;
   background: rgba(255, 255, 255, .55); border: 2px solid #fff; box-shadow: 0 2px 6px #0008;
 }
+.pomello-mira {
+  position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%;
+  background: var(--oro); border: 2px solid var(--oro-ombra); box-shadow: 0 2px 6px #0008;
+}
+.base-joystick.mira .tasto.fuoco { width: 64px; height: 64px; font-size: 16px; pointer-events: auto; position: relative; z-index: 1; }
+/* chip miccia sopra la base di mira, ARMA a sinistra della base, etichetta "45° · 60%" sotto ARMA */
+.sopra-mira { position: absolute; right: calc(var(--bordo-corto) + 54px); bottom: calc(var(--sicura-b) + 167px); transform: translateX(50%); }
+.arma-doppio { position: absolute; right: calc(var(--bordo-corto) + 141px); bottom: calc(var(--sicura-b) + 96px); }
+.mira-info.doppio { right: calc(var(--bordo-corto) + 141px); bottom: calc(var(--sicura-b) + 48px); }
+.hud.mancini .sopra-mira { right: auto; left: calc(var(--bordo-corto) + 54px); transform: translateX(-50%); }
+.hud.mancini .arma-doppio { right: auto; left: calc(var(--bordo-corto) + 141px); }
+.hud.mancini .mira-info.doppio { right: auto; left: calc(var(--bordo-corto) + 141px); }
 
 /* scelta della Schermaglia */
 .scelta-schermaglia { display: flex; flex-direction: column; gap: 12px; width: min(70vw, 460px); }

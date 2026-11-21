@@ -10,7 +10,8 @@ import type { VistaBattaglia } from '../../core/bus';
 import { bannerDaEventi, configSchermaglia, DURATA_BANNER_MS, semeNuovo, squadraUmana } from './logica';
 import { vibraPerEventi } from './vibrazioni';
 import { suona, type Suono } from '../../piattaforma/audio';
-import { piratiSchermaglia, comandiClassici, suComandiClassici } from '../preferenze';
+import { piratiSchermaglia } from '../preferenze';
+import { puntoSuiComandi } from './zone';
 
 /** schermata di scelta della Schermaglia (1-5 pirati per lato) aperta */
 export const sceltaSchermaglia = signal(false);
@@ -36,7 +37,6 @@ export function avviaSchermaglia(): void {
   azzeraHud();
   sceltaSchermaglia.value = false;
   velocitaIa.value = 1;
-  applicaFiondaAlRilascio(!comandiClassici.value);
   bus.richiestaBattaglia.value = configSchermaglia(semeNuovo(), piratiSchermaglia.value);
 }
 
@@ -45,15 +45,10 @@ export function cambiaVelocitaIa(): void {
   bus.azioni.invia({ t: 'velocita', fattore: velocitaIa.value });
 }
 
-// La fionda che spara al rilascio è di B (render/input.ts, nel pezzo di Pixi): con "Comandi classici" si spegne.
-// Si carica con import.meta.glob così la UI non tira dentro Pixi e la build passa anche senza la funzione.
-const MODULI_INPUT = import.meta.glob<{ impostaFiondaAlRilascio?: (v: boolean) => void }>('../../battaglia/render/input.ts');
-export function applicaFiondaAlRilascio(attiva: boolean): void {
-  const carica = Object.values(MODULI_INPUT)[0];
-  if (!carica) return;
-  void carica().then((m) => m.impostaFiondaAlRilascio?.(attiva)).catch(() => {});
-}
-suComandiClassici((classici) => applicaFiondaAlRilascio(!classici));
+// Regola "ogni tocco appartiene al controllo dove comincia": il canvas di B ignora i tocchi che partono sui
+// controlli dell'HUD. Si carica con import.meta.glob così la UI non tira dentro Pixi.
+const MODULI_INPUT = import.meta.glob<{ impostaZoneControlli?: (f: ((x: number, y: number) => boolean) | null) => void }>('../../battaglia/render/input.ts');
+void Object.values(MODULI_INPUT)[0]?.().then((m) => m.impostaZoneControlli?.(puntoSuiComandi)).catch(() => {});
 
 export function apriPausa(): void {
   if (!inBattaglia() || bus.battagliaInPausa.value || bus.battaglia.value?.esito) return;

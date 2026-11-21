@@ -1,10 +1,11 @@
 // HUD di battaglia (00 §3 e §9.16, design M1 §6, m1-ritmo §1-3), sopra il canvas. Progettato a 800×360 CSS.
 //
 // [II] [PV + emblema A]   ⏱ timer  ~vento~   [PV + emblema B]
-//                                                 [miccia]
-// (joystick dove appoggi il pollice)                [ARMA]
+//                                         [ARMA]   [miccia]
+//  ( movimento )                    45° · 60%   ( mira [FUOCO] )
 //
-// Con "Comandi classici": [◀][▶] … [▲][▼] [SALTA][FUOCO] come prima. Mira e sparo stanno sul canvas (fionda di B).
+// Doppio joystick fisso (scelta del proprietario 21/11): vedi Joystick.tsx. Con "Comandi classici":
+// [◀][▶] … [▲][▼] [SALTA][FUOCO] come prima. Mancini: i due lati si scambiano.
 // I tasti usano i pointer event (non click) così due pollici lavorano insieme (caso 22).
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo } from 'preact/hooks';
@@ -19,7 +20,7 @@ import {
 import { apriPausa, banner, cambiaVelocitaIa, grigliaAperta, invia, velocitaIa } from './stato';
 import { EMBLEMA, ICONA_ARMA } from './segnaposto';
 import { comandiClassici, mancini } from '../preferenze';
-import { Joystick } from './Joystick';
+import { JoystickMira, JoystickMovimento } from './Joystick';
 import { suona } from '../../piattaforma/audio';
 import { GrigliaArmi } from './GrigliaArmi';
 
@@ -35,7 +36,7 @@ function Tasto(p: {
     p.su?.();
   };
   return (
-    <button type="button" id={p.id} class={`tasto ${p.cls ?? ''}`} aria-label={p.label} disabled={p.disabilitato}
+    <button type="button" id={p.id} data-testid={p.id} class={`tasto ${p.cls ?? ''}`} aria-label={p.label} disabled={p.disabilitato}
       onPointerDown={(e) => {
         if (p.disabilitato) return;
         e.preventDefault();
@@ -157,17 +158,21 @@ export function Hud({ v }: { v: VistaBattaglia }) {
         <div class="medita" data-testid="medita" role="status">{T.battaglia.medita}</div>
       )}
 
-      {vedi && <div class="mira-info" data-testid="mira">{T.battaglia.mira(alzo(v.miraGradi), Math.round(v.potenza))}</div>}
+      {vedi && <div class={`mira-info ${comandiClassici.value ? '' : 'doppio'}`} data-testid="mira">{T.battaglia.mira(alzo(v.miraGradi), Math.round(v.potenza))}</div>}
 
       {vedi && !comandiClassici.value && (
         <>
-          <Joystick />
-          <div class="gruppo gruppo-azione">
-            <div class="colonna">
-              {conMiccia && <ChipMiccia v={v} attivo={mira} />}
-              <TastoArma v={v} attivo={mira} />
-            </div>
-          </div>
+          <JoystickMovimento />
+          {mira && (
+            <>
+              <JoystickMira v={v} fuoco={
+                <Tasto id="tasto-fuoco" label={T.battaglia.fuoco} cls="fuoco testo"
+                  giu={() => t.fuoco.tocca(v.numeroTurno)}>{T.battaglia.fuoco}</Tasto>
+              } />
+              <div class="sopra-mira">{conMiccia && <ChipMiccia v={v} attivo={mira} />}</div>
+              <div class="arma-doppio"><TastoArma v={v} attivo={mira} /></div>
+            </>
+          )}
         </>
       )}
 

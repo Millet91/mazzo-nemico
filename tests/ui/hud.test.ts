@@ -1,6 +1,7 @@
 // L1 dell'HUD (agente D): logica dei tasti, griglia 4×4, configurazione della Schermaglia, banner, testi.
 import { describe, it, expect } from 'vitest';
 import {
+  creaJoystickMira, DOPPIO, limitaPomello, miraDaPomello, pomelloDaMira,
   alzo, bannerDaEventi, barraVento, celleGriglia, comandiVisibili, configSchermaglia, creaDoppioTocco,
   creaGrillettoUnico, creaJoystick, creaRipetitore, micciaSuccessiva, miraAttiva, PASSO_MIRA, RIPETI_OGNI_MS, versoDaMira,
   DURATA_BANNER_MS, type Tempi,
@@ -208,5 +209,38 @@ describe('Joystick (m1-ritmo §1)', () => {
     expect(bannerDaEventi([{ t: 'cassaCaduta', proiettile: 1, x: 100 }], v)).toEqual(['Cassa in arrivo!']);
     expect(bannerDaEventi([{ t: 'cassaAperta', proiettile: 1, pirata: 0, contenuto: 'rum' }], v)).toEqual(['Rum! +25 PV']);
     expect(bannerDaEventi([{ t: 'cassaAperta', proiettile: 1, pirata: 0, contenuto: 'trappola' }], v)).toEqual(['Trappola!']);
+  });
+});
+
+describe('doppio joystick: mira', () => {
+  it('45° · 60% e ritorno: pomello ↔ mira', () => {
+    const p = pomelloDaMira(45, 60);
+    expect(p.x).toBeGreaterThan(0);
+    expect(p.y).toBeLessThan(0); // in alto a destra
+    expect(miraDaPomello(p.x, p.y)).toEqual({ mezziGradi: 90, potenza: 60 });
+  });
+  it('potenza 0 sul bordo di FUOCO, 100 sul bordo della base', () => {
+    expect(miraDaPomello(DOPPIO.mira.fuoco / 2, 0)).toEqual({ mezziGradi: 0, potenza: 0 });
+    expect(miraDaPomello(-DOPPIO.mira.base / 2, 0)).toEqual({ mezziGradi: 360, potenza: 100 });
+  });
+  it('il pomello resta sulla corona', () => {
+    const dentro = limitaPomello(1, 0);
+    expect(dentro.x).toBe(DOPPIO.mira.fuoco / 2);
+    const fuori = limitaPomello(0, 500);
+    expect(fuori.y).toBe(DOPPIO.mira.base / 2);
+  });
+  it('trascinamento relativo al 50%, passi di 0,5°, niente invio se non cambia', () => {
+    const inviati: unknown[] = [];
+    const j = creaJoystickMira((c) => inviati.push(c));
+    const p0 = pomelloDaMira(0, 50);
+    j.inizia(p0);
+    j.sposta(0, 0);
+    expect(inviati).toEqual([]);
+    const p = j.sposta(0, -40); // dito 40 px in su → pomello 20 px in su
+    expect(Math.round(p.y)).toBe(-20);
+    expect(inviati.length).toBe(1);
+    const m = inviati[0] as { mezziGradi: number; potenza: number };
+    expect(Number.isInteger(m.mezziGradi)).toBe(true);
+    expect(m.mezziGradi).toBeGreaterThan(0);
   });
 });

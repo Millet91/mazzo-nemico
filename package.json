@@ -1,7 +1,7 @@
 {
   "name": "baro",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
@@ -10,7 +10,8 @@
     "preview": "vite preview --host",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "sim": "tsx sim/cli.ts"
+    "sim": "tsx sim/cli.ts",
+    "assets:check": "tsx scripts/assets-check.ts"
   },
   "dependencies": {
     "preact": "^10.29.8"

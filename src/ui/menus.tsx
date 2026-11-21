@@ -6,7 +6,8 @@ import { BARI, SIGILLI, BOSS_TEXT, EVENTS } from '../content/meta';
 import { ENEMIES } from '../content/enemies';
 import { DEFENSES, ALL_DEFENSE_IDS, PACKS } from '../content/defenses';
 import { sceneArt } from '../assets/registry';
-import { loadSave, type Settings } from './profile';
+import { loadSave, exportAll, importAll, loadTelemetry, patchLastTelemetry, type Settings } from './profile';
+import { readableSeed, weeklySeed, BUILD } from './seeds';
 import { replayLink, copy } from './screens';
 import { CONTENT_VERSION } from '../content/config';
 import type { RunState } from '../core/types';
@@ -20,17 +21,20 @@ export function Title() {
         <div class="logo-cards" aria-hidden="true">🂠🂡🂮</div>
         <h1>BARO</h1>
         <p class="hook">Il Fato ti dà le carte. Tu bari.</p>
+        <p class="small-label world">Un paese di campagna, una notte di veglia. Il Mazziere manda sventure alla tua porta; tu, con quattro trucchi da baro, devi arrivare all’alba.</p>
       </div>
       <nav class="menu">
         {save && <Btn kind="primary" onClick={() => resumeSave()}>Continua la notte</Btn>}
-        <Btn kind={save ? undefined : 'primary'} onClick={() => set({ screen: 'newrun' })}>Nuova notte</Btn>
-        <Btn onClick={() => startRun(defaultConfig({ tutorial: true, seed: 'prova', asso: s.settings.asso }))}>Atto 0 · La Prova (tutorial)</Btn>
+        {!s.profile.tutorialDone && !save && <Btn kind="primary" onClick={() => startRun(defaultConfig({ tutorial: true, seed: 'prova', asso: s.settings.asso }))}>Prima volta? Gioca la Prova con la Nonna (3 minuti)</Btn>}
+        <Btn kind={save || !s.profile.tutorialDone ? undefined : 'primary'} onClick={() => set({ screen: 'newrun' })}>Nuova notte</Btn>
+        <Btn onClick={() => startRun(defaultConfig({ seed: weeklySeed(), asso: s.settings.asso, packs: s.settings.unlockAll ? ['*'] : s.profile.packs }))}>La Notte della settimana · {weeklySeed()}</Btn>
+        {s.profile.tutorialDone && <Btn onClick={() => startRun(defaultConfig({ tutorial: true, seed: 'prova', asso: s.settings.asso }))}>Atto 0 · La Prova (tutorial)</Btn>}
         <Btn onClick={() => set({ screen: 'rules' })}>Come si gioca</Btn>
         <Btn onClick={() => set({ screen: 'codex' })}>Il Codice</Btn>
         <Btn onClick={() => set({ screen: 'unlocks' })}>Sblocchi · {s.profile.inchiostro} Inchiostro</Btn>
         <Btn onClick={() => set({ screen: 'settings' })}>Impostazioni</Btn>
       </nav>
-      <p class="small-label foot">Versione di prova {CONTENT_VERSION} · grafica provvisoria · run: {s.profile.runs}, vittorie: {s.profile.wins}</p>
+      <p class="small-label foot">Versione di prova {CONTENT_VERSION} ({BUILD}) · grafica provvisoria · notti: {s.profile.runs}, albe: {s.profile.wins}</p>
     </div>
   );
 }
@@ -44,7 +48,7 @@ export function NewRun() {
   const unlockAll = s.settings.unlockAll;
   const maxSig = unlockAll ? 10 : p.maxSigillo;
   const go = () => {
-    const cfg = defaultConfig({ baro, sigillo: sig, asso: s.settings.asso, packs: unlockAll ? ['*'] : p.packs, seed: seed.trim() || String(Math.floor(Math.random() * 1e9)) });
+    const cfg = defaultConfig({ baro, sigillo: sig, asso: s.settings.asso, packs: unlockAll ? ['*'] : p.packs, seed: seed.trim().toUpperCase() || readableSeed() });
     startRun(cfg);
   };
   return (
@@ -73,7 +77,7 @@ export function NewRun() {
           </button>
         ))}
       </div>
-      <label class="field">Seed (facoltativo, per rigiocare la stessa notte): <input value={seed} onInput={(e) => setSeed((e.target as HTMLInputElement).value)} placeholder="casuale" /></label>
+      <label class="field">Seed (facoltativo, per rigiocare la stessa notte): <input value={seed} onInput={(e) => setSeed((e.target as HTMLInputElement).value)} placeholder="casuale, es. LUPO-POZZO-47" /></label>
       <label class="field"><input type="checkbox" checked={s.settings.asso} onChange={(e) => updateSettings({ asso: (e.target as HTMLInputElement).checked })} /> Asso nella manica (una mossa per ondata)</label>
       <div class="row main-actions">
         <Btn kind="ghost" onClick={() => set({ screen: 'title' })}>Indietro</Btn>
@@ -166,8 +170,11 @@ export function SettingsScreen({ inRun }: { inRun?: boolean }) {
       </label>
       <h3>Audio</h3>
       {chk('audio', 'Audio attivo')}
+      {chk('detailedForecast', 'Previsione dettagliata: numeri esatti accanto ai simboli ▲/▼')}
+      {chk('tips', 'Suggerimenti e didascalie delle abilità la prima volta')}
       <label class="field">Volume <input type="range" min={0} max={1} step={0.05} value={st.volume} onInput={(e) => updateSettings({ volume: Number((e.target as HTMLInputElement).value) })} /></label>
       {chk('silentTick', 'Tick silenzioso')}
+      {chk('reducedAudio', 'Audio ridotto: solo i suoni importanti (impatti, distruzioni, furti)')}
       <h3>Accessibilità</h3>
       <label class="field">Palette
         <select value={st.palette} onChange={(e) => updateSettings({ palette: (e.target as HTMLSelectElement).value as Settings['palette'] })}>
@@ -188,6 +195,13 @@ export function SettingsScreen({ inRun }: { inRun?: boolean }) {
       <h3>Test</h3>
       {chk('unlockAll', 'Sblocca tutto (Bari, Sigilli, pacchetti, Codice) per i test')}
       {chk('debug', 'Pannello debug nel menu di gioco')}
+      <h3>Dati</h3>
+      <div class="row wrap">
+        <Btn small onClick={() => copy(exportAll())}>Esporta i dati (copia)</Btn>
+        <Btn small onClick={() => { const t = window.prompt?.('Incolla qui i dati esportati'); if (t && importAll(t)) location.reload(); else if (t) toast('Dati non validi'); }}>Importa i dati</Btn>
+        <Btn small onClick={() => updateProfile({ ...s.profile, seenTips: [] })}>Rivedi i suggerimenti</Btn>
+      </div>
+      <p class="small-label">Versione {CONTENT_VERSION} · build {BUILD} · notti registrate per il playtest: {loadTelemetry().length}</p>
       {!inRun && (
         <div class="row">
           <Btn kind="danger" small onClick={() => { if (confirmReset()) { try { localStorage.clear(); } catch { /* */ } location.reload(); } }}>Azzera i progressi</Btn>
@@ -226,8 +240,19 @@ export function Rules() {
         <li><b>Risoluzione</b>: premi Avvia e guarda. Ogni tick: le carte avanzano (nessuno sorpassa), ne entra una nuova, i Segni agiscono dal Passo più vicino alla porta, poi le abilità nemiche, i Patti e il Brucia.</li>
       </ol>
       <p>La <b>Forza</b> è sia la vita sia il danno di una carta: ferirla riduce anche il danno che farà. La <b>Corazza</b> para il prossimo colpo o effetto dei tuoi, qualunque sia. Il mazzo è <b>persistente</b>: le carte distrutte tornano a fine ondata; escono per sempre solo con l’<b>Esilio</b>.</p>
+      <h3>Glossario</h3>
+      <ul class="glossary">
+        <li><b>Lumi</b>: la tua vita. Una sventura alla porta ne spegne tanti quanta è la sua Forza.</li>
+        <li><b>Spiccioli</b> (¢): si guadagnano distruggendo sventure e respingendo i rintocchi; si spendono al Mercante.</li>
+        <li><b>Deposito</b>: le difese che hai ma non usi. Tiene al massimo 4 difese.</li>
+        <li><b>Rancore</b>: una carta rimandata nel mazzo (Rimando, Riserva, Gatto Nero) guadagna +1 Forza di Rancore per il resto della notte, fino a +2. Lo vedi come puntini rossi sulla carta.</li>
+        <li><b>Esilio</b>: toglie per sempre una carta dal Mazzo del Fato.</li>
+        <li><b>Lealtà</b>: quante ondate un tuo Patto resta con te. Scende di 1 a ogni ondata in cui è pescato, e di 1 in più se cade in Fila.</li>
+        <li><b>Silenzio</b>: i primi Segni che colpiscono quella carta tacciono. La Lanterna lo toglie.</li>
+        <li><b>Affinare</b>: una difesa diventa + (più forte). Al Focolare, al Mercante, o come terza scelta quando non hai più posti.</li>
+      </ul>
       <p><b>Asso nella manica</b> (se attivo): una volta per ondata, durante la risoluzione, puoi Trattenere una carta per un tick o Scambiare due carte vicine.</p>
-      <p>Ogni veglia (Vespro, Mezzanotte, Ora Morta) è una mappa di 7 livelli e finisce con un <b>Mazziere</b> in tre fasi. Batti la Piena e all’alba canta il gallo.</p>
+      <p>Ogni veglia (Vespro, Mezzanotte, Ora Morta) è una mappa di 7 livelli con 4 rintocchi e finisce con un <b>Mazziere</b> in tre fasi. Batti la Piena e all’alba canta il gallo.</p>
       <p class="small-label">Tocca qualsiasi carta o sigillo per leggerne le regole. Nel riepilogo, “Rivedi ondata” ripete la risoluzione; nel dettaglio di una carta, “Perché?” spiega cosa le è successo.</p>
       <div class="row main-actions"><Btn onClick={() => set({ screen: get().run && !get().run!.ended ? 'run' : 'title' })}>Indietro</Btn></div>
     </div>
@@ -247,6 +272,7 @@ export function GameMenu() {
           <Btn onClick={() => setView('settings')}>Impostazioni</Btn>
           <Btn onClick={() => { close(); set({ screen: 'rules' }); }}>Come si gioca</Btn>
           <Btn onClick={() => copy(replayLink())}>Copia link del replay (seed + azioni)</Btn>
+          <Btn onClick={() => copy(bugReport())}>Segnala un problema (copia il rapporto)</Btn>
           {s.settings.debug && <Btn onClick={() => setView('debug')}>Pannello debug</Btn>}
           <Btn onClick={() => { close(); set({ screen: 'title', run: null, playback: null, review: null }); }}>Salva ed esci al titolo</Btn>
           <Btn kind="danger" onClick={() => abandon()}>Abbandona la notte</Btn>
@@ -338,3 +364,18 @@ export function loadReplayFromHash(): boolean {
     return false;
   }
 }
+
+/** Rapporto da incollare in una segnalazione (QA/Producer): versione, seed, azioni, stato. */
+export function bugReport(): string {
+  const st = get();
+  const r = st.run;
+  return [
+    `Baro ${CONTENT_VERSION} (${BUILD})`,
+    r ? `Seed ${r.cfg.seed} · Baro ${r.cfg.baro} · Sigillo ${r.cfg.sigillo} · fase ${r.phase} · rintocco ${r.rintocco} · Lumi ${r.lumi}/${r.maxLumi}` : 'Nessuna partita in corso',
+    `Schermo ${typeof window !== 'undefined' ? `${window.innerWidth}×${window.innerHeight}` : '?'} · ${typeof navigator !== 'undefined' ? navigator.userAgent : ''}`,
+    'Cosa è successo:',
+    '',
+    `Replay: ${replayLink()}`,
+  ].join('\n');
+}
+export { patchLastTelemetry };

@@ -1,17 +1,20 @@
 import { useState } from 'preact/hooks';
-import { act, set, useStore, get } from './store';
+import { act, set, useStore, get, markTip, tipSeen } from './store';
 import { Art, Btn, DefChip, DefenseCard, DeckCardView } from './components';
 import { DeckList, TopBar, DeckPanel } from './board';
-import { allies, basamentoCost, eventChoices, ownedIds } from '../core/run';
+import { deiCasa, allies, basamentoCost, eventChoices, ownedIds, pattiMax, restHeal, sellValue } from '../core/run';
 import { minDeck } from '../core/wave';
 import { ENEMIES, girataFull } from '../content/enemies';
 import { DEFENSES } from '../content/defenses';
 import { ACT_NAMES, P, slotNames } from '../content/config';
-import { BOSS_TEXT, DAWN_LINES, EVENTS } from '../content/meta';
+import { ACT_INTRO, BOSS_TEXT, DAWN_ALT, DAWN_LINES, EVENTS } from '../content/meta';
+import { CONTENT_VERSION } from '../content/config';
+import type { WaveOutcome } from '../core/wave';
 import { MAP_NODE_ART, sceneArt } from '../assets/registry';
 import { sfx } from '../assets/audio';
 import type { RunState } from '../core/types';
-import { inkFor } from './profile';
+import { inkFor, patchLastTelemetry } from './profile';
+import { quadernoImage } from './quaderno';
 
 const NODE_LABEL: Record<string, string> = { ondata: 'Rintocco', elite: 'Élite', negozio: 'Il Mercante', riposo: 'Il Focolare', evento: 'Evento', mazziere: 'Mazziere' };
 
@@ -25,10 +28,12 @@ export function MapScreen() {
       <TopBar run={run} />
       <DeckPanel run={run} />
       {s.showDeck && <div class="drawer"><DeckList run={run} /></div>}
+      {!run.cfg.tutorial && <p class="small-label famline">Vegli sulla casa {deiCasa(run.famiglia[0])}: {run.famiglia[1]}.</p>}
       <h2 class="almanac">{run.cfg.tutorial ? ACT_NAMES[0] : `${ACT_NAMES[run.act]} · ${['', 'prima', 'seconda', 'terza'][run.act]} veglia`}</h2>
       {!run.cfg.tutorial && bt && (
         <div class="bossbanner"><Art a={sceneArt(bt.id)} /><div><b>Alla fine della veglia: {bt.name}</b> · <i>“{bt.rule}”</i><div class="small-label">{bt.ruleText}{run.cfg.sigillo >= 5 ? ' ' + bt.variant : ''}</div></div></div>
       )}
+      {!tipSeen('map') && !run.cfg.tutorial && <p class="small-label tipline">La strada della notte: sali di un gradino alla volta, toccando una delle tappe illuminate. I <b>Rintocchi</b> sono ondate; l’<b>Élite</b> è più dura ma dà una difesa rara; il <b>Mercante</b> vende, il <b>Focolare</b> cura. In cima ti aspetta il Mazziere. <button type="button" class="chiplink" onClick={() => markTip('map')}>Ok</button></p>}
       <ol class="mapcol" reversed>
         {[...run.map].map((lv, li) => ({ lv, li })).reverse().map(({ lv, li }) => {
           const reachable = li === run.level;
@@ -53,31 +58,119 @@ export function MapScreen() {
 }
 
 // ------------------------------------------------------------------ riepilogo d'ondata
+/** Le tre difese che hanno fatto di più nell'ultima ondata (danni e distruzioni), dal registro. */
+export function topDefenses(out: WaveOutcome | null): { id: string; dmg: number; kills: number }[] {
+  if (!out) return [];
+  const m = new Map<string, { id: string; dmg: number; kills: number }>();
+  for (const e of out.events) {
+    if (!e.src || !DEFENSES[e.src] || (e.k !== 'damage' && e.k !== 'destroy')) continue;
+    const r = m.get(e.src) ?? { id: e.src, dmg: 0, kills: 0 };
+    if (e.k === 'damage') r.dmg += e.n ?? 0;
+    else r.kills++;
+    m.set(e.src, r);
+  }
+  return [...m.values()].sort((x, y) => y.kills * 3 + y.dmg - (x.kills * 3 + x.dmg)).slice(0, 3);
+}
+
 export function SummaryScreen() {
   const s = useStore();
   const run = s.run!;
   const sm = run.lastSummary!;
-  const mvp = sm.mvp ? DEFENSES[sm.mvp]?.name ?? sm.mvp : '—';
+  const top = topDefenses(s.lastOut);
+  const impacts = s.lastOut?.events.filter((e) => e.k === 'impact') ?? [];
+  const saved = s.bare != null ? Math.max(0, s.bare - sm.dmg) : null;
   return (
     <div class="screen summary">
       <TopBar run={run} />
-      <h2>{sm.dmg === 0 ? 'Rintocco respinto!' : `Rintocco ${sm.rintocco}: −${sm.dmg} Lumi`}</h2>
+      <h2 class={`sum-head ${sm.dmg === 0 ? 'clean' : 'hurt'}`}>{sm.dmg === 0 ? 'Rintocco respinto!' : `Rintocco ${sm.rintocco}: hai perso ${sm.dmg} ${sm.dmg === 1 ? 'Lume' : 'Lumi'}`}</h2>
+      {saved != null && (
+        <div class="naked">
+          <b>Senza i tuoi Segni, Trucchi e Rito avresti perso {s.bare} {s.bare === 1 ? 'Lume' : 'Lumi'}</b>{saved > 0 ? `: le tue difese ne hanno salvati ${saved}.` : '.'}
+          {s.bareOut && <> <button type="button" class="chiplink" onClick={() => set({ review: { out: s.bareOut!, idx: 0, playing: true, asso: null, assoMode: null, pauses: 0 } })}>Guarda come sarebbe andata</button></>}
+        </div>
+      )}
+      {top.length > 0 && (
+        <div class="top3">
+          <span class="small-label">Le difese che hanno lavorato di più</span>
+          <ol>{top.map((t) => <li key={t.id}><DefChip id={t.id} label plus={run.def.plus.includes(t.id)} /> {t.kills ? `${t.kills} ${t.kills === 1 ? 'distrutta' : 'distrutte'}, ` : ''}{t.dmg} danni</li>)}</ol>
+        </div>
+      )}
       <div class="sumgrid">
         <div><span class="small-label">Lumi</span><b>{sm.lumiBefore} → {sm.lumiAfter}</b></div>
         <div><span class="small-label">Spiccioli guadagnati</span><b>+{sm.gained}</b></div>
         <div><span class="small-label">Distrutte</span><b>{sm.destroyed.length}</b></div>
-        <div><span class="small-label">Arrivate alla Soglia</span><b>{sm.arrived.length}</b></div>
-        <div><span class="small-label">MVP</span><b>{mvp}</b></div>
-        <div><span class="small-label">Più pericolosa</span><b>{sm.dangerous ?? '—'}</b></div>
-        <div><span class="small-label">Tick</span><b>{sm.ticks}</b></div>
+        <div><span class="small-label">Arrivate alla porta</span><b>{sm.arrived.length}</b></div>
+        {sm.dangerous && <div><span class="small-label">Più pericolosa</span><b>{sm.dangerous}</b></div>}
       </div>
+      {impacts.length > 0 && (
+        <div class="why-list">
+          <span class="small-label">Chi è arrivato alla porta, e perché (tocca un nome):</span>
+          <div class="row wrap">{impacts.map((e, k) => {
+            const c = e.snap.lane.find((x) => x && x.wid === e.wid) ?? null;
+            const name = c?.name ?? e.msg.split(' ')[0];
+            return <button type="button" key={k} class="chiplink" onClick={() => set({ inspect: { kind: 'enemy', id: c?.def ?? '', why: e.wid != null ? s.lastOut!.why[e.wid] : undefined } })}>{name} ({e.n ?? '?'})</button>;
+          })}</div>
+        </div>
+      )}
+      {(sm.allyHurt ?? 0) > 0 && <p class="small-label">I tuoi Segni hanno colpito anche i tuoi Patti: {sm.allyHurt} danni.</p>}
+      {(sm.returned ?? []).length > 0 && <p>Ti è stato restituito: {sm.returned!.join(', ')} (nel Deposito).</p>}
       {sm.stolen.length > 0 && <p class="bad">Perso: il Segno {sm.stolen.join(', ')} è stato rubato. Lo riprendi distruggendo o esiliando il ladro, o con il Riscatto al negozio.</p>}
       {sm.betrayed.length > 0 && <p class="bad">Tradimento: {sm.betrayed.join(', ')} torna dal Fato con +2 Forza.</p>}
       {sm.limit && <p class="bad">Il mazzo è collassato per il limite di tick (bug di design da segnalare).</p>}
-      {sm.arrived.length > 0 && <p class="small-label">Alla Soglia: {sm.arrived.join(', ')}</p>}
-      <div class="row main-actions">
+      <div class="row main-actions sticky-actions">
         {s.lastOut && <Btn onClick={() => set({ review: { out: s.lastOut!, idx: 0, playing: true, asso: null, assoMode: null, pauses: 0 } })}>Rivedi ondata</Btn>}
-        <Btn kind="primary" onClick={() => act({ t: 'continue' })}>Continua ▶</Btn>
+        <Btn kind="primary" cls="big" onClick={() => act({ t: 'continue' })}>Continua ▶</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ vendita dal Deposito pieno (SD-4)
+export function SellPickScreen() {
+  const s = useStore();
+  const run = s.run!;
+  return (
+    <div class="screen sellpick">
+      <TopBar run={run} />
+      <h2>Il Deposito è pieno</h2>
+      <p>Il Deposito tiene al massimo {P.DEPOSITO_MAX} difese. Scegline una da vendere a metà prezzo: le altre restano.</p>
+      <div class="offer-cards">
+        {run.def.deposito.map((id) => <DefenseCard key={id} id={id} plus={run.def.plus.includes(id)} extra={<div class="row"><Btn small kind="gold" onClick={() => { sfx('coin'); act({ t: 'sellPick', id }); }}>Vendi per {sellValue(id)} ¢</Btn></div>} />)}
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ introduzioni di atto e Mazziere (Narrative/Marketing)
+export function IntroModal() {
+  const s = useStore();
+  const it = s.intro!;
+  const run = s.run;
+  const close = () => { sfx('ui'); set({ intro: null }); };
+  if (it.kind === 'boss') {
+    const t = BOSS_TEXT[it.act];
+    return (
+      <div class="intro-bg" onClick={close} role="dialog" aria-modal="true" aria-label={t.name}>
+        <div class="intro boss" onClick={(e) => e.stopPropagation()}>
+          <Art a={sceneArt(t.id)} cls="intro-art" />
+          <h2>{t.name}</h2>
+          <p class="speech big">“{t.intro}”</p>
+          <p><b>La sua regola: {t.rule}.</b> {t.ruleText}{run && run.cfg.sigillo >= 5 ? ' ' + t.variant : ''}</p>
+          <p class="small-label">Lo scontro ha tre fasi. Fra una fase e l’altra puoi spostare le difese.</p>
+          <Btn kind="primary" cls="big" onClick={close}>Affrontalo ▶</Btn>
+        </div>
+      </div>
+    );
+  }
+  const ai = ACT_INTRO[it.act];
+  return (
+    <div class="intro-bg" onClick={close} role="dialog" aria-modal="true" aria-label={ACT_NAMES[it.act]}>
+      <div class="intro act" onClick={(e) => e.stopPropagation()}>
+        <span class="small-label">{['', 'Prima', 'Seconda', 'Terza'][it.act]} veglia</span>
+        <h2>{ACT_NAMES[it.act]}</h2>
+        <p class="speech big">{ai.line}</p>
+        <p class="small-label">Nel mazzo arriveranno: {ai.family}</p>
+        <Btn kind="primary" cls="big" onClick={close}>Comincia ▶</Btn>
       </div>
     </div>
   );
@@ -89,7 +182,8 @@ export function PattoScreen() {
   const run = s.run!;
   const [dissolve, setDissolve] = useState<number | null>(null);
   const al = allies(run);
-  const full = al.length >= P.PATTI_MAX;
+  const max = pattiMax(run);
+  const full = al.length >= max;
   const lealta = run.cfg.baro === 'bracconiera' ? 5 : P.LEALTA;
   return (
     <div class="screen patto">
@@ -98,7 +192,7 @@ export function PattoScreen() {
       <p>Scegli una sventura distrutta in questo rintocco: resta nel Mazzo del Fato ma combatte per te, come Infiltrato. Ha Lealtà {lealta}: perde 1 Lealtà a ogni ondata in cui è pescata, e a 0 ti tradisce con +2 Forza. Oppure prendi {P.PATTO_RIFIUTO} Spiccioli.</p>
       {full && (
         <div class="pending">
-          <p>Hai già {P.PATTI_MAX} Patti: per stringerne un altro devi scioglierne uno.</p>
+          <p>Hai già {max} Patti: per stringerne un altro devi scioglierne uno.</p>
           <div class="row">{al.map((a) => <Btn key={a.uid} small kind={dissolve === a.uid ? 'gold' : undefined} onClick={() => setDissolve(a.uid)}>Sciogli {ENEMIES[a.def].name} (Lealtà {a.lealta})</Btn>)}</div>
         </div>
       )}
@@ -112,7 +206,7 @@ export function PattoScreen() {
                 <b>{d.name}</b>
                 <div><b>Girata:</b> {girataFull(c.def)}</div>
                 <div class="small-label">Se tradisce: torna nemica con Forza {d.forza + 2} (Corrotta).</div>
-                <Btn kind="gold" disabled={full && !dissolve} onClick={() => { sfx('patto'); act({ t: 'patto', uid: c.uid, dissolve: dissolve ?? undefined }); }}>Stringi il Patto</Btn>
+                <Btn kind="gold" cls="big" disabled={full && !dissolve} onClick={() => { sfx('patto'); act({ t: 'patto', uid: c.uid, dissolve: dissolve ?? undefined }); }}>Stringi il Patto</Btn>
               </div>
             </div>
           );
@@ -182,6 +276,8 @@ export function ShopScreen() {
   const run = s.run!;
   const sh = run.shop!;
   const [tab, setTab] = useState<'difese' | 'mazzo' | 'servizi' | 'vendi'>('difese');
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const sure = (k: string, f: () => void) => { if (confirm === k) { setConfirm(null); f(); } else setConfirm(k); };
   const al = allies(run);
   const owned = ownedIds(run).filter((x) => !run.def.stolen.some((y) => y.segno === x));
   return (
@@ -205,11 +301,15 @@ export function ShopScreen() {
       {tab === 'mazzo' && (
         <div>
           <p>Esilio: {sh.exileCost} ¢ (sale di 5 a ogni uso). Minimo del mazzo: {minDeck(run)} carte.</p>
-          <DeckList run={run} onPick={(uid) => act({ t: 'exile', uid })} pickLabel={`Esilia ${sh.exileCost} ¢`} filter={() => run.sp >= sh.exileCost && run.deck.length > minDeck(run)} />
+          <DeckList run={run} onPick={(uid) => sure('ex' + uid, () => act({ t: 'exile', uid }))} pickLabel={confirm?.startsWith('ex') ? 'Tocca ancora per confermare' : `Esilia ${sh.exileCost} ¢`} filter={() => run.sp >= sh.exileCost && run.deck.length > minDeck(run)} />
         </div>
       )}
       {tab === 'servizi' && (
         <div class="services">
+          <div class="svc"><b>Affinare</b>: una tua difesa diventa + ({P.SHOP_AFFINA} ¢, una volta per negozio)
+            <div class="row wrap">{ownedIds(run).filter((x) => !run.def.plus.includes(x) && !run.def.stolen.some((y) => y.segno === x)).map((id) => <DefChip key={id} id={id} label onClick={() => { if (!sh.affinato && run.sp >= P.SHOP_AFFINA) act({ t: 'shopAffina', id }); }} dim={!!sh.affinato || run.sp < P.SHOP_AFFINA} />)}</div>
+            {sh.affinato && <span class="small-label">Già fatto in questo negozio.</span>}
+          </div>
           <div class="svc"><b>Cura</b>: +{P.HEAL_AMT} Lumi <Btn small disabled={run.lumi >= run.maxLumi || run.sp < (run.cfg.sigillo >= 4 ? 12 : P.HEAL_COST)} onClick={() => act({ t: 'heal' })}>{run.cfg.sigillo >= 4 ? 12 : P.HEAL_COST} ¢</Btn></div>
           <div class="svc"><b>Basamento</b>: un secondo Segno su un Passo ({basamentoCost(run)} ¢)
             <div class="row">{slotNames(5).map((n, i) => <Btn small key={i} disabled={run.def.cap[i] > 1 || run.sp < basamentoCost(run)} onClick={() => act({ t: 'basamento', slot: i })}>{n}</Btn>)}</div>
@@ -217,7 +317,7 @@ export function ShopScreen() {
           {al.map((a) => (
             <div class="svc" key={a.uid}><b>{ENEMIES[a.def].name}</b> (Lealtà {a.lealta})
               <Btn small disabled={run.sp < P.RINSALDA} onClick={() => act({ t: 'rinsalda', uid: a.uid })}>Rinsalda +2 ({P.RINSALDA} ¢)</Btn>
-              <Btn small kind="danger" onClick={() => act({ t: 'sciogli', uid: a.uid })}>Sciogli</Btn>
+              <Btn small kind="danger" onClick={() => sure('sc' + a.uid, () => act({ t: 'sciogli', uid: a.uid }))}>{confirm === 'sc' + a.uid ? 'Sicuro? Tocca ancora' : 'Sciogli'}</Btn>
             </div>
           ))}
           {run.def.stolen.map((st) => (
@@ -227,7 +327,7 @@ export function ShopScreen() {
       )}
       {tab === 'vendi' && (
         <div class="row wrap">
-          {owned.map((id) => <div key={id} class="svc"><DefChip id={id} label plus={run.def.plus.includes(id)} /> <Btn small onClick={() => act({ t: 'sell', id })}>Vendi {Math.floor(P.PRICE[DEFENSES[id].rarity] / 2)} ¢</Btn></div>)}
+          {owned.map((id) => <div key={id} class="svc"><DefChip id={id} label plus={run.def.plus.includes(id)} /> <Btn small onClick={() => sure('v' + id, () => act({ t: 'sell', id }))}>{confirm === 'v' + id ? 'Sicuro? Tocca ancora' : `Vendi ${sellValue(id)} ¢`}</Btn></div>)}
         </div>
       )}
       <div class="row main-actions"><Btn kind="primary" onClick={() => act({ t: 'leave' })}>Riparti ▶</Btn></div>
@@ -240,7 +340,7 @@ export function RestScreen() {
   const s = useStore();
   const run = s.run!;
   const [aff, setAff] = useState(false);
-  const heal = Math.round(run.maxLumi * (run.cfg.sigillo >= 3 ? 0.2 : P.REST_HEAL));
+  const heal = Math.min(restHeal(run), run.maxLumi - run.lumi);
   const owned = ownedIds(run).filter((x) => !run.def.plus.includes(x) && !run.def.stolen.some((y) => y.segno === x));
   return (
     <div class="screen rest">
@@ -303,20 +403,27 @@ export function EventScreen() {
 
 // ------------------------------------------------------------------ fine run: il Quaderno della Notte
 export function dawnLine(run: RunState): string {
-  if (!run.won) return DAWN_LINES.lose;
-  const lostAny = run.history.some((h) => h.dmg > 0);
-  if (!lostAny) return DAWN_LINES.perfect;
-  if (run.lumi <= 3) return DAWN_LINES.close;
-  if (run.stats.patti >= 4) return DAWN_LINES.patti;
-  if (run.stats.exiled >= 5) return DAWN_LINES.exile;
-  if (ownedIds(run).length <= 6) return DAWN_LINES.barehands;
-  return DAWN_LINES.generic;
+  const k = dawnKey(run);
+  const all = [DAWN_LINES[k], ...DAWN_ALT[k]];
+  let h = 0;
+  for (const ch of run.cfg.seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return all[h % all.length];
+}
+function dawnKey(run: RunState): keyof typeof DAWN_LINES {
+  if (!run.won) return 'lose';
+  if (!run.history.some((h) => h.dmg > 0)) return 'perfect';
+  if (run.lumi <= 3) return 'close';
+  if (run.stats.patti >= 4) return 'patti';
+  if (run.stats.exiled >= 5) return 'exile';
+  if (ownedIds(run).length <= 6) return 'barehands';
+  return 'generic';
 }
 
 export function EndScreen() {
   const s = useStore();
   const run = s.run!;
   const link = replayLink();
+  const [img, setImg] = useState<string | null>(null);
   return (
     <div class={`screen end ${run.won ? 'won' : 'lost'}`}>
       <h2>{run.cfg.tutorial ? 'La Prova è superata' : run.won ? 'All’alba il gallo canta' : 'L’ultimo Lume si è spento'}</h2>
@@ -332,14 +439,35 @@ export function EndScreen() {
             <div><span class="small-label">Esiliate</span><b>{run.stats.exiled}</b></div>
             <div><span class="small-label">Inchiostro</span><b>+{inkFor(run)}</b></div>
           </div>
+          <h3>Il Mazzo del Fato all’alba</h3>
+          <div class="row wrap dawn-deck">{[...new Map(run.deck.map((c) => [c.def + c.owner, c])).values()].slice(0, 24).map((c) => <DeckCardView key={c.uid} def={c.def} owner={c.owner} lealta={c.lealta} corrotto={c.corrotto} rancore={c.rancore} />)}</div>
           <h3>Il Quaderno della Notte</h3>
-          <div class="quaderno">{run.chronicle.map((c, k) => <p key={k}>{c.text}</p>)}</div>
-          <p class="small-label">Seed: <code>{run.cfg.seed}</code> · <button type="button" class="chiplink" onClick={() => copy(link)}>Copia il link del replay</button></p>
+          <div class="quaderno">{run.chronicle.slice(-14).map((c, k) => <p key={k}>{c.text}</p>)}</div>
+          <div class="row"><Btn small onClick={() => setImg(quadernoImage(run, dawnLine(run)))}>Il Quaderno come immagine</Btn></div>
+          {img && <div class="qimg"><img src={img} alt="Il Quaderno della Notte" /><p class="small-label">Tieni premuto (o tasto destro) sull’immagine per salvarla o condividerla.</p></div>}
+          <p class="small-label">Seed: <code>{run.cfg.seed}</code> · <button type="button" class="chiplink" onClick={() => copy(run.cfg.seed)}>Copia il seed</button> · <button type="button" class="chiplink" onClick={() => copy(link)}>Copia il link del replay</button> · <button type="button" class="chiplink" onClick={() => copy(shareText(run))}>Condividi il risultato</button></p>
         </>
       )}
+      {!run.cfg.tutorial && <Feedback />}
       <div class="row main-actions">
         <Btn kind="primary" onClick={() => set({ screen: 'title', run: null, playback: null, review: null })}>Torna al titolo</Btn>
       </div>
+    </div>
+  );
+}
+
+/** Micro-questionario di fine notte (Producer): resta sul dispositivo, si esporta dalle Impostazioni. */
+function Feedback() {
+  const [done, setDone] = useState<string | null>(null);
+  if (done) return <p class="small-label">Grazie: annotato ({done}).</p>;
+  const pick = (v: string) => { patchLastTelemetry({ feedback: v }); setDone(v); };
+  return (
+    <div class="row feedback">
+      <span class="small-label">Com’è stata questa notte?</span>
+      <Btn small onClick={() => pick('troppo facile')}>Troppo facile</Btn>
+      <Btn small onClick={() => pick('giusta')}>Giusta</Btn>
+      <Btn small onClick={() => pick('troppo difficile')}>Troppo difficile</Btn>
+      <Btn small onClick={() => pick('confusa')}>Non ho capito qualcosa</Btn>
     </div>
   );
 }
@@ -360,4 +488,11 @@ export function copy(text: string) {
   } catch {
     set({ toast: text });
   }
+}
+
+/** Testo da condividere, stile "griglia" (Marketing): un quadratino per rintocco. */
+export function shareText(run: RunState): string {
+  const cells = run.history.map((h) => (h.dmg === 0 ? '🟨' : h.dmg <= 3 ? '🟧' : '🟥')).join('');
+  const res = run.won ? 'Ho visto l’alba' : `Mi sono spento al rintocco ${run.rintocco}`;
+  return `Baro · ${res} · Sigillo ${run.cfg.sigillo}\n${cells}\nSeed ${run.cfg.seed} · v${CONTENT_VERSION}`;
 }

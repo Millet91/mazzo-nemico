@@ -157,7 +157,7 @@ export function newRun(cfg: RunConfig): RunState {
     s.deck.push(c);
   }
   s.map = genMap(s);
-  s.chronicle.push({ rintocco: 0, kind: 'start', text: `Calò la notte su Sottovento. Il Baro vegliava sulla casa dei ${s.famiglia[0]}: ${s.famiglia[1]}.` });
+  s.chronicle.push({ rintocco: 0, kind: 'start', text: `Calò la notte su Sottovento. ${baroSubj(s)} vegliava sulla casa ${deiCasa(s.famiglia[0])}: ${s.famiglia[1]}.` });
   return s;
 }
 
@@ -321,7 +321,7 @@ export function gainDefense(s: RunState, id: string, slot?: number, seme?: Seme,
       s.def.consumed = [...(s.def.consumed ?? []), id]; // consumato: non torna nelle offerte
       s.exilePick = { n: s.def.plus.includes('rogoArchivio') ? 3 : 2, back: s.phase, reason: "Rogo dell'Archivio" };
       s.phase = 'exilePick';
-      s.chronicle.push({ rintocco: s.rintocco, kind: 'rogo', text: "Il Baro diede fuoco all'archivio del Fato." });
+      s.chronicle.push({ rintocco: s.rintocco, kind: 'rogo', text: `${baroSubj(s)} diede fuoco all'archivio del Fato.` });
       return;
     }
     if (s.def.trucchi.length < s.def.tsock) s.def.trucchi.push(id);
@@ -420,7 +420,7 @@ function afterWave(s: RunState, out: WaveOutcome, lumiBefore: number) {
     s.chronicle.push({ rintocco: s.rintocco, kind: 'impact', text: `Al rintocco ${s.rintocco} la prima sventura alla Soglia fu ${lc(out.firstImpact)}.` });
   }
   for (const st of out.stolen) s.chronicle.push({ rintocco: s.rintocco, kind: 'steal', text: `Al rintocco ${s.rintocco} sparì il Segno ${st}.` });
-  if (out.maxCombo >= 5) s.chronicle.push({ rintocco: s.rintocco, kind: 'combo', text: `Al rintocco ${s.rintocco} i trucchi del Baro scattarono ${out.maxCombo} volte in un solo battito.` });
+  if (out.maxCombo >= 5) s.chronicle.push({ rintocco: s.rintocco, kind: 'combo', text: `Al rintocco ${s.rintocco} i trucchi ${baroDi(s)} scattarono ${out.maxCombo} volte in un solo battito.` });
   for (const b of betrayed) s.chronicle.push({ rintocco: s.rintocco, kind: 'betray', text: `Il patto con ${lc(b)} si ruppe, e la carta tornò dal Fato.` });
   const sum: WaveSummary = {
     rintocco: s.rintocco, act: s.act, kind: spec.kind === 'boss' ? `Mazziere, fase ${(spec.phase ?? 0) + 1}` : spec.kind,
@@ -439,6 +439,8 @@ function afterWave(s: RunState, out: WaveOutcome, lumiBefore: number) {
     s.ended = true;
     s.won = false;
     s.chronicle.push({ rintocco: s.rintocco, kind: 'end', text: `Al rintocco ${s.rintocco} l'ultimo Lume si spense, e la sventura entrò in casa.` });
+    // N17 · il Baro Caduto, versione leggera: la promessa per la prossima notte
+    s.chronicle.push({ rintocco: s.rintocco, kind: 'end', text: `Il Fato tenne le carte, e anche ${baroObj(s)}. Il prossimo inverno sarà nel mazzo.` });
     return;
   }
   if (s.boss) {
@@ -497,7 +499,8 @@ function finishBoss(s: RunState) {
   s.sp += P.BOSS_WIN;
   if (b.bossDead) s.stats.bossKills++;
   const bt = BOSS_TEXT[b.act];
-  s.chronicle.push({ rintocco: s.rintocco, kind: 'boss', text: `${bt.name} si alzò dal tavolo: "${bt.defeat}"${b.bossDead ? ' La sua carta era stata stracciata.' : ''}` });
+  // N3 · la Piena è un fiume: non si alza e non parla
+  s.chronicle.push({ rintocco: s.rintocco, kind: 'boss', text: b.act === 3 ? `La Piena si ritirò verso il fiume.${b.bossDead ? ' La sua carta era stata stracciata.' : ''}` : `${bt.name} si alzò dal tavolo: «${bt.defeat}»${b.bossDead ? ' La sua carta era stata stracciata.' : ''}` });
   s.pattoNext = 'map';
   if (b.act >= 3) { s.pattoCands = null; afterPatto(s); return; } // dopo la Piena la notte finisce: niente Patto (SD-14)
   enterPatto(s, 'boss');
@@ -527,7 +530,7 @@ function afterPatto(s: RunState) {
       s.phase = 'victory';
       s.ended = true;
       s.won = true;
-      s.chronicle.push({ rintocco: s.rintocco, kind: 'win', text: `All'alba il gallo cantò. La casa dei ${s.famiglia[0]} era salva fino all'inverno.` });
+      s.chronicle.push({ rintocco: s.rintocco, kind: 'win', text: `All'alba il gallo cantò. La casa ${deiCasa(s.famiglia[0])} era salva fino all'inverno.` });
     }
     return;
   }
@@ -576,7 +579,7 @@ export function eventChoices(s: RunState): { id: string; label: string; enabled:
     case 'bambini': return [{ id: 'cedi', label: 'Regala un Segno dal Deposito: per 3 rintocchi sai qual è la carta più forte e dove sta', enabled: segDep, arg: 'segnoDeposito' }, { id: 'no', label: 'Non hai niente per loro', enabled: true }];
     case 'processione': return [{ id: 'segui', label: 'Segui la processione: il prossimo rintocco ha 2 Denari in più, ma ogni Denari distrutta vale doppio', enabled: true }, { id: 'no', label: 'Chiudi le imposte', enabled: true }];
     case 'gatto': return [{ id: 'no', label: 'Torna indietro', enabled: true }, { id: 'prosegui', label: 'Prosegui: una carta a caso prende Rancore +1, ma il prossimo negozio ha 4 offerte', enabled: true }];
-    case 'vedova': return [{ id: 'sciogli', label: 'Sciogli un Patto: 2 Spiccioli per ogni Lealtà rimasta e una difesa non comune', enabled: al, arg: 'ally' }, { id: 'no', label: 'Le tue bestie restano con te', enabled: true }];
+    case 'vedova': return [{ id: 'sciogli', label: 'Sciogli un Patto: 2 Spiccioli per ogni Lealtà rimasta e una difesa non comune', enabled: al, arg: 'ally' }, { id: 'no', label: 'I tuoi Patti restano con te', enabled: true }];
     case 'vicini': return [{ id: 'accetta', label: `Accetta: ${ENEMIES[e.data.card as string]?.name} entra nel tuo mazzo, scegli una difesa rara tra 2`, enabled: true }, { id: 'no', label: 'Sbarra la porta', enabled: true }];
   }
   return [];
@@ -589,8 +592,13 @@ function doEvent(s: RunState, choice: string, arg?: string | number) {
   const done = () => { s.event = null; goMap(s); };
   const r = rng(s, 'events');
   const ev = EVENTS.find((x) => x.id === e.id)!;
-  if (choice === 'no') { done(); return; }
-  if (e.step === 0) s.chronicle.push({ rintocco: s.rintocco, kind: 'event', text: `Il Baro incontrò ${ev.who}.` });
+  const met = e.step === 0 && !s.chronicle.some((c) => c.kind === 'event' && c.rintocco === s.rintocco);
+  if (choice === 'no') {
+    if (met) s.chronicle.push({ rintocco: s.rintocco, kind: 'event', text: `${baroSubj(s)} incontrò ${ev.who}, e tirò dritto.` });
+    done();
+    return;
+  }
+  if (met) s.chronicle.push({ rintocco: s.rintocco, kind: 'event', text: `${baroSubj(s)} incontrò ${ev.who}, e accettò.` });
   switch (e.id) {
     case 'comare':
       s.intel.fullOrder = 1;
@@ -681,7 +689,7 @@ function makePatto(s: RunState, uid: number) {
   x.corrotto = false;
   if (x.bottino) { s.def.deposito.push(x.bottino); s.def.stolen = s.def.stolen.filter((y) => y.holder !== x.uid); x.bottino = null; }
   s.stats.patti++;
-  s.chronicle.push({ rintocco: s.rintocco, kind: 'patto', text: `Al rintocco ${s.rintocco} il Baro strinse un Patto con ${lc(ENEMIES[x.def].name)}.` });
+  s.chronicle.push({ rintocco: s.rintocco, kind: 'patto', text: pattoLine(s, lc(ENEMIES[x.def].name)) });
 }
 
 export function removeDefense(s: RunState, id: string) {
@@ -920,7 +928,9 @@ function apply0(s: RunState, a: Action): WaveOutcome | null {
       gainDefense(s, a.keep, a.slot);
       forestieroGive(s, a.give);
       f.keep = a.keep; f.give = a.give; f.done = true;
-      s.chronicle.push({ rintocco: s.rintocco, kind: 'forestiero', text: `Il Forestiero si tenne ${DEFENSES[a.give].name}: "Questa la tengo io, se non le spiace."` });
+      { const prev = s.chronicle.find((c) => c.kind === 'forestiero');
+        if (prev) prev.text = prev.text.replace(/si tenne (.+?)(?: e (.+?))?: /, (_m, x: string, y?: string) => `si tenne ${y ? `${x}, ${y}` : x} e ${DEFENSES[a.give].name}: `);
+        else s.chronicle.push({ rintocco: s.rintocco, kind: 'forestiero', text: `Il Forestiero si tenne ${DEFENSES[a.give].name}: «Questa la tengo io, se non le spiace.»` }); }
       if ((s.phase as Phase) !== 'exilePick') s.phase = 'prep';
       else s.exilePick!.back = 'prep';
       return null;
@@ -1095,4 +1105,34 @@ export function replay(cfg: RunConfig, actions: Action[]): RunState {
   let s = newRun(cfg);
   for (const a of actions) { const n = structuredClone(s); apply(n, a); s = n; }
   return s;
+}
+
+// ------------------------------------------------------------------ voce del Quaderno (Narrative N1, N2, N7)
+/** "dei Rossi", "degli Esposito": l'articolo davanti al cognome. */
+export function deiCasa(cognome: string): string {
+  return /^([aeiouAEIOU]|[sS][^aeiou]|[zZ]|[gG][nN]|[pP][sS]|[xX])/.test(cognome) ? `degli ${cognome}` : `dei ${cognome}`;
+}
+function baroName(s: RunState): string {
+  return BARI.find((b) => b.id === s.cfg.baro)?.name ?? 'Il Baro';
+}
+/** soggetto della frase: "Il Baro di Sottovento", "La Fattucchiera"... */
+export function baroSubj(s: RunState): string {
+  return baroName(s);
+}
+function baroObj(s: RunState): string {
+  const n = baroName(s);
+  return n.charAt(0).toLowerCase() + n.slice(1);
+}
+function baroDi(s: RunState): string {
+  const n = baroObj(s);
+  return n.startsWith('il ') ? 'del ' + n.slice(3) : n.startsWith('la ') ? 'della ' + n.slice(3) : n.startsWith("l'") ? "dell'" + n.slice(2) : 'di ' + n;
+}
+const PATTO_LINES = [
+  (b: string, x: string, r: number) => `Al rintocco ${r} ${b} strinse un Patto con ${x}.`,
+  (b: string, x: string) => `${b} e ${x} si strinsero la mano sopra il tavolo.`,
+  (b: string, x: string) => `Anche ${x} passò dalla parte ${b.startsWith('Il ') ? 'del ' + b.slice(3) : b.startsWith('La ') ? 'della ' + b.slice(3) : 'di ' + b}.`,
+];
+function pattoLine(s: RunState, x: string): string {
+  const k = s.chronicle.filter((c) => c.kind === 'patto').length;
+  return PATTO_LINES[k % PATTO_LINES.length](baroSubj(s), x, s.rintocco);
 }

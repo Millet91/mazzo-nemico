@@ -7,8 +7,9 @@ import { set } from './store';
 
 /** Mostra un asset: l'immagine definitiva se c'è nel registro, altrimenti il glifo segnaposto. */
 export function Art({ a, cls = '', label }: { a: VisualAsset; cls?: string; label?: string }) {
-  if (a.image) return <img class={`art ${cls}`} src={a.image} alt={label ?? ''} draggable={false} />;
-  return <span class={`art glyph ${cls}`} aria-hidden="true">{a.glyph}</span>;
+  const style = a.tint ? { filter: a.tint } : undefined;
+  if (a.image) return <img class={`art ${cls}`} src={a.image} srcset={a.image2x ? `${a.image} 1x, ${a.image2x} 2x` : undefined} alt={label ?? ''} draggable={false} style={style} />;
+  return <span class={`art glyph ${cls}`} aria-hidden="true" style={style}>{a.glyph}</span>;
 }
 
 export function Btn(p: { onClick?: () => void; children: ComponentChildren; kind?: 'primary' | 'ghost' | 'danger' | 'gold'; disabled?: boolean; title?: string; cls?: string; small?: boolean }) {
@@ -85,12 +86,12 @@ export function familyShape(f: string) {
 }
 
 /** Sigillo di una difesa (forma = famiglia). */
-export function DefChip({ id, plus, onClick, selected, dim, label, contro }: { id: string; plus?: boolean; onClick?: () => void; selected?: boolean; dim?: boolean; label?: boolean; contro?: boolean }) {
+export function DefChip({ id, plus, onClick, selected, dim, label, contro, firing }: { id: string; plus?: boolean; onClick?: () => void; selected?: boolean; dim?: boolean; label?: boolean; contro?: boolean; firing?: boolean }) {
   const d = DEFENSES[id];
   return (
     <button
       type="button"
-      class={`defchip ${familyShape(d.family)} ${selected ? 'sel' : ''} ${dim ? 'dim' : ''} ${contro ? 'contro' : ''} rar-${d.rarity}`}
+      class={`defchip ${familyShape(d.family)} ${selected ? 'sel' : ''} ${dim ? 'dim' : ''} ${contro ? 'contro' : ''} ${firing ? 'firing' : ''} rar-${d.rarity}`}
       onClick={onClick ?? (() => set({ inspect: { kind: 'defense', id } }))}
       aria-label={`${d.name}${plus ? '+' : ''}: ${plus ? d.plus : d.text}${contro ? ' (Contro-segno: non agisce)' : ''}`}
       aria-pressed={selected}
@@ -102,11 +103,16 @@ export function DefChip({ id, plus, onClick, selected, dim, label, contro }: { i
   );
 }
 
-export function DefenseCard({ id, onClick, selected, extra, plus }: { id: string; onClick?: () => void; selected?: boolean; extra?: ComponentChildren; plus?: boolean }) {
+export function DefenseCard({ id: rawId, onClick, selected, extra, plus: plusIn }: { id: string; onClick?: () => void; selected?: boolean; extra?: ComponentChildren; plus?: boolean }) {
+  // "affina:<id>" = opzione di potenziamento nelle offerte (Systems SD-3)
+  const affina = rawId.startsWith('affina:');
+  const id = affina ? rawId.slice(7) : rawId;
+  const plus = plusIn || affina;
   const d = DEFENSES[id];
   const fam = { segno: 'Segno', trucco: 'Trucco', rito: 'Rito' }[d.family];
   return (
-    <button type="button" class={`defcard ${selected ? 'sel' : ''} rar-${d.rarity}`} onClick={onClick} aria-pressed={selected}>
+    <button type="button" class={`defcard ${selected ? 'sel' : ''} rar-${d.rarity} ${affina ? 'affina' : ''}`} onClick={onClick} aria-pressed={selected}>
+      {affina && <div class="affina-tag">Affina: la tua {d.name} diventa {d.name}+</div>}
       <div class="defcard-head">
         <span class={`defchip ${familyShape(d.family)} static`}><span class="shape"><Art a={defenseArt(id)} /></span></span>
         <div>
@@ -114,7 +120,7 @@ export function DefenseCard({ id, onClick, selected, extra, plus }: { id: string
           <div class="dmeta">{fam} · {{ C: 'Comune', NC: 'Non comune', R: 'Rara' }[d.rarity]}</div>
         </div>
       </div>
-      <div class="dtext">{plus ? `${d.text} Potenziata: ${d.plus}` : d.text}</div>
+      <div class="dtext">{affina ? d.plus : plus ? `${d.text} Potenziata: ${d.plus}` : d.text}</div>
       {d.backlash && <div class="dback">Contraccolpo: {d.backlash}</div>}
       {extra}
     </button>

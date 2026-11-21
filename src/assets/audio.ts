@@ -9,6 +9,8 @@ let master: GainNode | null = null;
 let volume = 0.6;
 let enabled = true;
 let silentTick = false;
+let reduced = false;
+const MINOR = new Set(['pulse', 'step', 'enter', 'bell', 'ability', 'copy', 'coin', 'hit']);
 let voices = 0;
 const MAX_VOICES = 8;
 const buffers: Record<string, AudioBuffer> = {};
@@ -16,7 +18,8 @@ const buffers: Record<string, AudioBuffer> = {};
 // Dorico su re: ogni Passo ha una nota, Crocevia la più acuta, Uscio la più grave (GDD §11.2)
 const SCALE = [587.33, 523.25, 493.88, 440, 392, 349.23, 329.63, 293.66];
 
-export function setAudio(opts: { volume?: number; enabled?: boolean; silentTick?: boolean }) {
+export function setAudio(opts: { volume?: number; enabled?: boolean; silentTick?: boolean; reduced?: boolean }) {
+  if (opts.reduced !== undefined) reduced = opts.reduced;
   if (opts.volume !== undefined) volume = opts.volume;
   if (opts.enabled !== undefined) enabled = opts.enabled;
   if (opts.silentTick !== undefined) silentTick = opts.silentTick;
@@ -105,6 +108,7 @@ async function playSample(url: string, vol = 1) {
 /** Suona un cue. slot/L posizionano il suono nello stereo e nella scala dei Passi; combo alza la nota. */
 export function sfx(cue: string, o: { slot?: number; L?: number; combo?: number } = {}) {
   if (!enabled) return;
+  if (reduced && MINOR.has(cue)) return;
   const a = SOUNDS[cue];
   if (a?.sample) { void playSample(a.sample, a.volume); return; }
   const L = o.L ?? 5;
@@ -135,6 +139,22 @@ export function sfx(cue: string, o: { slot?: number; L?: number; combo?: number 
     case 'patto': tone(523, 0.5, 'sine', 0.07); tone(659, 0.5, 'sine', 0.07, 0, 0.1); tone(784, 0.6, 'sine', 0.07, 0, 0.2); break;
     case 'betray': tone(311, 0.6, 'sawtooth', 0.06, 0, 0, 200); break;
     case 'defeat': tone(220, 1.5, 'sawtooth', 0.08, 0, 0, 55); break;
+    case 'copy': tone(note(0), 0.08, 'square', 0.03, pan); tone(note(0), 0.08, 'square', 0.03, pan, 0.07); break;
+    case 'ability': tone(330, 0.12, 'sawtooth', 0.035, pan); break;
+    case 'bell': tone(note(o.slot ?? 0) * 2, 0.35, 'sine', 0.05, pan); tone(note(o.slot ?? 0) * 3, 0.25, 'sine', 0.02, pan, 0.01); break;
+    case 'exile': tone(1568, 0.3, 'sine', 0.06, pan, 0, 392); break;
+    case 'rimando': tone(392, 0.25, 'triangle', 0.06, pan, 0, 784); break;
+    case 'end': tone(392, 0.3, 'sine', 0.06); tone(523, 0.45, 'sine', 0.06, 0, 0.12); break;
+    case 'heartbeat': tone(60, 0.12, 'sine', 0.25); tone(55, 0.14, 'sine', 0.2, 0, 0.18); break;
     case 'victory': [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.6, 'sine', 0.08, 0, i * 0.15)); break;
   }
+}
+
+// Il gioco tace quando l'app va in secondo piano (Audio/Tech: niente suoni dal telefono in tasca).
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (!ctx) return;
+    if (document.hidden) void ctx.suspend();
+    else if (enabled) void ctx.resume();
+  });
 }

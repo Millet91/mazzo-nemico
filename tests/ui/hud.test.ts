@@ -1,0 +1,152 @@
+// L1 dell'HUD (agente D): logica dei tasti, griglia 4×4, configurazione della Schermaglia, banner, testi.
+import { describe, it, expect } from 'vitest';
+import {
+  alzo, bannerDaEventi, barraVento, celleGriglia, comandiVisibili, configSchermaglia, creaDoppioTocco,
+  creaGrillettoUnico, creaRipetitore, micciaSuccessiva, miraAttiva, PASSO_MIRA, RIPETI_OGNI_MS, type Tempi,
+} from '../../src/ui/battaglia/logica';
+import { dotazioneIniziale } from '../../src/contenuti/armi';
+import { BIL } from '../../src/contenuti/bilanciamento';
+import type { VistaBattaglia } from '../../src/core/bus';
+import { T } from '../../src/testi/it';
+
+/** Orologio finto: i timer scattano solo con avanza(ms). */
+function orologio() {
+  let ora = 0;
+  let id = 0;
+  const timer = new Map<number, { quando: number; ogni: number; f: () => void }>();
+  const t: Tempi = {
+    ora: () => ora,
+    dopo: (ms, f) => { timer.set(++id, { quando: ora + ms, ogni: 0, f }); return id; },
+    ogni: (ms, f) => { timer.set(++id, { quando: ora + ms, ogni: ms, f }); return id; },
+    annulla: (i) => { timer.delete(i as number); },
+  };
+  const avanza = (ms: number) => {
+    const fine = ora + ms;
+    for (;;) {
+      const prossimo = [...timer.entries()].filter(([, x]) => x.quando <= fine).sort((a, b) => a[1].quando - b[1].quando)[0];
+      if (!prossimo) break;
+      const [k, x] = prossimo;
+      ora = x.quando;
+      if (x.ogni) x.quando += x.ogni; else timer.delete(k);
+      x.f();
+    }
+    ora = fine;
+  };
+  return { t, avanza };
+}
+
+function vista(p: Partial<VistaBattaglia> = {}): VistaBattaglia {
+  const sq = (ciurma: 'teschio' | 'marina', controllo: 'umano' | 'ia') => ({ ciurma, controllo, pvTotali: 210, pvIniziali: 210, vivi: 3, iniziali: 3 });
+  return {
+    numeroTurno: 1, turnoLimite: 18, mareSaleDalTurno: 12, squadraDiTurno: 0, tocca: 'umano', fase: 'azione',
+    secondiRimasti: 30, timerAvviato: false, vento: 0, ventoMax: 6,
+    squadre: [sq('teschio', 'umano'), sq('marina', 'ia')],
+    arma: 'cannone', munizioni: dotazioneIniziale(), miccia: 3, miraGradi: 45, potenza: 60, iaPensa: false,
+    puoArrendersi: false, esito: null, ...p,
+  };
+}
+
+describe('Schermaglia di M1', () => {
+  it('Teschio Rosso umano attaccante contro Marina Reale IA Mozzo, 3 contro 3, 30 s, traiettoria intera', () => {
+    const c = configSchermaglia(1234);
+    expect(c.bioma).toBe('isola');
+    expect(c.squadre[0]).toMatchObject({ ciurma: 'teschio', ruolo: 'attaccante', controllo: 'umano', pirati: 3 });
+    expect(c.squadre[1]).toMatchObject({ ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: 3 });
+    expect(c.timerSecondi).toBe(30);
+    expect(c.traiettoriaCompleta).toBe(true);
+    expect(configSchermaglia(-1).seme).toBe(0xffffffff);
+  });
+});
+
+describe('Griglia armi 4×4', () => {
+  it('16 celle in ordine, 4 attive (le Base di M1) con munizioni infinite, 12 bloccate', () => {
+    const c = celleGriglia(dotazioneIniziale());
+    expect(c.map((x) => x.numero)).toEqual(Array.from({ length: 16 }, (_, i) => i + 1));
+    expect(c.filter((x) => x.attiva).map((x) => x.id)).toEqual(['cannone', 'granata', 'pistola', 'sciabola']);
+    expect(c.filter((x) => x.attiva).every((x) => x.munizioni === -1)).toBe(true);
+    expect(c.filter((x) => !x.attiva)).toHaveLength(12);
+  });
+  it('un\'arma con munizioni finite a 0 è bloccata', () => {
+    expect(celleGriglia({ cannone: -1, barile: 0 }).find((x) => x.id === 'barile')!.attiva).toBe(false);
+    expect(celleGriglia({ cannone: -1, barile: 1 }).find((x) => x.id === 'barile')!.attiva).toBe(true);
+  });
+});
+
+describe('Tasti', () => {
+  it('▲▼: un passo al tocco, poi 10°/s tenendo premuto, stop al rilascio', () => {
+    const { t, avanza } = orologio();
+    let passi = 0;
+    const r = creaRipetitore(() => passi++, t);
+    r.premi();
+    expect(passi).toBe(1);
+    avanza(299);
+    expect(passi).toBe(1);
+    avanza(1 + 1000);
+    expect(passi).toBe(11); // 1 + 10 in un secondo
+    r.rilascia();
+    avanza(1000);
+    expect(passi).toBe(11);
+    expect(PASSO_MIRA).toBe(2); // 1° = 2 mezzi gradi
+    expect(RIPETI_OGNI_MS).toBe(100);
+  });
+
+  it('SALTA: tocco singolo = avanti dopo 250 ms; doppio tocco = indietro, una volta sola', () => {
+    const { t, avanza } = orologio();
+    const fatti: string[] = [];
+    const s = creaDoppioTocco(() => fatti.push('avanti'), () => fatti.push('indietro'), t);
+    s.tocca(); avanza(250);
+    expect(fatti).toEqual(['avanti']);
+    s.tocca(); avanza(100); s.tocca(); avanza(500);
+    expect(fatti).toEqual(['avanti', 'indietro']);
+  });
+
+  it('FUOCO: il doppio tocco (o due dita) spara una volta sola per turno', () => {
+    let spari = 0;
+    const f = creaGrillettoUnico(() => spari++);
+    expect(f.tocca(3)).toBe(true);
+    expect(f.tocca(3)).toBe(false);
+    expect(spari).toBe(1);
+    f.tocca(5);
+    expect(spari).toBe(2);
+  });
+
+  it('miccia: 1 → 5 e poi ricomincia; niente miccia per il cannone', () => {
+    expect([1, 2, 3, 4, 5].map((m) => micciaSuccessiva(m, 'granata'))).toEqual([2, 3, 4, 5, 1]);
+    expect(micciaSuccessiva(3, 'cannone')).toBe(3);
+  });
+});
+
+describe('Cosa si vede', () => {
+  it('comandi solo nel turno umano in azione o fuga; mira e FUOCO solo in azione', () => {
+    expect(comandiVisibili(vista())).toBe(true);
+    expect(comandiVisibili(vista({ fase: 'fuga' }))).toBe(true);
+    expect(miraAttiva(vista({ fase: 'fuga' }))).toBe(false);
+    expect(comandiVisibili(vista({ fase: 'volo' }))).toBe(false);
+    expect(comandiVisibili(vista({ tocca: 'ia' }))).toBe(false);
+    expect(comandiVisibili(null)).toBe(false);
+  });
+  it('alzo mostrato sopra l\'orizzonte nei due versi', () => {
+    expect(alzo(45)).toBe(45);
+    expect(alzo(135)).toBe(45);
+    expect(alzo(180)).toBe(0);
+    expect(alzo(350)).toBe(-10);
+    expect(alzo(200)).toBe(-20);
+  });
+  it('barra del vento dal centro', () => {
+    expect(barraVento(3, 6)).toEqual({ verso: 1, frazione: 0.5 });
+    expect(barraVento(-6, 6)).toEqual({ verso: -1, frazione: 1 });
+    expect(barraVento(0, 6)).toEqual({ verso: 0, frazione: 0 });
+  });
+});
+
+describe('Banner', () => {
+  it('"Tocca a te!", il turno della Marina Reale, il mare che sale e gli ultimi turni', () => {
+    const v = vista();
+    const inizio = (numero: number, squadra: 0 | 1) => ({ t: 'turnoIniziato' as const, numero, squadra, pirata: 0, vento: 0 });
+    expect(bannerDaEventi([inizio(1, 0)], v)).toEqual([T.battaglia.toccaATe]);
+    expect(bannerDaEventi([inizio(2, 1)], v)).toEqual(['Turno della Marina Reale']);
+    expect(bannerDaEventi([inizio(BIL.battaglia.mareSaleDalTurno, 1)], v)).toEqual(['Turno della Marina Reale', T.battaglia.mareSale]);
+    expect(bannerDaEventi([inizio(16, 1)], v)).toEqual(['Turno della Marina Reale', T.battaglia.ultimiTurni]);
+    expect(bannerDaEventi([{ t: 'timerAvviato' }], v)).toEqual([]);
+  });
+});

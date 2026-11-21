@@ -62,6 +62,8 @@ export interface MappaGenerata {
   arte?: string;
   /** barili di polvere già piazzati (centro della base, appoggiati al suolo); la sim li crea come proiettili 'barile' fermi senza miccia, che esplodono se colpiti */
   barili?: Punto[];
+  /** scale e liane (segmenti verticali, NON nella maschera): la sim li copia in StatoBattaglia.appigli con un id */
+  appigli?: { tipo: TipoAppiglio; x: number; yAlto: number; yBasso: number }[];
 }
 
 export interface Decorazione { tipo: 'palma' | 'masso' | 'rovina' | 'cespuglio'; x: number; y: number; scala: number; specchio: boolean }
@@ -128,6 +130,17 @@ export interface Squadra {
   pvIniziali: number;
 }
 
+export type TipoAppiglio = 'scala' | 'liana';
+
+/** scala o liana distruttibile: segmento verticale in x, da yAlto a yBasso (yAlto < yBasso). Non è nella maschera. */
+export interface Appiglio {
+  id: number;
+  tipo: TipoAppiglio;
+  x: number;
+  yAlto: number;
+  yBasso: number;
+}
+
 export type StatoPirata = 'vivo' | 'morto' | 'annegato';
 
 export interface Pirata {
@@ -149,6 +162,8 @@ export interface Pirata {
   yInizioCaduta: number;
   /** danno subito in questo turno, mostrato e applicato alle barre a fine risoluzione */
   dannoNelTurno: number;
+  /** id dell'appiglio a cui è aggrappato (−1 = nessuno): niente gravità, può sparare */
+  appeso: number;
 }
 
 export type TipoProiettile = 'palla' | 'granata' | 'frammento' | 'barile' | 'mina' | 'lapide' | 'cassa';
@@ -201,6 +216,8 @@ export interface StatoTurno {
   miccia: number;
   /** camminata in corso: −1 sinistra, 0 ferma, 1 destra */
   camminata: -1 | 0 | 1;
+  /** arrampicata in corso su un appiglio: −1 su, 0 ferma, 1 giù */
+  arrampicata: -1 | 0 | 1;
   /** lo sparo di questo turno c'è già stato */
   sparato: boolean;
   /** in 'risoluzione': tick da cui tutto è fermo (−1 = qualcosa si muove). La sim lo azzera a −1 a ogni cambio di fase */
@@ -235,7 +252,9 @@ export interface StatoBattaglia {
   squadre: [Squadra, Squadra];
   pirati: Pirata[];
   proiettili: Proiettile[];
-  /** contatore per gli id dei proiettili */
+  /** scale e liane presenti (id da prossimoId) */
+  appigli: Appiglio[];
+  /** contatore per gli id di proiettili e appigli */
   prossimoId: number;
   turno: StatoTurno;
   esito: EsitoBattaglia | null;
@@ -250,6 +269,8 @@ export interface StatoBattaglia {
 export type Comando =
   | { t: 'muovi'; dir: -1 | 0 | 1 }
   | { t: 'salta'; indietro: boolean }
+  /** su (−1) / giù (1) / ferma (0) su un appiglio; ci si aggrappa se si è entro BIL.arrampicata.presa px */
+  | { t: 'arrampica'; dir: -1 | 0 | 1 }
   /** imposta la mira (fionda o IA); mezziGradi 0..719 assoluti, potenza intera 0..100 */
   | { t: 'mira'; mezziGradi: number; potenza: number }
   /** ▲▼: ruota la mira di `delta` mezzi gradi verso l'alto (+) o il basso (−), nel verso del pirata */
@@ -293,6 +314,10 @@ export type EventoBattaglia =
   | { t: 'mareSale'; livello: number }
   | { t: 'cassaCaduta'; proiettile: number; x: number }
   | { t: 'cassaAperta'; proiettile: number; pirata: number; contenuto: ContenutoCassa }
+  | { t: 'aggrappato'; pirata: number; appiglio: number }
+  | { t: 'staccato'; pirata: number }
+  /** un'esplosione ha tolto il tratto yAlto-yBasso dell'appiglio (il resto può diventare uno o due appigli) */
+  | { t: 'appiglioRotto'; appiglio: number; x: number; yAlto: number; yBasso: number }
   | { t: 'fine'; esito: EsitoBattaglia };
 
 // ─── IA ───────────────────────────────────────────────────────────────────────────────────────────

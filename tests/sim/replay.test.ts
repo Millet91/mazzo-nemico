@@ -215,6 +215,30 @@ describe('traiettoria', () => {
     expect(punti[punti.length - 1].x).toBeLessThan(1101);
   });
 
+  it('granata: mostra i rimbalzi e finisce dove esplode davvero, allo scadere della miccia', () => {
+    const t = terrenoPiatto();
+    rettangolo(t, 1000, 450, 1010, 600, MATERIALE.roccia); // muro su cui rimbalzare
+    const s = battagliaPiatta([800], [1400], { terreno: t });
+    inAzione(s);
+    eseguiComando(s, { t: 'arma', arma: 'granata' });
+    eseguiComando(s, { t: 'miccia', secondi: 4 });
+    eseguiComando(s, { t: 'mira', mezziGradi: daGradi(35), potenza: 60 });
+    const h0 = hashStato(s);
+    const punti = traiettoria(s, 60);
+    expect(hashStato(s)).toBe(h0);
+    expect(punti.length).toBeGreaterThan(5);
+    expect(punti.length).toBeLessThanOrEqual(60);
+    // tornata indietro dopo il muro: c'è un punto a destra del pirata più lontano dell'ultimo
+    expect(Math.max(...punti.map((q) => q.x))).toBeGreaterThan(punti[punti.length - 1].x);
+    expect(punti.every((q) => q.x < 1000)).toBe(true); // non passa il muro
+    // l'ultimo punto coincide con l'esplosione vera
+    eseguiComando(s, { t: 'fuoco' });
+    const ev = avanzaFinche(s, (x) => x.turno.fase === 'fuga');
+    const esp = eventiDi(ev, 'esplosione')[0];
+    expect(esp.x).toBeCloseTo(punti[punti.length - 1].x, 6);
+    expect(esp.y).toBeCloseTo(punti[punti.length - 1].y, 6);
+  });
+
   it('sciabola: niente linea', () => {
     const s = battagliaPiatta([800], [1400]);
     inAzione(s);

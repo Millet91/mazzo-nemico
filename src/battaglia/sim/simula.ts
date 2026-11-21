@@ -126,8 +126,9 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
 }
 
 /**
- * Punti della traiettoria prevista dell'arma del turno, con vento e terreno veri, un punto ogni 3 tick, fino al
- * primo urto (compreso) o a `maxPunti`. Pistola: linea dritta fino alla portata. Sciabola: nessun punto.
+ * Punti della traiettoria prevista dell'arma del turno, con vento e terreno veri. Cannone: un punto ogni 3 tick fino
+ * al primo urto (compreso). Granata: rimbalzi compresi fino allo scadere della miccia, l'ultimo punto è
+ * l'esplosione. Al massimo `maxPunti` punti. Pistola: linea dritta fino alla portata. Sciabola: nessun punto.
  */
 export function traiettoria(s: StatoBattaglia, maxPunti = 60): Punto[] {
   const p = s.pirati.find((x) => x.id === s.turno.pirata);
@@ -149,9 +150,24 @@ export function traiettoria(s: StatoBattaglia, maxPunti = 60): Punto[] {
   if (b.bloccato) return [{ x: b.x, y: b.y }];
   const v = velocitaIniziale(mg, a.usaPotenza ? s.turno.mira.potenza : 100);
   const pr: CorpoProiettile = { x: b.x, y: b.y, vx: v.vx, vy: v.vy, fermo: false };
-  // per la linea: si ferma al primo urto anche la granata
-  const f = { ...fisicaDi(arma), rimbalzo: null };
   const bersagli = s.pirati.filter((q) => q.stato === 'vivo' && q.id !== p.id);
+  const f = fisicaDi(arma);
+  if (a.miccia && f.rimbalzo !== null) {
+    // granata: rimbalzi veri sulla maschera (solo letta) fino allo scadere della miccia; l'ultimo punto è
+    // dove esplode. I punti sono distribuiti su tutta la miccia, più un punto a ogni rimbalzo.
+    const durata = s.turno.miccia * TICK_AL_SECONDO;
+    const passo = Math.max(3, Math.ceil(durata / Math.max(1, maxPunti - 1)));
+    for (let i = 1; i <= durata; i++) {
+      const u = muoviProiettile(t, t.mare, s.vento, pr, f, bersagli);
+      if (u && u.tipo === 'mare') { out.push({ x: u.x, y: u.y }); return out; }
+      const rimbalzo = u !== null && u.tipo === 'rimbalzo';
+      if (i === durata) break;
+      if ((rimbalzo || i % passo === 0) && out.length < maxPunti - 1) out.push({ x: pr.x, y: pr.y });
+    }
+    out.push({ x: pr.x, y: pr.y }); // esplosione
+    return out;
+  }
+  // cannone: fino al primo urto
   for (let i = 1; i <= maxPunti * 3; i++) {
     const u = muoviProiettile(t, t.mare, s.vento, pr, f, bersagli);
     if (u) { out.push({ x: u.x, y: u.y }); break; }

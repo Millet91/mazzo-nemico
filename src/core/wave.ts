@@ -33,6 +33,7 @@ export interface WaveOutcome {
   exiled: string[];
   allyLoss: Record<number, number>;
   revealExtra: number;
+  why: Record<number, string[]>;
 }
 
 export function minDeck(run: RunState): number {
@@ -91,6 +92,7 @@ export class WaveSim {
   revealExtra = 0;
   allyLoss: Record<number, number> = {};
   truccatoTop: DeckCard[] = [];
+  all: WC[] = [];
 
   constructor(run: RunState, spec: WaveSpec, seed: number, asso: Asso | null = null, silent = false) {
     this.run = run;
@@ -127,12 +129,14 @@ export class WaveSim {
     }
     const bonus = dc ? dc.rancore + (dc.corrotto ? 2 : 0) : 0;
     const f = d.forza + (ally ? 0 : bonus);
-    return {
+    const wc: WC = {
       wid: ++this.wid, uid, def, name: d.name, seme: d.seme, forza: f, base: f, kw, cor: kw.corazza ?? 0, burn: 0,
       geloUsed: false, frozen: 0, lt: 0, tier: d.tier, token: d.tier === 't', ally, ritornoUsed: false, malUsed: false,
       night: false, brancoGot: 0, divoraUsed: false, barileUsed: false, allyRitornoUsed: false, why: [], extraLealtaLoss: 0,
       ...opts,
     };
+    if (!this.silent) this.all.push(wc);
+    return wc;
   }
   snapCard(c: WC): SnapCard {
     const dc = c.uid != null ? this.run.deck.find((x) => x.uid === c.uid) : undefined;
@@ -1057,6 +1061,7 @@ export class WaveSim {
       exiled: this.exiled,
       allyLoss: this.allyLoss,
       revealExtra: this.revealExtra,
+      why: Object.fromEntries(this.all.map((c) => [c.wid, c.why])),
     };
   }
 

@@ -203,13 +203,17 @@ export interface Pirata {
   mossa?: MossaPirata;
   /** tick in cui è cominciata la mossa in corso (per far partire l'animazione dal primo fotogramma) */
   mossaDa?: number;
+  /** Fase 1: salvataggi al bordo già usati in questa battaglia (limite BIL.movimento.bordoPerBattaglia); assente = 0 */
+  bordi?: number;
+  /** Fase 1: salti dal muro fatti da quando ha lasciato terra (torna a 0 quando tocca terra); assente = 0 */
+  saltiMuro?: number;
 }
 
 /**
  * Mosse del pirata (PIANO §3 Fase 1). 'passo' = cammino corto, 'corsa' = falcate dopo BIL.movimento.corsaDopoSec,
  * 'frenata' = scivolata breve a fine corsa, 'salto' = sale, 'caduta' = scende, 'scavalco' = si issa su un muretto
  * fino a BIL.movimento.scavalcoMax, 'scivolata' = giù per un pendio ripido, 'bordo' = appeso al ciglio dopo il
- * salvataggio, 'scala' e 'liana' = aggrappato a un appiglio, 'aTerra' = steso dopo un colpo (si rialza da solo).
+ * salvataggio, 'scala' e 'liana' = aggrappato a un appiglio, 'aTerra' = sbalzato da un colpo: dal momento del colpo (anche in volo) fino a 0,5 s dopo che si è fermato.
  */
 export type MossaPirata =
   | 'fermo' | 'passo' | 'corsa' | 'frenata' | 'salto' | 'caduta' | 'scavalco' | 'scivolata' | 'bordo' | 'scala' | 'liana' | 'aTerra';
@@ -236,6 +240,11 @@ export interface Proiettile {
   contenuto?: ContenutoCassa;
 }
 
+/**
+ * Ordine delle fasi. Fino alla Fase 0: inquadra → azione → volo → fuga → risoluzione.
+ * Dalla Fase 1 (PIANO §3, "la fuga parte allo sparo"): inquadra → azione → fuga (ci si muove mentre il colpo
+ * vola) → volo (solo se qualcosa vola ancora) → risoluzione. Chi legge la fase non deve dare per scontato l'ordine.
+ */
 export type FaseTurno =
   | 'inquadra'    // 0,6 s: la camera vola sul pirata attivo, niente comandi
   | 'azione'      // muovi/mira/fuoco; il timer scorre (parte al primo comando o dopo 2 s)

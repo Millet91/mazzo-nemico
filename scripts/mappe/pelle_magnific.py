@@ -34,6 +34,17 @@ def main():
         x0, x1 = PEZZI[nome]
         im = Image.open(f).convert('RGB').resize((x1 - x0, Y1 - Y0), Image.LANCZOS)
         a = verde(im)
+        # l'AI sposta un po' le forme: si cerca lo scostamento (±16 px) che fa combaciare meglio la sagoma
+        g = (base[Y0:Y1, x0:x1, 3] >= 128).astype(np.float32)
+        meglio, sx_, sy_ = -1e9, 0, 0
+        for ddy in range(-16, 17, 2):
+            for ddx in range(-16, 17, 2):
+                v = (np.roll(np.roll(a > 0.5, ddy, 0), ddx, 1) == (g > 0.5)).mean()
+                if v > meglio:
+                    meglio, sx_, sy_ = v, ddx, ddy
+        print(f'{nome}: scostamento {sx_},{sy_}, combacia {meglio * 100:.1f}%')
+        im = Image.fromarray(np.roll(np.roll(np.asarray(im), sy_, 0), sx_, 1))
+        a = np.roll(np.roll(a, sy_, 0), sx_, 1)
         # dissolvenza nella zona in comune al centro (988-1060)
         rampa = np.ones(x1 - x0, np.float32)
         if nome == 'sinistra':
@@ -53,11 +64,11 @@ def main():
         fid[780:850, 330:430] = 0
     alfa = base[..., 3]
     solido = alfa >= 128
-    fid = np.where(solido, fid, 0)   # grotte e aria: restano del pittore
+    fid = np.where(alfa > 0, fid, 0)   # terreno e fondo delle grotte (alfa 110): colori dell'AI; l'aria resta vuota
     rgb = base[..., :3] * (1 - fid[..., None]) + ai * fid[..., None]
     res = np.dstack([rgb, alfa]).clip(0, 255).astype(np.uint8)
     Image.fromarray(res, 'RGBA').save(out)
-    print(f'{out}: pelle AI su {(fid > 0.5).sum() / max(1, solido.sum()) * 100:.0f}% del terreno')
+    print(f'{out}: pelle AI su {(fid[solido] > 0.5).mean() * 100:.0f}% del terreno')
 
 
 if __name__ == '__main__':

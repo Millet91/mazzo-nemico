@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { get, set, useStore, act, beginWave, finishWave, useAsso, toast, tipSeen, markTip } from './store';
-import { Art, Btn, CardBack, CardView, DefChip, DefenseCard, DeckCardView, Lumi } from './components';
+import { Art, Btn, CardBack, CardView, DefChip, DefenseCard, DeckCardView } from './components';
 import { WaveSim, truccatoCandidates } from '../core/wave';
 import { forecast, meanDamage } from '../core/forecast';
 import { visibleQueue, allies, gainDefenseClone } from './runhelpers';
@@ -9,27 +9,39 @@ import { DEFENSES } from '../content/defenses';
 import { ACT_NAMES, P, slotNames } from '../content/config';
 import { BOSS_TEXT, ELITE_LINES } from '../content/meta';
 import { TUTORIAL } from '../content/tutorial';
-import { sceneArt, SEME_ASSET } from '../assets/registry';
+import { sceneArt, SEME_ASSET, enemyArt as enemyArtFor } from '../assets/registry';
 import { sfx } from '../assets/audio';
+import { buzz } from './haptics';
+import { Coach } from './coach';
 import type { Ev, RunState, Snap, SnapCard } from '../core/types';
 
-// ------------------------------------------------------------------ barra in alto
+// ------------------------------------------------------------------ barra in alto (HUD)
 export function TopBar({ run, lumi, sp }: { run: RunState; lumi?: number; sp?: number }) {
   const act = run.cfg.tutorial ? ACT_NAMES[0] : ACT_NAMES[run.act];
+  const L = lumi ?? run.lumi;
+  const total = run.cfg.tutorial ? 5 : 15;
+  const low = L <= run.maxLumi * 0.25;
   return (
     <header class={`topbar act-${run.act}`}>
-      <button type="button" class="btn ghost small" onClick={() => set({ menu: true })} aria-label="Menu">☰</button>
+      <button type="button" class="hud-btn" onClick={() => { buzz('tap'); set({ menu: true }); }} aria-label="Menu">☰</button>
       <div class="tb-act">
         <b>{act}</b>
-        <span>Rintocco {run.rintocco}{run.cfg.tutorial ? '' : ' di 15'}{run.cfg.sigillo ? ` · Sigillo ${run.cfg.sigillo}` : ''}</span>
+        <div class="pips" aria-label={`Rintocco ${run.rintocco} di ${total}`}>
+          {Array.from({ length: total }, (_, k) => <i key={k} class={`pip ${k < run.rintocco - 1 ? 'done' : k === run.rintocco - 1 ? 'now' : ''} ${!run.cfg.tutorial && (k + 1) % 5 === 0 ? 'boss' : ''}`} />)}
+        </div>
       </div>
-      <Lumi lumi={lumi ?? run.lumi} max={run.maxLumi} />
-      <div class="sp" aria-label={`Spiccioli ${sp ?? run.sp}`}><Art a={sceneArt('spicciolo')} /> {sp ?? run.sp}</div>
+      {run.cfg.sigillo > 0 && <span class="hud-chip sig" title="Sigillo">◈ {run.cfg.sigillo}</span>}
+      <div id="coach-lumi" class={`hud-chip lumi-chip ${low ? 'low' : ''}`} role="meter" aria-valuenow={L} aria-valuemax={run.maxLumi} aria-label={`Lumi ${L} su ${run.maxLumi}`}>
+        <Art a={sceneArt('lume')} />
+        <b key={L} class="tick-num">{L}</b><span>/{run.maxLumi}</span>
+        <span class="lumi-bar"><span class="lumi-fill" style={{ width: `${Math.max(0, Math.min(100, (L / run.maxLumi) * 100))}%` }} /></span>
+      </div>
+      <div class="hud-chip sp" aria-label={`Spiccioli ${sp ?? run.sp}`}><span class="coin">¢</span><b key={sp ?? run.sp} class="tick-num">{sp ?? run.sp}</b></div>
     </header>
   );
 }
 
-// ------------------------------------------------------------------ pannello del mazzo
+// ------------------------------------------------------------------ mazzo, Trucchi e Patti (in basso a sinistra)
 export function DeckPanel({ run }: { run: RunState }) {
   const s = useStore();
   const fato = run.deck.filter((x) => x.owner === 'fato');
@@ -38,42 +50,37 @@ export function DeckPanel({ run }: { run: RunState }) {
   const s7 = run.cfg.sigillo >= 7;
   const al = allies(run);
   return (
-    <section class="deckpanel" aria-label="Mazzo del Fato">
-      <button type="button" class="deck-pile" onClick={() => set({ showDeck: !s.showDeck })} aria-expanded={s.showDeck}>
-        <Art a={sceneArt('mazzo')} />
+    <section class="deckpanel" id="coach-deck" aria-label="Mazzo del Fato">
+      <button type="button" class="deck-pile" onClick={() => { buzz('tap'); set({ showDeck: !s.showDeck }); }} aria-expanded={s.showDeck} title="Il Mazzo del Fato: tocca per vederlo">
+        <span class="pile-stack" style={{ '--n': Math.min(6, Math.ceil(run.deck.length / 4)) } as never} />
         <b>{run.deck.length}</b>
-        <span class="small-label">carte{al.length ? ` · tuoi ${al.length}` : ''}</span>
+        {run.announced.length > 0 && <span class="pile-new">+{run.announced.length}</span>}
       </button>
       <div class="deck-info">
+        <span class="zone-label">Mazzo del Fato</span>
         <div class="semi">
-          {SEMI.map((se) => (
-            <span key={se} class={`semebadge seme-${se}`} title={se}>{SEME_ASSET[se].glyph} {bySeme[se] ?? 0}</span>
-          ))}
+          {SEMI.map((se) => (bySeme[se] ? <span key={se} class={`semebadge seme-${se}`} title={se}>{SEME_ASSET[se].glyph}{bySeme[se]}</span> : null))}
         </div>
-        {run.announced.length > 0 && (
+        {run.announced.length > 0 && !s7 && (
           <div class="announced">
-            <span class="small-label">Il Fato ha aggiunto, per questo rintocco:</span>
             {run.announced.map((u) => {
               const c = run.deck.find((x) => x.uid === u);
               if (!c) return null;
-              return s7 ? <span key={u} class={`semebadge seme-${ENEMIES[c.def].seme}`}>{SEME_ASSET[ENEMIES[c.def].seme].glyph} ?</span> : (
-                <button type="button" key={u} class="chiplink" onClick={() => set({ inspect: { kind: 'enemy', id: c.def } })}>+{ENEMIES[c.def].name}</button>
-              );
+              return <button type="button" key={u} class="newcard" onClick={() => set({ inspect: { kind: 'enemy', id: c.def } })}>+{ENEMIES[c.def].name}</button>;
             })}
           </div>
         )}
       </div>
       <div class="trucchi" aria-label="Trucchi">
-        <span class="zone-label">Trucchi</span>
         {Array.from({ length: run.def.tsock }, (_, k) => run.def.trucchi[k]).map((t, k) =>
-          t ? <DefChip key={t} id={t} plus={run.def.plus.includes(t)} selected={s.selected === t} onClick={() => selectDef(t)} /> : <span key={k} class="defchip rombo empty" aria-label="posto Trucco vuoto"><span class="shape" /></span>,
+          t ? <DefChip key={t} id={t} plus={run.def.plus.includes(t)} selected={s.selected === t} onClick={() => selectDef(t)} /> : <span key={k} class="defchip rombo empty" aria-label="posto Trucco vuoto" title="Posto Trucco vuoto"><span class="shape" /></span>,
         )}
       </div>
       {al.length > 0 && (
         <div class="patti" aria-label="Patti">
           {al.map((a) => (
             <button type="button" key={a.uid} class="defchip patto" onClick={() => set({ inspect: { kind: 'enemy', id: a.def, extra: `Lealtà ${a.lealta}` } })} aria-label={`Patto: ${ENEMIES[a.def].name}, Lealtà ${a.lealta}`}>
-              <span class="shape">{ENEMIES[a.def].name.split(' ').pop()?.slice(0, 3)}</span><span class="plus">{a.lealta}</span>
+              <span class="shape"><Art a={enemyArtFor(a.def)} /></span><span class="plus">{a.lealta}</span>
             </button>
           ))}
         </div>
@@ -126,7 +133,7 @@ export function Lane({ run, snap, ev, playing, combo = 0, slotDelta }: { run: Ru
   const contro = new Set((spec?.contro ?? []).map((b) => b + off));
   const cards: { c: SnapCard; i: number }[] = [];
   if (snap) snap.lane.forEach((c, i) => c && cards.push({ c, i }));
-  const vertical = s.settings.layout === 'verticale' || (s.settings.layout === 'auto' && typeof window !== 'undefined' && window.innerWidth < 560);
+  const vertical = s.settings.layout === 'verticale';
   const pb = s.playback;
   const clickSlot = (i: number) => {
     const b = i - off;
@@ -139,12 +146,12 @@ export function Lane({ run, snap, ev, playing, combo = 0, slotDelta }: { run: Ru
     if (playing) return;
     if (b < 0) return;
     if (s.pending && s.pending.family === 'segno') {
-      sfx('pick');
+      sfx('pick'); buzz('pick');
       act({ t: 'pick', id: s.pending.id, slot: b });
       return;
     }
     if (s.selected && DEFENSES[s.selected].family === 'segno') {
-      sfx('pick');
+      sfx('pick'); buzz('pick');
       act({ t: 'place', id: s.selected, slot: b });
     }
   };
@@ -155,7 +162,7 @@ export function Lane({ run, snap, ev, playing, combo = 0, slotDelta }: { run: Ru
   const lumiNow = snap?.lumi ?? run.lumi;
   const doorState = lumiNow <= run.maxLumi * 0.25 ? 2 : lumiNow <= run.maxLumi * 0.6 ? 1 : 0;
   return (
-    <section class={`lane ${vertical ? 'v' : 'h'} ${target ? 'targeting' : ''} ${ev?.k === 'impact' ? 'impact' : ''}`} key={ev?.k === 'impact' ? `imp${evKey}` : 'lane'} style={{ '--L': L } as never} aria-label="La Fila: i Passi verso la tua porta">
+    <section id="coach-lane" class={`lane ${vertical ? 'v' : 'h'} ${target ? 'targeting' : ''} ${ev?.k === 'impact' ? 'impact' : ''}`} key={ev?.k === 'impact' ? `imp${evKey}` : 'lane'} style={{ '--L': L } as never} aria-label="La Fila: i Passi verso la tua porta">
       {names.map((n, i) => {
         const hl = ev && ev.slot === i && ['segno', 'damage', 'block', 'freeze', 'burn', 'rimando', 'exile', 'silence'].includes(ev.k);
         const sd = slotDelta?.[i - off];
@@ -211,20 +218,24 @@ export function Queue({ run, queue, playing, revealExtra, revealed }: { run: Run
   const rito = run.wave?.spec.bossRito ? { id: run.wave.spec.bossRito, imposed: true } : run.def.rito ? { id: run.def.rito.id, imposed: false } : null;
   const bambini = run.intel.bambini > 0 && !playing ? strongest(queue) : -1;
   return (
-    <section class="queue" aria-label={`Coda: ${queue.length} carte`}>
-      <div class="rito-slot">
-        <span class="zone-label">Rito</span>
+    <section class="queue" id="coach-queue" aria-label={`Coda: ${queue.length} carte`}>
+      <div class="queue-head">
+        <span class="zone-label">In arrivo</span>
+        <span class="qcount">{queue.length}</span>
+      </div>
+      <div class="rito-slot" title="Il Rito decide l'ordine della Coda">
         {rito ? <DefChip id={rito.id} plus={run.def.plus.includes(rito.id)} contro={rito.imposed} onClick={() => selectDef(rito.id)} /> : <span class="defchip cerchio empty" title="Nessun Rito: la Coda resta nell'ordine pescato"><span class="shape" /></span>}
+        <span class="zone-label">Rito</span>
         {run.def.rito?.seme && !rito?.imposed && <span class={`semebadge seme-${run.def.rito.seme}`}>{SEME_ASSET[run.def.rito.seme].glyph}</span>}
       </div>
       <div class="queue-cards">
-        {queue.length === 0 && <span class="small-label">Coda vuota</span>}
+        {queue.length === 0 && <span class="small-label">vuota</span>}
         {queue.map((c, k) => {
           const shown = (playing ? k < vis || rev.has(c.wid) : rev.size ? rev.has(c.wid) : k < vis) || c.tier === 'e' || (showLast && k === queue.length - 1) || k === bambini;
-          return <div key={c.wid} class={`qslot ${k === bambini ? 'bambini' : ''}`}>{shown ? <CardView c={c} small /> : <CardBack />}</div>;
+          return <div key={c.wid} class={`qslot ${k === 0 ? 'next' : ''} ${k === bambini ? 'bambini' : ''}`} style={{ '--k': k } as never}>{shown ? <CardView c={c} small /> : <CardBack />}</div>;
         })}
       </div>
-      <span class="qcount" title="carte in Coda">{queue.length}<br /><span class="small-label">in Coda</span></span>
+      <span class="queue-arrow" aria-hidden="true">➜</span>
     </section>
   );
 }
@@ -259,26 +270,32 @@ export function RunBoard() {
   let combo = 0;
   if (pb && ev) for (let j = Math.min(pb.idx, pb.out.events.length - 1); j >= 0 && pb.out.events[j].t === ev.t; j--) if (pb.out.events[j].k === 'damage' || pb.out.events[j].k === 'destroy') combo++;
   const slotDelta = useSlotDelta(run, s.pending?.family === 'segno' ? s.pending.id : s.selected && DEFENSES[s.selected]?.family === 'segno' ? s.selected : null, s.pending?.family === 'segno');
-  const showCaptions = !playing && (run.cfg.tutorial || !tipSeen('zone'));
+  const offerOpen = run.phase === 'offer' && !playing && !(s.pending && s.pending.family === 'segno');
   return (
-    <div class="board">
+    <div class={`board stage ${playing ? 'is-playing' : ''} ${ev?.k === 'impact' ? 'is-impact' : ''}`}>
       <TopBar run={run} lumi={snap?.lumi} sp={snap?.sp} />
-      {run.boss && <BossBanner run={run} ev={ev} />}
-      {!run.boss && run.wave?.spec.elite && (run.phase === 'prep' || run.phase === 'offer') && !playing && (
-        <div class="bossbanner elite"><b>Élite: {ENEMIES[run.wave.spec.elite]?.name}</b><div class="speech">{ELITE_LINES[run.wave.spec.elite] ?? '…'}</div></div>
-      )}
-      {run.cfg.tutorial && (run.phase === 'prep' || run.phase === 'offer') && !playing && <TutorialHint run={run} />}
-      {!run.cfg.tutorial && !playing && run.phase === 'prep' && <HowTo />}
-      {!playing && run.phase === 'prep' && <KeywordCaption queue={queue} revealed={revealed} />}
-      <DeckPanel run={run} />
-      {s.showDeck && <div class="drawer"><DeckList run={run} /></div>}
-      {showCaptions && <ZoneCaption>La <b>Coda</b>: le sventure pescate dal Mazzo del Fato, nell’ordine in cui entreranno (da sinistra). Il <b>Rito</b> decide quest’ordine.</ZoneCaption>}
-      <Queue run={run} queue={queue} playing={playing} revealExtra={pb?.out.revealExtra} revealed={revealed} />
-      {showCaptions && <ZoneCaption>La <b>Fila</b>: a ogni tick le sventure avanzano di un Passo verso la tua <b>porta</b>. I tuoi <b>Segni</b> (esagoni) colpiscono chi passa sul loro Passo. Chi arriva alla porta ti toglie tanti Lumi quanta è la sua Forza.</ZoneCaption>}
-      <Lane run={run} snap={snap} ev={ev} playing={playing} combo={combo} slotDelta={slotDelta} />
-      <div class="panel">
-        {s.playback ? <PlaybackPanel /> : s.review ? <PlaybackPanel review /> : run.phase === 'offer' ? <OfferPanel /> : run.phase === 'prep' ? <PrepPanel /> : null}
+      <div class="banners">
+        {run.boss && <BossBanner run={run} ev={ev} />}
+        {!run.boss && run.wave?.spec.elite && (run.phase === 'prep' || run.phase === 'offer') && !playing && (
+          <div class="bossbanner elite"><span class="bb-name">Élite · {ENEMIES[run.wave.spec.elite]?.name}</span><div class="speech">{ELITE_LINES[run.wave.spec.elite] ?? '…'}</div></div>
+        )}
+        {run.cfg.tutorial && (run.phase === 'prep' || run.phase === 'offer') && !playing && <TutorialHint run={run} />}
+        {!playing && run.phase === 'prep' && <KeywordCaption queue={queue} revealed={revealed} />}
       </div>
+      <div class="table">
+        <Queue run={run} queue={queue} playing={playing} revealExtra={pb?.out.revealExtra} revealed={revealed} />
+        <Lane run={run} snap={snap} ev={ev} playing={playing} combo={combo} slotDelta={slotDelta} />
+      </div>
+      <div class="dock">
+        <DeckPanel run={run} />
+        <div class="dock-main">
+          {s.playback ? <PlaybackPanel /> : s.review ? <PlaybackPanel review /> : run.phase === 'prep' ? <PrepDock /> : run.phase === 'offer' && s.pending ? <PendingPlacement /> : null}
+        </div>
+      </div>
+      {s.showDeck && <div class="sheet-bg" onClick={() => set({ showDeck: false })}><div class="sheet" onClick={(e) => e.stopPropagation()}><div class="sheet-head"><h3>Il Mazzo del Fato</h3><Btn small kind="ghost" onClick={() => set({ showDeck: false })}>✕</Btn></div><DeckList run={run} /></div></div>}
+      {s.banco && run.phase === 'prep' && !playing && <BancoSheet />}
+      {offerOpen && <OfferPanel />}
+      {!playing && run.phase === 'prep' && !run.cfg.tutorial && <Coach />}
     </div>
   );
 }
@@ -290,29 +307,10 @@ function BossBanner({ run, ev }: { run: RunState; ev: Ev | null }) {
   if (ev?.k === 'impact') line = t.win;
   else if (ev?.k === 'destroy' && ev.snap && ev.msg.includes(t.name.replace(/^(Il|La) /, ''))) line = t.hurt;
   return (
-    <div class="bossbanner">
+    <div class="bossbanner" onClick={() => set({ intro: { kind: 'boss', act: b.act } })} title={`${t.ruleText}${run.cfg.sigillo >= 5 ? ' ' + t.variant : ''}`}>
       <Art a={sceneArt(t.id)} />
-      <div>
-        <b>{t.name}</b> · fase {b.phase + 1} di 3 · <i>“{t.rule}”</i>
-        <div class="small-label">{t.ruleText}{run.cfg.sigillo >= 5 ? ' ' + t.variant : ''}</div>
-      </div>
+      <span class="bb-name">{t.name} · fase {b.phase + 1}/3 · <i>{t.rule}</i></span>
       <div class="speech" key={line}>{line}</div>
-    </div>
-  );
-}
-
-/** "Come si gioca" in tre righe, la prima volta (UX P0, feedback di Daniele). */
-function HowTo() {
-  if (tipSeen('howto')) return null;
-  return (
-    <div class="howto" role="note">
-      <b>Come si gioca, in tre righe</b>
-      <ol>
-        <li>Il <b>Fato</b> pesca sventure dal suo mazzo e le manda lungo la Fila verso la tua porta.</li>
-        <li>Tu non le combatti a mano: <b>prepari</b> Segni sui Passi, Trucchi sul mazzo e un Rito sull’ordine, poi premi <b>Avvia</b> e guardi.</li>
-        <li>Dopo ogni rintocco scegli una difesa nuova. Le sventure che arrivano alla porta spengono i tuoi <b>Lumi</b>: a zero, la notte è persa.</li>
-      </ol>
-      <Btn small onClick={() => { markTip('howto'); markTip('zone'); }}>Ho capito</Btn>
     </div>
   );
 }
@@ -395,26 +393,35 @@ function OfferPanel() {
     tutorial: 'Prendi la difesa', forestiero: '', trofeo: 'Hai stracciato la carta del Mazziere: una difesa rara in premio',
   };
   const rerollCost = run.freeRerolls > 0 ? 0 : 3;
+  const [focus, setFocus] = useState<string | null>(null);
+  const cur = focus && o.ids.includes(focus) ? focus : null;
+  const allFlat = deltas && o.ids.every((id) => Math.abs(deltas[id] ?? 0) < 0.4);
   return (
-    <div class="offer">
-      <h3>{title[o.source] ?? 'Scegli una difesa'}</h3>
-      {!s.pending && !tipSeen('offer') && <p class="small-label tipline">Ogni difesa ha una forma: <b>esagono</b> = Segno (sta su un Passo della Fila), <b>rombo</b> = Trucco (agisce sul mazzo), <b>cerchio</b> = Rito (ordina la Coda). Il simbolo ▲ dice quanto ti aiuterebbe nel prossimo rintocco. <button type="button" class="chiplink" onClick={() => markTip('offer')}>Ok</button></p>}
-      {s.pending ? (
-        <PendingPlacement />
-      ) : (
-        <>
-          <div class="offer-cards">
-            {o.ids.map((id) => (
-              <DefenseCard key={id} id={id} onClick={() => pick(id)} extra={deltas && deltas[id] !== undefined ? <Delta d={deltas[id]} /> : null} />
-            ))}
-          </div>
-          {deltas && o.ids.every((id) => Math.abs(deltas[id] ?? 0) < 0.4) && <p class="small-label tipline">Il prossimo rintocco è leggero: nessuna di queste cambia molto adesso. Scegli pensando ai rintocchi che verranno, quando il mazzo del Fato sarà più grosso.</p>}
-          <div class="row">
-            {o.canSkip && <Btn onClick={() => act({ t: 'pick', id: null })}>Salta {o.source === 'ondata' ? '(+3 Spiccioli)' : ''}</Btn>}
-            {o.source !== 'tutorial' && o.source !== 'trofeo' && <Btn disabled={run.sp < rerollCost} title={run.sp < rerollCost ? 'Non hai abbastanza Spiccioli' : undefined} onClick={() => act({ t: 'reroll' })}>Rimescola ({rerollCost ? '3 ¢' : 'gratis'})</Btn>}
-          </div>
-        </>
-      )}
+    <div class="sheet-bg offer-bg">
+      <div class="offer sheet wide" role="dialog" aria-label={title[o.source] ?? 'Scegli una difesa'}>
+        <div class="sheet-head">
+          <h3>{title[o.source] ?? 'Scegli una difesa'}</h3>
+          <span class="small-label">{allFlat ? 'Il prossimo rintocco è leggero: scegli pensando ai prossimi.' : 'Tocca una carta, poi Prendi.'}</span>
+        </div>
+        {s.pending ? (
+          <PendingPlacement />
+        ) : (
+          <>
+            <div class="offer-cards">
+              {o.ids.map((id, k) => (
+                <div key={id} class={`offer-slot ${cur === id ? 'focus' : cur ? 'dimmed' : ''}`} style={{ '--k': k } as never}>
+                  <DefenseCard id={id} selected={cur === id} onClick={() => { buzz('tap'); sfx('ui'); setFocus(cur === id ? null : id); }} extra={deltas && deltas[id] !== undefined ? <Delta d={deltas[id]} /> : null} />
+                </div>
+              ))}
+            </div>
+            <div class="sheet-actions">
+              {o.canSkip && <Btn small kind="ghost" onClick={() => act({ t: 'pick', id: null })}>Salta {o.source === 'ondata' ? '+3 ¢' : ''}</Btn>}
+              {o.source !== 'tutorial' && o.source !== 'trofeo' && <Btn small kind="ghost" disabled={run.sp < rerollCost} onClick={() => { buzz('tap'); act({ t: 'reroll' }); }}>↻ Rimescola {rerollCost ? '3 ¢' : 'gratis'}</Btn>}
+              <Btn kind="primary" cls="big cta" disabled={!cur} onClick={() => { if (cur) { buzz('pick'); pick(cur); } }}>{cur ? `Prendi ${cur.startsWith('affina:') ? 'Affina' : DEFENSES[cur].name}` : 'Scegli una carta'}</Btn>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -438,15 +445,13 @@ function PendingPlacement() {
   const run = s.run!;
   const p = s.pending!;
   const d = DEFENSES[p.id];
-  const cancel = <Btn kind="ghost" onClick={() => set({ pending: null })}>Annulla</Btn>;
+  const cancel = <Btn small kind="ghost" onClick={() => set({ pending: null })}>Annulla</Btn>;
   if (p.family === 'segno')
     return (
-      <div class="pending">
-        <p>Tocca un Passo della Fila per piazzare <b>{d.name}</b>. Il numero su ogni Passo dice quanti Lumi perderesti circa con il Segno lì: il più basso è evidenziato. Se il Passo è pieno, il Segno che c’era va nel Deposito.</p>
-        <div class="row">
-          <Btn onClick={() => act({ t: 'pick', id: p.id })}>Piazza dove c’è posto</Btn>
-          {cancel}
-        </div>
+      <div class="pending pill-bar">
+        <span class="pill-text"><b>Tocca un Passo</b> per mettere {d.name}. Il verde è il posto migliore.</span>
+        <Btn small onClick={() => act({ t: 'pick', id: p.id })}>Dove c’è posto</Btn>
+        {cancel}
       </div>
     );
   if (p.family === 'trucco')
@@ -470,71 +475,97 @@ function PendingPlacement() {
   );
 }
 
-// ------------------------------------------------------------------ Preparazione
-function PrepPanel() {
+// ------------------------------------------------------------------ Preparazione: barra in basso + "Banco" (Deposito e opzioni)
+function PrepDock() {
   const s = useStore();
   const run = s.run!;
   const fc = useMemo(() => (s.settings.istinto ? null : forecast(run, 40)), [run, s.settings.istinto]);
   const sel = s.selected ? DEFENSES[s.selected] : null;
   const dep = run.def.deposito;
   const inDep = s.selected ? dep.includes(s.selected) : false;
-  const truccCands = useMemo(() => (run.def.trucchi.includes('truccato') ? truccatoCandidates(run) : []), [run]);
+  const extra = (run.def.rito && DEFENSES[run.def.rito.id].needsSeme) || run.def.trucchi.includes('truccato') || run.def.trucchi.includes('segnare');
+  const sev = fc ? (fc.hi >= run.lumi ? 'mortal' : fc.hi >= run.lumi * 0.4 ? 'heavy' : fc.hi === 0 ? 'clean' : '') : '';
+  const fcText = !fc ? '' : fc.exact ? (fc.lo === 0 ? 'Nessun Lume perso' : `Perderai ${fc.lo}`) : fc.hi === 0 ? 'Nessun Lume perso' : `Perderai ~${Math.round(fc.mean)}`;
   return (
     <div class="prep">
-      {!sel && <p class="small-label tipline">Preparazione: tocca un tuo Segno (esagono) e poi un Passo per spostarlo. Quando sei pronto, premi Avvia.</p>}
-      {fc && (
-        <div class={`forecast ${fc.exact ? 'exact' : ''} ${fc.hi >= run.lumi ? 'mortal' : fc.hi >= run.lumi * 0.4 ? 'heavy' : fc.hi === 0 ? 'clean' : ''}`} aria-live="polite">
-          <b>Previsione:</b> {fc.exact ? (fc.lo === 0 ? 'non perderai Lumi' : `perderai ${fc.lo} ${fc.lo === 1 ? 'Lume' : 'Lumi'}`) : fc.hi === 0 ? 'nessun Lume perso' : `perderai circa ${Math.round(fc.mean)} ${Math.round(fc.mean) === 1 ? 'Lume' : 'Lumi'}`}
-          {!fc.exact && fc.hi > 0 && <span class="small-label"> (di solito tra {fc.lo} e {fc.hi}; hai {run.lumi} Lumi)</span>}
-          {fc.hi >= run.lumi && <div class="bad"><b>Attento: in questo rintocco puoi perdere la notte.</b></div>}
-          {fc.warnings.length > 0 && <ul class="warns">{fc.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
+      {sel ? (
+        <div class="selbar pill-bar">
+          <span class="pill-text"><b>{sel.name}</b>{sel.family === 'segno' ? ': tocca un Passo per spostarlo' : ''}</span>
+          {sel.family === 'trucco' && inDep && Array.from({ length: run.def.tsock }, (_, k) => (
+            <Btn small key={k} onClick={() => act({ t: 'setTrucco', id: s.selected!, index: k })}>Posto {k + 1}{run.def.trucchi[k] ? ` (via ${DEFENSES[run.def.trucchi[k]].name})` : ''}</Btn>
+          ))}
+          {sel.family === 'rito' && inDep && <Btn small onClick={() => act({ t: 'setRito', id: s.selected! })}>Usa questo Rito</Btn>}
+          {!inDep && <Btn small onClick={() => act({ t: 'unplace', id: s.selected! })}>Al Deposito</Btn>}
+          <Btn small kind="ghost" onClick={() => set({ inspect: { kind: 'defense', id: s.selected! } })}>ⓘ</Btn>
+          <Btn small kind="ghost" onClick={() => set({ selected: null })}>✕</Btn>
         </div>
+      ) : (
+        <>
+          {fc && (
+            <button type="button" class={`forecast chip ${sev}`} id="coach-forecast" onClick={() => set({ banco: true })} aria-live="polite" title="Previsione del danno: tocca per i dettagli">
+              <span class="fc-label">Previsione</span>
+              <b>{fcText}</b>{!fc.exact && fc.hi > 0 && <span class="fc-range">{fc.lo}–{fc.hi}</span>}
+              {fc.warnings.length > 0 && <span class="fc-warn">⚠ {fc.warnings.length}</span>}
+            </button>
+          )}
+          <Btn small cls="banco-btn" onClick={() => { buzz('tap'); set({ banco: true }); }}>Deposito {dep.length}/{P.DEPOSITO_MAX}{extra ? ' · opzioni' : ''}</Btn>
+        </>
       )}
-      {sel && (
-        <div class="selbar">
-          <span>Selezionato: <b>{sel.name}</b>. {sel.family === 'segno' ? 'Tocca un Passo per spostarlo.' : ''}</span>
-          <div class="row">
-            {sel.family === 'trucco' && inDep && Array.from({ length: run.def.tsock }, (_, k) => (
-              <Btn small key={k} onClick={() => act({ t: 'setTrucco', id: s.selected!, index: k })}>Nel posto {k + 1}{run.def.trucchi[k] ? ` (al posto di ${DEFENSES[run.def.trucchi[k]].name})` : ''}</Btn>
-            ))}
-            {sel.family === 'rito' && inDep && <Btn small onClick={() => act({ t: 'setRito', id: s.selected! })}>Usa questo Rito</Btn>}
-            {!inDep && <Btn small onClick={() => act({ t: 'unplace', id: s.selected! })}>Metti nel Deposito</Btn>}
-            <Btn small kind="ghost" onClick={() => set({ inspect: { kind: 'defense', id: s.selected! } })}>Dettagli</Btn>
-            <Btn small kind="ghost" onClick={() => set({ selected: null })}>Annulla</Btn>
+      <Btn kind="primary" cls="big cta go" onClick={() => { buzz('pick'); beginWave(); }}><span id="coach-go">Avvia {run.boss ? `fase ${run.boss.phase + 1}` : ''} ▶</span></Btn>
+    </div>
+  );
+}
+
+function BancoSheet() {
+  const s = useStore();
+  const run = s.run!;
+  const fc = useMemo(() => (s.settings.istinto ? null : forecast(run, 40)), [run, s.settings.istinto]);
+  const dep = run.def.deposito;
+  const truccCands = useMemo(() => (run.def.trucchi.includes('truccato') ? truccatoCandidates(run) : []), [run]);
+  const close = () => set({ banco: false });
+  return (
+    <div class="sheet-bg" onClick={close}>
+      <div class="sheet" onClick={(e) => e.stopPropagation()}>
+        <div class="sheet-head"><h3>Il tuo banco</h3><Btn small kind="ghost" onClick={close}>✕</Btn></div>
+        {fc && (
+          <div class={`forecast ${fc.exact ? 'exact' : ''} ${fc.hi >= run.lumi ? 'mortal' : fc.hi >= run.lumi * 0.4 ? 'heavy' : fc.hi === 0 ? 'clean' : ''}`}>
+            <b>Previsione:</b> {fc.exact ? (fc.lo === 0 ? 'non perderai Lumi' : `perderai ${fc.lo} ${fc.lo === 1 ? 'Lume' : 'Lumi'}`) : fc.hi === 0 ? 'nessun Lume perso' : `perderai circa ${Math.round(fc.mean)} ${Math.round(fc.mean) === 1 ? 'Lume' : 'Lumi'}`}
+            {!fc.exact && fc.hi > 0 && <span class="small-label"> (di solito tra {fc.lo} e {fc.hi}; hai {run.lumi} Lumi)</span>}
+            {fc.hi >= run.lumi && <div class="bad"><b>Attento: in questo rintocco puoi perdere la notte.</b></div>}
+            {fc.warnings.length > 0 && <ul class="warns">{fc.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
           </div>
+        )}
+        <div class="deposito" aria-label="Deposito">
+          <span class="zone-label">Deposito {dep.length}/{P.DEPOSITO_MAX}</span>
+          {dep.length ? <div class="row wrap">{dep.map((id) => <DefChip key={id} id={id} label plus={run.def.plus.includes(id)} selected={s.selected === id} onClick={() => { selectDef(id); close(); }} />)}</div> : <p class="small-label">Vuoto. Le difese che togli dal tavolo finiscono qui.</p>}
+          {run.def.stolen.length > 0 && <div class="small-label">Rubati: {run.def.stolen.map((x) => DEFENSES[x.segno].name).join(', ')}</div>}
         </div>
-      )}
-      {run.def.rito && DEFENSES[run.def.rito.id].needsSeme && (
-        <div class="row seme-pick" aria-label="Seme del Rito">
-          <span class="small-label">{DEFENSES[run.def.rito.id].name}:</span>
-          {SEMI.map((se) => <Btn small key={se} kind={run.def.rito?.seme === se ? 'gold' : undefined} onClick={() => act({ t: 'setSeme', seme: se as Seme })}>{SEME_ASSET[se].glyph}</Btn>)}
-        </div>
-      )}
-      {run.def.trucchi.includes('truccato') && truccCands.length > 0 && (
-        <div class="truccato">
-          <span class="small-label">Mazzo Truccato: le prossime carte in cima. Tocca quelle da mandare in fondo (max {run.def.plus.includes('truccato') ? 3 : 2}).</span>
-          <div class="row">
-            {truccCands.map((c) => {
-              const on = (run.def.truccato ?? []).includes(c.uid);
-              return <Btn small key={c.uid} kind={on ? 'gold' : undefined} onClick={() => {
-                const cur = run.def.truccato ?? [];
-                act({ t: 'truccato', uids: on ? cur.filter((x) => x !== c.uid) : [...cur, c.uid] });
-              }}>{ENEMIES[c.def].name}</Btn>;
-            })}
+        {run.def.rito && DEFENSES[run.def.rito.id].needsSeme && (
+          <div class="row seme-pick" aria-label="Seme del Rito">
+            <span class="zone-label">{DEFENSES[run.def.rito.id].name}: seme</span>
+            {SEMI.map((se) => <Btn small key={se} kind={run.def.rito?.seme === se ? 'gold' : undefined} onClick={() => act({ t: 'setSeme', seme: se as Seme })}>{SEME_ASSET[se].glyph}</Btn>)}
           </div>
-        </div>
-      )}
-      {run.def.trucchi.includes('segnare') && (
-        <div class="small-label">Segnare: {run.def.marked.map((u) => ENEMIES[run.deck.find((x) => x.uid === u)?.def ?? '']?.name).filter(Boolean).join(', ') || 'nessuna carta'}. <button type="button" class="chiplink" onClick={() => set({ showDeck: true })}>Cambia dal mazzo</button></div>
-      )}
-      {s.showDeck && run.def.trucchi.includes('segnare') && <DeckList run={run} onPick={(uid) => act({ t: 'mark', uid })} pickLabel="Segna" />}
-      <div class="deposito" aria-label="Deposito">
-        <span class="small-label">Deposito {dep.length}/{P.DEPOSITO_MAX} {dep.length ? '· tocca una difesa per rimetterla in gioco' : '(vuoto)'}</span>
-        <div class="row">{dep.map((id) => <DefChip key={id} id={id} label plus={run.def.plus.includes(id)} selected={s.selected === id} onClick={() => selectDef(id)} />)}</div>
-        {run.def.stolen.length > 0 && <div class="small-label">Rubati: {run.def.stolen.map((x) => DEFENSES[x.segno].name).join(', ')}</div>}
-      </div>
-      <div class="row main-actions">
-        <Btn kind="primary" cls="big" onClick={beginWave}>Avvia {run.boss ? `la fase ${run.boss.phase + 1}` : 'il rintocco'} ▶</Btn>
+        )}
+        {run.def.trucchi.includes('truccato') && truccCands.length > 0 && (
+          <div class="truccato">
+            <span class="zone-label">Mazzo Truccato: manda in fondo (max {run.def.plus.includes('truccato') ? 3 : 2})</span>
+            <div class="row wrap">
+              {truccCands.map((c) => {
+                const on = (run.def.truccato ?? []).includes(c.uid);
+                return <Btn small key={c.uid} kind={on ? 'gold' : undefined} onClick={() => {
+                  const cur = run.def.truccato ?? [];
+                  act({ t: 'truccato', uids: on ? cur.filter((x) => x !== c.uid) : [...cur, c.uid] });
+                }}>{ENEMIES[c.def].name}</Btn>;
+              })}
+            </div>
+          </div>
+        )}
+        {run.def.trucchi.includes('segnare') && (
+          <div>
+            <span class="zone-label">Segnare: {run.def.marked.map((u) => ENEMIES[run.deck.find((x) => x.uid === u)?.def ?? '']?.name).filter(Boolean).join(', ') || 'nessuna carta'}</span>
+            <DeckList run={run} onPick={(uid) => act({ t: 'mark', uid })} pickLabel="Segna" />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -554,8 +585,8 @@ function cue(e: Ev, L: number, combo: number) {
     case 'enter': sfx('enter', { slot: 0, L }); break;
     case 'damage': sfx('hit', { slot: e.slot, L, combo }); break;
     case 'block': sfx('block', { slot: e.slot, L }); break;
-    case 'destroy': sfx('kill', { slot: e.slot, L, combo }); break;
-    case 'impact': sfx('impact'); if (e.snap.lumi <= 8) setTimeout(() => sfx('heartbeat'), 380); break;
+    case 'destroy': sfx('kill', { slot: e.slot, L, combo }); buzz('kill'); break;
+    case 'impact': sfx('impact'); buzz('impact'); if (e.snap.lumi <= 8) setTimeout(() => sfx('heartbeat'), 380); break;
     case 'steal': sfx('steal', { slot: e.slot, L }); break;
     case 'silence': sfx('silence'); break;
     case 'coins': sfx('coin'); break;
@@ -605,12 +636,12 @@ function PlaybackPanel({ review }: { review?: boolean }) {
     }, d);
     return () => clearTimeout(t);
   }, [pb.idx, pb.playing, speed]);
-  const recent = evs.slice(Math.max(0, pb.idx - 5), pb.idx + 1).map((e, k) => ({ e, j: Math.max(0, pb.idx - 5) + k })).filter(({ e }) => e.k !== 'tick' && e.k !== 'move');
+  const recent = evs.slice(Math.max(0, pb.idx - 8), pb.idx + 1).map((e, k) => ({ e, j: Math.max(0, pb.idx - 8) + k })).filter(({ e }) => e.k !== 'tick' && e.k !== 'move').slice(-2);
   const assoAvail = !review && run.cfg.asso && !pb.asso && ev.k !== 'end' && ev.k !== 'defeat';
   const marks = useMemo(() => evs.map((e, j) => ({ e, j })).filter(({ e }) => e.k === 'impact' || e.k === 'destroy' || e.k === 'steal'), [pb.out]);
   return (
     <div class="playback">
-      <div class="pb-status">Tick {ev.t} · {atEnd ? 'rintocco concluso' : pb.playing ? 'in corso' : pb.pauses > 0 && ['impact', 'steal', 'herald', 'silence', 'copy'].includes(ev.k) ? 'pausa su un evento importante: guarda la Fila, poi premi ▶' : 'in pausa'}{pb.asso ? ' · Asso usato' : ''}{review ? ' · stai rivedendo' : ''}</div>
+      <div class="pb-status"><span class="tick-badge">Tick {ev.t}</span> · {atEnd ? 'rintocco concluso' : pb.playing ? 'in corso' : pb.pauses > 0 && ['impact', 'steal', 'herald', 'silence', 'copy'].includes(ev.k) ? 'pausa: guarda la Fila, poi ▶' : 'in pausa'}{pb.asso ? ' · Asso usato' : ''}{review ? ' · replay' : ''}</div>
       <div class="timeline" aria-hidden="true">
         <input type="range" min={0} max={evs.length - 1} value={pb.idx} onInput={(e) => upd({ idx: Number((e.target as HTMLInputElement).value), playing: false })} aria-label="Linea del tempo dell'ondata" />
         {marks.map(({ e, j }) => <span key={j} class={`tmark m-${e.k}`} style={{ left: `${(j / Math.max(1, evs.length - 1)) * 100}%` }} />)}
@@ -637,7 +668,7 @@ function PlaybackPanel({ review }: { review?: boolean }) {
       )}
       {assoAvail && !atEnd && (
         <div class="row asso">
-          <span class="small-label">Asso nella manica (una volta per ondata):</span>
+          <span class="zone-label">Asso</span>
           <Btn small onClick={() => upd({ playing: false, assoMode: 'trattieni' })}>✋ Trattieni</Btn>
           <Btn small onClick={() => upd({ playing: false, assoMode: 'scambia' })}>⇄ Scambia</Btn>
         </div>

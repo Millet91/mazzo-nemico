@@ -1,4 +1,5 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { buzz } from './haptics';
 import { act, set, useStore, get, markTip, tipSeen } from './store';
 import { Art, Btn, DefChip, DefenseCard, DeckCardView } from './components';
 import { DeckList, TopBar, DeckPanel } from './board';
@@ -26,16 +27,20 @@ export function MapScreen() {
   return (
     <div class="screen map">
       <TopBar run={run} />
-      <DeckPanel run={run} />
-      {s.showDeck && <div class="drawer"><DeckList run={run} /></div>}
-      {!run.cfg.tutorial && <p class="small-label famline">Vegli sulla casa {deiCasa(run.famiglia[0])}: {run.famiglia[1]}.</p>}
-      <h2 class="almanac">{run.cfg.tutorial ? ACT_NAMES[0] : `${ACT_NAMES[run.act]} · ${['', 'prima', 'seconda', 'terza'][run.act]} veglia`}</h2>
-      {!run.cfg.tutorial && bt && (
-        <div class="bossbanner"><Art a={sceneArt(bt.id)} /><div><b>Alla fine della veglia: {bt.name}</b> · <i>“{bt.rule}”</i><div class="small-label">{bt.ruleText}{run.cfg.sigillo >= 5 ? ' ' + bt.variant : ''}</div></div></div>
-      )}
-      {!tipSeen('map') && !run.cfg.tutorial && <p class="small-label tipline">La strada della notte: sali di un gradino alla volta, toccando una delle tappe illuminate. I <b>Rintocchi</b> sono ondate; l’<b>Élite</b> è più dura ma dà una difesa rara; il <b>Mercante</b> vende, il <b>Focolare</b> cura. In cima ti aspetta il Mazziere. <button type="button" class="chiplink" onClick={() => markTip('map')}>Ok</button></p>}
-      <ol class="mapcol" reversed>
-        {[...run.map].map((lv, li) => ({ lv, li })).reverse().map(({ lv, li }) => {
+      <div class="map-head">
+        <DeckPanel run={run} />
+        <div class="map-title">
+          <h2 class="almanac">{run.cfg.tutorial ? ACT_NAMES[0] : `${ACT_NAMES[run.act]} · ${['', 'prima', 'seconda', 'terza'][run.act]} veglia`}</h2>
+          {!run.cfg.tutorial && <p class="small-label famline">Vegli sulla casa {deiCasa(run.famiglia[0])}: {run.famiglia[1]}.</p>}
+        </div>
+        {!run.cfg.tutorial && bt && (
+          <div class="map-boss"><Art a={sceneArt(bt.id)} /><div><b>In fondo: {bt.name}</b> · <i>“{bt.rule}”</i><div class="small-label">{bt.ruleText}{run.cfg.sigillo >= 5 ? ' ' + bt.variant : ''}</div></div></div>
+        )}
+      </div>
+      {s.showDeck && <div class="sheet-bg" onClick={() => set({ showDeck: false })}><div class="sheet" onClick={(e) => e.stopPropagation()}><div class="sheet-head"><h3>Il Mazzo del Fato</h3><Btn small kind="ghost" onClick={() => set({ showDeck: false })}>✕</Btn></div><DeckList run={run} /></div></div>}
+      {!tipSeen('map') && !run.cfg.tutorial && <p class="small-label tipline">La strada della notte va da sinistra a destra: tocca una tappa illuminata. <b>Rintocco</b> = ondata, <b>Élite</b> = più dura ma dà una difesa rara, <b>Mercante</b> = negozio, <b>Focolare</b> = cura. In fondo c’è il Mazziere. <button type="button" class="chiplink" onClick={() => markTip('map')}>Ok</button></p>}
+      <ol class="mapcol">
+        {[...run.map].map((lv, li) => ({ lv, li })).map(({ lv, li }) => {
           const reachable = li === run.level;
           const past = li < run.level;
           return (
@@ -424,6 +429,7 @@ export function EndScreen() {
   const run = s.run!;
   const link = replayLink();
   const [img, setImg] = useState<string | null>(null);
+  useEffect(() => { buzz(run.won ? 'win' : 'lose'); }, []);
   return (
     <div class={`screen end ${run.won ? 'won' : 'lost'}`}>
       <h2>{run.cfg.tutorial ? 'La Prova è superata' : run.won ? 'All’alba il gallo canta' : 'L’ultimo Lume si è spento'}</h2>

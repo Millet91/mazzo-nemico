@@ -187,6 +187,8 @@ export function SettingsScreen({ inRun }: { inRun?: boolean }) {
         </select>
       </label>
       {chk('reduceMotion', 'Riduci movimento')}
+      {chk('haptics', 'Vibrazione (telefono)')}
+      {chk('allowPortrait', 'Permetti di giocare in verticale')}
       <label class="field">Fila
         <select value={st.layout} onChange={(e) => updateSettings({ layout: (e.target as HTMLSelectElement).value as Settings['layout'] })}>
           <option value="auto">Automatica</option><option value="orizzontale">Orizzontale</option><option value="verticale">Verticale (telefono)</option>

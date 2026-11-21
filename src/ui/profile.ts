@@ -24,6 +24,10 @@ export interface Settings {
   tips: boolean;
   /** audio ridotto: niente passi, battiti e campanelli, solo i suoni che contano */
   reducedAudio: boolean;
+  /** vibrazione (feedback tattile) */
+  haptics: boolean;
+  /** su telefono in verticale: accetta di giocare senza ruotare */
+  allowPortrait: boolean;
 }
 
 export interface Profile {
@@ -47,8 +51,8 @@ export interface Profile {
 
 export const DEFAULT_SETTINGS: Settings = {
   asso: true, istinto: false, speed: 1, pauseImportant: true, volume: 0.6, audio: true, silentTick: false,
-  palette: 'standard', textScale: 1, reduceMotion: false, layout: 'auto', debug: false, unlockAll: false,
-  detailedForecast: false, tips: true, reducedAudio: false,
+  palette: 'standard', textScale: 1, reduceMotion: false, layout: 'orizzontale', debug: false, unlockAll: false,
+  detailedForecast: false, tips: true, reducedAudio: false, haptics: true, allowPortrait: false,
 };
 
 export const DEFAULT_PROFILE: Profile = {

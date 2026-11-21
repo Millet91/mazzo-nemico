@@ -37,6 +37,8 @@ export interface AppState {
   selected: string | null; // difesa selezionata in Preparazione
   pending: null | { id: string; family: string }; // offerta da piazzare
   showDeck: boolean;
+  /** foglio del banco (Deposito e opzioni) aperto */
+  banco: boolean;
   /** Lumi che avresti perso nell'ultima ondata senza Segni, Trucchi e Rito ("Senza i tuoi trucchi") */
   bare: number | null;
   bareOut: WaveOutcome | null;
@@ -48,7 +50,7 @@ export interface AppState {
 let state: AppState = {
   screen: 'title', cfg: null, run: null, actions: [], playback: null, review: null, lastOut: null,
   profile: loadProfile(), settings: loadSettings(), toast: null, news: [], inspect: null, menu: false, selected: null,
-  pending: null, showDeck: false, bare: null, bareOut: null, intro: null, startedAt: Date.now(),
+  pending: null, showDeck: false, banco: false, bare: null, bareOut: null, intro: null, startedAt: Date.now(),
 };
 const subs = new Set<() => void>();
 

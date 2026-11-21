@@ -17,7 +17,7 @@ export const TUTORIAL: TutorialStep[] = [
     draws: 3,
     offer: [],
     give: [{ id: 'brace', slot: 2 }],
-    hint: '«Stanotte il Fato bussa, nipote. Vedi le carte in alto? È la Coda: le sventure che entreranno. Sotto c’è la Fila, cinque Passi fino alla nostra porta. Ti ho messo una Brace nel Cortile: brucia 2 di Forza a chi ci passa. Premi Avvia e guarda: chi arriva alla porta ci spegne i Lumi.»',
+    hint: '«Stanotte il Fato bussa, nipote. Vedi le carte a sinistra? È la Coda: le sventure che entreranno. Accanto c’è la Fila, cinque Passi fino alla nostra porta, là a destra. Ti ho messo una Brace nel Cortile: brucia 2 di Forza a chi ci passa. Premi Avvia e guarda: chi arriva alla porta ci spegne i Lumi.»',
   },
   {
     title: 'La Nonna: «Scegli e piazza»',

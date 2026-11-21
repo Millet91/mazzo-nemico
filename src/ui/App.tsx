@@ -1,5 +1,5 @@
 import { useEffect } from 'preact/hooks';
-import { useStore, set } from './store';
+import { useStore, set, updateSettings } from './store';
 import { RunBoard, stepPlayback } from './board';
 import { finishWave } from './store';
 import { IntroModal, SellPickScreen, MapScreen, SummaryScreen, PattoScreen, ForestieroScreen, ExileScreen, ShopScreen, RestScreen, EventScreen, EndScreen } from './screens';
@@ -64,9 +64,16 @@ export function App() {
     else body = <RunBoard />;
   } else body = <Title />;
 
+  const screenKey = s.screen === 'run' && s.run ? `run-${s.run.phase === 'offer' ? 'prep' : s.run.phase}` : s.screen;
   return (
-    <div class={`app act-${s.run?.act ?? 1}`}>
-      <main>{body}</main>
+    <div class={`app act-${s.run?.act ?? 1} ${s.settings.allowPortrait ? 'allow-portrait' : ''}`}>
+      <main key={screenKey} class="screen-enter">{body}</main>
+      <div class="rotate-hint" role="dialog" aria-label="Ruota il telefono">
+        <div class="rotate-phone" aria-hidden="true">📱</div>
+        <b>Gira il telefono in orizzontale</b>
+        <p>Baro si gioca con il telefono di lato.</p>
+        <button type="button" class="btn ghost small" onClick={() => updateSettings({ allowPortrait: true })}>Gioca lo stesso in verticale</button>
+      </div>
       {s.intro && !s.inspect && <IntroModal />}
       {s.inspect && <InspectModal />}
       {s.menu && <GameMenu />}

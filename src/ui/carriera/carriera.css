@@ -1,0 +1,114 @@
+/* Carriera (P2, Campagna): pannelli sopra la mappa del mondo. Segnaposto sobri: il kit dipinto lo fa Arte UI. */
+.car-carta { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; background: var(--mare-fondo); }
+.car-mare { fill: var(--mare-fondo); }
+.car-rotta { stroke: #E6FBFF55; stroke-width: 10; stroke-dasharray: 30 24; }
+.car-freccia { stroke: var(--pericolo); stroke-width: 18; stroke-linecap: round; }
+.car-cala circle { fill: #6B7B5A; stroke: #0004; stroke-width: 8; }
+.car-cala text, .car-nome-isola { fill: var(--testo); font: 400 64px var(--font-titolo); text-anchor: middle; paint-order: stroke; stroke: #0008; stroke-width: 10px; }
+.car-isola { cursor: pointer; }
+.car-tocco { fill: transparent; }
+.car-terra { fill: #C9A86A; stroke-width: 18; }
+.car-isola.mia .car-terra { stroke: #D7263D; }
+.car-isola.marina .car-terra { stroke: #8A96A3; }
+.car-isola.toccabile .car-terra { animation: car-pulsa 1.2s ease-in-out infinite alternate; }
+.car-isola:not(.toccabile):not(.mia) .car-terra { filter: brightness(.7); }
+.car-anello { fill: none; stroke: var(--oro); stroke-width: 14; }
+.car-segnalino circle { fill: var(--legno); stroke: var(--legno-scuro); stroke-width: 8; }
+.car-isola.marina .car-segnalino circle { fill: #5D6875; stroke: #39424C; }
+.car-segnalino text { fill: var(--testo); font: 400 58px var(--font-titolo); text-anchor: middle; }
+.car-icona-premio { font-size: 64px; text-anchor: middle; }
+@keyframes car-pulsa { from { stroke-width: 18; } to { stroke-width: 34; } }
+
+.car-ui { z-index: 1; }
+.car-ui section { pointer-events: auto; }
+.car-barra { pointer-events: none; }
+.car-barra > * { pointer-events: auto; }
+.car-round { pointer-events: none !important; }
+.car-barra {
+  position: absolute; top: var(--sicura-a); left: var(--bordo-corto); right: var(--bordo-corto);
+  display: flex; align-items: center; gap: 12px;
+}
+.car-round {
+  flex: 1; display: flex; flex-direction: column; align-items: center; line-height: 1.15;
+  font: 400 16px var(--font-titolo); text-shadow: 0 2px 0 #0008;
+}
+.car-capitolo { color: var(--oro); font-size: 13px; }
+.car-conto { font: 400 16px var(--font-titolo); background: #0006; padding: 6px 12px; border-radius: 16px; }
+
+.car-fase {
+  position: absolute; left: var(--bordo-corto); bottom: var(--sicura-b); width: min(320px, 46vw);
+  background: #13293AE6; border: 2px solid var(--legno); border-radius: 12px; padding: 10px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.car-fase h2 { font-size: 18px; color: var(--oro); }
+.car-fase p { margin: 0; font-size: 13px; }
+.car-fase .btn { height: 44px; }
+
+.car-pergamena {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(640px, 86vw); max-height: 92vh; overflow: auto; pointer-events: auto;
+  background: var(--pergamena); color: var(--inchiostro); border-radius: 12px; padding: 12px 18px;
+  box-shadow: 0 8px 0 #0005; display: flex; flex-direction: column; gap: 6px;
+}
+.car-pergamena h2 { font-size: 22px; color: var(--legno-scuro); text-align: center; }
+.car-pergamena p { margin: 0; }
+.car-pergamena footer { display: flex; justify-content: center; gap: 12px; margin-top: 6px; }
+.car-pergamena footer .btn { min-width: 150px; height: 48px; }
+.car-cartello { font-style: italic; text-align: center; color: #5C4630; font-size: 13px; }
+.car-colonne { display: grid; grid-template-columns: 1fr 1.3fr; gap: 14px; }
+.car-scontro { margin: 0; padding-left: 18px; font-size: 13px; }
+.car-capo { font-style: italic; }
+.car-difensori { font-weight: 800; }
+.car-premi { display: flex; flex-direction: column; gap: 2px; font-size: 13px; margin-top: 4px; }
+.car-premi.preso { opacity: .55; }
+.car-etichetta { font: 400 13px var(--font-titolo); color: var(--legno); }
+.car-imbarco { display: flex; flex-direction: column; gap: 4px; }
+.car-riga { display: grid; grid-template-columns: 1fr 44px 28px 44px; align-items: center; gap: 6px; font-size: 13px; }
+.car-riga .car-nota { grid-column: 1 / -1; margin-top: -4px; }
+.car-riga .btn.icona { width: 44px; height: 44px; font-size: 22px; color: var(--testo); }
+.car-numero { text-align: center; font: 400 20px var(--font-titolo); }
+.car-totale { font-weight: 800; font-size: 13px; }
+.car-nota { font-size: 12px; opacity: .8; }
+.car-errore { color: #B3261E; font-weight: 800; font-size: 13px; }
+
+.car-scheda {
+  position: absolute; right: var(--bordo-corto); bottom: var(--sicura-b); width: min(300px, 44vw);
+  background: var(--pergamena); color: var(--inchiostro); border-radius: 10px; padding: 10px 14px; box-shadow: 0 6px 0 #0005;
+}
+.car-scheda h3 { margin: 0 0 4px; font: 400 18px var(--font-titolo); }
+.car-scheda p { margin: 2px 0; }
+
+.car-banner {
+  position: fixed; left: 50%; top: 52px; transform: translateX(-50%); z-index: 5; pointer-events: none;
+  background: #13293AF0; color: var(--oro); font: 400 20px var(--font-titolo); padding: 10px 22px; border-radius: 14px;
+  border: 2px solid var(--oro-ombra); text-align: center; max-width: 80vw;
+}
+.car-nuovo h2 { color: var(--oro-ombra); font-size: 28px; }
+.car-premio.grande { font: 400 18px var(--font-titolo); text-align: center; }
+.car-icona { font-size: 28px; vertical-align: middle; }
+.car-battuta { text-align: center; font-size: 14px; }
+
+.car-scena-fondo { background: #0009; }
+.car-scena {
+  position: absolute; left: 50%; bottom: var(--sicura-b); transform: translateX(-50%);
+  width: min(700px, 88vw); display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; pointer-events: auto;
+  background: var(--pergamena); color: var(--inchiostro); border-radius: 14px; padding: 12px 16px; box-shadow: 0 8px 0 #0005;
+}
+.car-scena footer { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; }
+.car-scena footer .btn { height: 44px; min-width: 110px; }
+.car-ritratto {
+  width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center;
+  font: 400 48px var(--font-titolo); color: var(--testo); background: var(--legno); border: 4px solid var(--legno-scuro);
+}
+.car-ritratto.r-scarlatta { background: #D7263D; }
+.car-ritratto.r-gancio { background: #6B4226; }
+.car-ritratto.r-verbale { background: #2E8B57; }
+.car-ritratto.r-rigidini, .car-ritratto.r-bottoni { background: #5D6875; }
+.car-fumetto b { font: 400 16px var(--font-titolo); color: var(--legno); }
+.car-fumetto p { margin: 2px 0 0; font-size: 17px; font-weight: 700; }
+
+.car-fine.vinto h2 { color: var(--oro-ombra); }
+.car-stelle { text-align: center; font-size: 40px; color: var(--oro-ombra); letter-spacing: 6px; }
+.car-righe-stelle { list-style: none; margin: 0 auto; padding: 0; font-size: 14px; }
+.car-righe-stelle li { opacity: .45; }
+.car-righe-stelle li.ok { opacity: 1; font-weight: 800; }

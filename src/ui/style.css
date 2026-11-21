@@ -286,6 +286,12 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
   transition: transform 120ms ease-out, opacity 120ms ease-out;
 }
 .zona-comando.attivo .base-joystick { opacity: 1; }
+/* a riposo la mira si confondeva con la roccia chiara: bordo più deciso (Lead design, PR #45) */
+.zona-mira:not(.attivo) .base-joystick { border-color: rgba(255, 255, 255, .4); }
+/* appeso a scala o liana: ▲▼ piccole in alto e in basso sul joystick di movimento */
+.freccia-scala { position: absolute; left: 50%; transform: translateX(-50%); font-size: 16px; line-height: 1; color: var(--oro); text-shadow: 0 1px 2px #000a; }
+.freccia-scala.su { top: 6px; }
+.freccia-scala.giu { bottom: 6px; }
 .base-joystick.movimento { width: 120px; height: 120px; }
 .base-joystick.mira { width: 150px; height: 150px; }
 .base-joystick .pomello {

@@ -204,35 +204,72 @@ export function versoDaMira(gradi: number): 1 | -1 | 0 {
   return g < 90 || g > 270 ? 1 : -1;
 }
 
+/** Dove si trova il pirata rispetto a scale e liane (design/comandi/scale-e-liane.md). */
+export type ModoArrampicata = 'libero' | 'vicino' | 'appeso';
+
+/** cono verticale dell'arrampicata (±30° dalla verticale) e diagonale del salto vicino agli appigli (30-60° sopra l'orizzontale) */
+export const ARRAMPICATA = { conoGradi: 30, sogliaArrampica: 0.4, saltoDaGradi: 30, saltoAGradi: 60 } as const;
+
+type ComandoJoystick =
+  | { t: 'muovi'; dir: -1 | 0 | 1 }
+  | { t: 'salta'; indietro: boolean }
+  | { t: 'arrampica'; dir: -1 | 0 | 1 };
+
 /**
- * Logica del joystick: riceve la posizione del pollice rispetto al punto d'appoggio (y verso il basso) e manda
- * `muovi` e `salta` come i tasti. Settore orizzontale (|dx| ≥ |dy|, oltre la zona morta) = cammina; spinta in
- * alto oltre il 60% del raggio = salto: in avanti, oppure salto alto all'indietro se la spinta va contro il verso
- * del pirata. Nel settore alto il pirata non cammina, così non si gira prima di saltare.
+ * Logica del joystick di movimento: riceve la posizione del pollice rispetto al centro (y verso il basso) e manda
+ * `muovi`, `salta` e `arrampica`.
+ * - libero: settore orizzontale (|dx| ≥ |dy|, oltre la zona morta) = cammina; spinta in alto oltre il 60% = salto,
+ *   in avanti o alto all'indietro se va contro il verso del pirata. Nel settore alto non cammina (non si gira).
+ * - vicino a un appiglio: spinta entro ±30° dalla verticale oltre il 40% = arrampica su/giù; il salto solo in
+ *   diagonale (30-60° sopra l'orizzontale) oltre il 60%, nel verso della spinta; orizzontale = cammina.
+ * - appeso: lasciato = fermo; su/giù = arrampica; diagonale oltre il 60% = salta via; destra/sinistra pura = niente.
  */
-export function creaJoystick(invia: (c: { t: 'muovi'; dir: -1 | 0 | 1 } | { t: 'salta'; indietro: boolean }) => void, verso: () => 1 | -1 | 0) {
+export function creaJoystick(invia: (c: ComandoJoystick) => void, verso: () => 1 | -1 | 0, modo: () => ModoArrampicata = () => 'libero') {
   let dir: -1 | 0 | 1 = 0;
+  let sale: -1 | 0 | 1 = 0;
   let saltoArmato = true;
+  let daOrizzontale = false;
   const R = JOYSTICK.raggio;
   const imposta = (d: -1 | 0 | 1) => { if (d !== dir) { dir = d; invia({ t: 'muovi', dir: d }); } };
+  const arrampica = (d: -1 | 0 | 1) => { if (d !== sale) { sale = d; invia({ t: 'arrampica', dir: d }); } };
+  const salta = (x: number) => {
+    saltoArmato = false;
+    const v = verso();
+    invia({ t: 'salta', indietro: Math.abs(x) > JOYSTICK.zonaMorta && v !== 0 && Math.sign(x) === -v });
+  };
   return {
-    /** dx, dy dal punto d'appoggio; restituisce la posizione del pomello limitata al raggio */
+    /** dx, dy dal centro; restituisce la posizione del pomello limitata al raggio */
     sposta(dx: number, dy: number): { x: number; y: number } {
       const d = Math.sqrt(dx * dx + dy * dy);
       const k = d > R ? R / d : 1;
-      const x = dx * k, y = dy * k;
-      const orizzontale = Math.abs(x) >= Math.abs(y);
-      imposta(orizzontale && Math.abs(x) > JOYSTICK.zonaMorta ? (x > 0 ? 1 : -1) : 0);
-      if (saltoArmato && -y > JOYSTICK.sogliaSalto * R) {
-        saltoArmato = false;
-        const v = verso();
-        const indietro = Math.abs(x) > JOYSTICK.zonaMorta && v !== 0 && Math.sign(x) === -v;
-        invia({ t: 'salta', indietro });
-      } else if (!saltoArmato && -y < JOYSTICK.riarmoSalto * R) saltoArmato = true;
+      const x = dx * k, y = dy * k, r = d * k;
+      const m = modo();
+      if (m === 'libero') {
+        arrampica(0);
+        const orizzontale = Math.abs(x) >= Math.abs(y);
+        imposta(orizzontale && Math.abs(x) > JOYSTICK.zonaMorta ? (x > 0 ? 1 : -1) : 0);
+        if (saltoArmato && -y > JOYSTICK.sogliaSalto * R) salta(x);
+        else if (!saltoArmato && -y < JOYSTICK.riarmoSalto * R) saltoArmato = true;
+        return { x, y };
+      }
+      // angolo sopra l'orizzontale (90 = su, −90 = giù)
+      const elevazione = (Math.atan2(-y, Math.abs(x)) * 180) / Math.PI;
+      const verticale = r > JOYSTICK.zonaMorta && Math.abs(elevazione) >= 90 - ARRAMPICATA.conoGradi;
+      const diagonale = elevazione >= ARRAMPICATA.saltoDaGradi && elevazione <= ARRAMPICATA.saltoAGradi;
+      const orizzontale = r > JOYSTICK.zonaMorta && Math.abs(elevazione) < ARRAMPICATA.saltoDaGradi;
+      arrampica(verticale && r > ARRAMPICATA.sogliaArrampica * R ? (y < 0 ? -1 : 1) : 0);
+      // appeso: destra/sinistra pura non fa niente (non si scivola fuori per sbaglio)
+      imposta(m === 'vicino' && orizzontale ? (x > 0 ? 1 : -1) : 0);
+      // scivolando da destra/sinistra verso l'alto si passa dalla diagonale: lì non salta (va ripreso dal centro)
+      if (orizzontale && r > JOYSTICK.sogliaSalto * R) daOrizzontale = true;
+      else if (verticale) daOrizzontale = false;
+      if (saltoArmato && !daOrizzontale && diagonale && r > JOYSTICK.sogliaSalto * R) salta(x);
+      else if (r < JOYSTICK.riarmoSalto * R) { saltoArmato = true; daOrizzontale = false; }
       return { x, y };
     },
-    rilascia() { imposta(0); saltoArmato = true; },
+    rilascia() { imposta(0); arrampica(0); saltoArmato = true; daOrizzontale = false; },
     get direzione() { return dir; },
+    get arrampicata() { return sale; },
   };
 }
 

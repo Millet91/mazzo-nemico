@@ -13,6 +13,9 @@ import { SceltaSchermaglia } from './battaglia/SceltaSchermaglia';
 import { sbloccaAudio } from '../piattaforma/audio';
 import { Diagnostica, provaAttiva, statoFps } from './Diagnostica';
 import { PulsanteKit, PulsanteTondo, applicaKit, urlKit } from './kit';
+// ── Carriera (P2 Campagna, mount minimo: Arte UI lo sostituisce col menu nuovo) ──
+import { Carriera } from './carriera/Carriera';
+import { avviaAscoltoCarriera, entraInCarriera, indietroCarriera, preparaCarriera } from './carriera/stato';
 import { caricaPreferenzeHud, comandiClassici, impostaComandiClassici, impostaMancini, impostaVolumeHud, impostaZoomMira, mancini, piratiSchermaglia, volume, zoomMira } from './preferenze';
 
 // avvio dell'HUD (main.tsx non è una cartella dell'HUD): preferenze salvate, banner e vibrazioni della battaglia
@@ -21,6 +24,8 @@ avviaAscoltoBattaglia();
 avviaTicTac();
 // immagini del kit dipinto (P2) nelle variabili CSS
 if (typeof document !== 'undefined') applicaKit();
+avviaAscoltoCarriera(); // P2 Campagna
+void preparaCarriera(); // P2 Campagna
 // l'audio parte solo dopo un tocco (regola dei browser e della WebView)
 if (typeof window !== 'undefined') window.addEventListener('pointerdown', sbloccaAudio, { capture: true, passive: true });
 
@@ -48,7 +53,7 @@ function mostraAvviso(testo: string) {
 /** Tasto indietro di Android: chiude il pannello aperto. Restituisce false se non c'era niente da chiudere. */
 export function gestisciIndietro(): boolean {
   if (indietroInBattaglia()) return true;
-  if (bus.schermata.value !== 'menu' && !pannello.value && !sceltaSchermaglia.value) { bus.schermata.value = 'menu'; return true; }
+  if (indietroCarriera()) return true; // P2 Campagna
   if (sceltaSchermaglia.value) { sceltaSchermaglia.value = false; return true; }
   if (pannello.value === 'info' || pannello.value === 'diagnostica') { pannello.value = 'impostazioni'; return true; }
   if (pannello.value === 'impostazioni') { pannello.value = null; return true; }
@@ -180,13 +185,11 @@ export function App() {
         </main>
       ) : (
       bus.schermata.value !== 'menu' ? (
-        // Carriera: la scena del mondo (Pixi) e i pannelli della Campagna stanno sopra; qui solo l'uscita al menu
-        <main class="ui fuori-menu" key="carriera">
+        // Carriera: la scena del mondo (Pixi) sotto, i pannelli della Campagna sopra (uscita al menu nella loro barra)
+        <>
           <ContatoreFps />
-          <div class="angolo-sinistra">
-            <PulsanteTondo id="torna-menu" label={T.home.tornaMenu} onClick={() => (bus.schermata.value = 'menu')}>‹</PulsanteTondo>
-          </div>
-        </main>
+          <Carriera /> {/* P2 Campagna */}
+        </>
       ) : (
       <main class="ui menu" key="menu">
         <img class="menu-sfondo" src={urlKit('ui_menu_sfondo')} alt="" draggable={false} />
@@ -199,7 +202,7 @@ export function App() {
           <p class="sottotitolo">{T.gioco.sottotitolo}</p>
         </div>
         <div class="menu-principale">
-          <PulsanteKit id="carriera" tipo="oro" grande onClick={() => (bus.schermata.value = 'mondo')}
+          <PulsanteKit id="carriera" tipo="oro" grande onClick={entraInCarriera /* P2 Campagna */}
             sotto={carrieraIniziata() ? T.home.carrieraSottoContinua(bus.carriera.value!.capitolo) : T.home.carrieraSottoNuova}>
             {T.home.carriera}
           </PulsanteKit>
@@ -216,7 +219,7 @@ export function App() {
         )}
       </main>
       ))}
-      {!battaglia && <PannelloImpostazioni />}
+      {!battaglia && bus.schermata.value === 'menu' && <PannelloImpostazioni />}
       {!battaglia && <SceltaSchermaglia />}
       {battaglia && provaAttiva.value && <div class="avviso" role="status">{statoFps.value}</div>}
       {avviso.value && <div class="avviso" role="status">{avviso.value}</div>}

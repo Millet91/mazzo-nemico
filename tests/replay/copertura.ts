@@ -7,6 +7,8 @@ export const COPERTURA_M1 = [
   'sparo:cannone', 'sparo:granata', 'sparo:pistola', 'sparo:sciabola',
   'annegamento', 'lapide', 'catenaLapidi', 'mareSale',
   'fine:eliminazione', 'fine:tempo', '5v5:fine',
+  // passata di ritmo (m1-ritmo §9): barili di polvere e casse Rum/Trappola
+  'barile', 'cassaCaduta', 'cassa:rum', 'cassa:trappola',
 ] as const;
 /** Desiderabile ma raro: si prende se il generatore lo trova. */
 export const COPERTURA_FACOLTATIVA = ['fine:tempo-parita', 'fine:ritirata', 'dannoCaduta'] as const;
@@ -23,8 +25,11 @@ export class Copertura {
         case 'lapide': this.tag.add('lapide'); break;
         case 'esplosione':
           if (e.arma === 'lapide' && ++this.lapidiNelTurno >= 2) this.tag.add('catenaLapidi');
+          if (e.arma === 'barile') this.tag.add('barile');
           break;
         case 'mareSale': this.tag.add('mareSale'); break;
+        case 'cassaCaduta': this.tag.add('cassaCaduta'); break;
+        case 'cassaAperta': this.tag.add(`cassa:${e.contenuto}`); break;
         case 'atterrato': if (e.dannoCaduta > 0) this.tag.add('dannoCaduta'); break;
         case 'fine': {
           this.tag.add(`fine:${e.esito.motivo}`);

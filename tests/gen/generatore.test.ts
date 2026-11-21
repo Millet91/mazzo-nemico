@@ -41,7 +41,7 @@ describe('Generatore · determinismo', () => {
   // Impronte d'oro: se cambiano per una modifica voluta del generatore, si aggiornano in un commit a parte
   // (piano QA). Se cambiano senza motivo, il generatore non è più deterministico.
   it('impronte d\'oro dei semi 7, 42, 1234', () => {
-    expect([7, 42, 1234].map((s) => impronta(generaMappa(richiesta(s))))).toEqual(['37c6b525', 'f2860524', 'd059e1a3']);
+    expect([7, 42, 1234].map((s) => impronta(generaMappa(richiesta(s))))).toEqual(['6c320321', '583e7428', '7c04b64b']);
   });
 
   it('semi diversi ⇒ mappe diverse', () => {

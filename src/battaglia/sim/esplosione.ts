@@ -7,6 +7,7 @@ import { BIL } from '../../contenuti/bilanciamento';
 import { distanza2Capsula, scavaCratere, MEZZA_LARGHEZZA_PIRATA } from './terreno';
 import { danneggia, stacca } from './pirata';
 import { SPINTA_MIN_SU } from './costanti';
+import { accendiOggetti } from './oggetti';
 
 /** Danno di un'arma per una ciurma, con il tratto del Teschio Rosso (+10% sugli esplosivi, per difetto). */
 export function dannoArma(arma: IdArma, ciurma: IdCiurma): number {
@@ -55,19 +56,29 @@ export function effettoEsplosione(
  */
 export function esplodi(
   s: StatoBattaglia, x: number, y: number, arma: IdArma | 'lapide', ciurma: IdCiurma | null, eventi: EventoBattaglia[],
+  parametri?: { raggio: number; danno: number },
 ): void {
-  const raggio = arma === 'lapide' ? BIL.lapide.raggio : ARMA[arma].raggio;
-  const base = arma === 'lapide' ? BIL.lapide.danno : ARMA[arma].danno;
-  const danno = arma === 'lapide' || !ciurma ? base : dannoArma(arma, ciurma);
+  const p = parametri ?? parametriEsplosione(arma);
+  const raggio = p.raggio;
+  const base = p.danno;
+  const danno = parametri || arma === 'lapide' || arma === 'barile' || !ciurma ? base : dannoArma(arma, ciurma);
   const spinta = base * BIL.fisica.spintaPerDanno;
   eventi.push({ t: 'esplosione', x, y, raggio, arma });
   scavaCratere(s.terreno, x, y, raggio, eventi);
-  for (const p of s.pirati) {
-    if (p.stato !== 'vivo') continue;
-    const e = effettoEsplosione(x, y, raggio, danno, spinta, p.x, p.y);
+  for (const q of s.pirati) {
+    if (q.stato !== 'vivo') continue;
+    const e = effettoEsplosione(x, y, raggio, danno, spinta, q.x, q.y);
     if (!e) continue;
-    stacca(p);
-    p.vx += e.vx; p.vy += e.vy;
-    danneggia(p, e.danno, eventi);
+    stacca(q);
+    q.vx += e.vx; q.vy += e.vy;
+    danneggia(q, e.danno, eventi);
   }
+  accendiOggetti(s, x, y, raggio);
+}
+
+/** Raggio e danno pieno di un'esplosione (senza tratti): armi da ARMA, lapide e barile da BIL. */
+export function parametriEsplosione(arma: IdArma | 'lapide'): { raggio: number; danno: number } {
+  if (arma === 'lapide') return { raggio: BIL.lapide.raggio, danno: BIL.lapide.danno };
+  if (arma === 'barile') return { raggio: BIL.barili.raggio, danno: BIL.barili.danno };
+  return { raggio: ARMA[arma].raggio, danno: ARMA[arma].danno };
 }

@@ -27,6 +27,7 @@ import { MEZZA_ALTEZZA_PIRATA } from './terreno';
 import { inGioco, stacca } from './pirata';
 import { avanza, iniziaTurno, miraIniziale, pirataDelTurno, ritirata } from './turno';
 import { hashDi } from './hash';
+import { creaBarili } from './oggetti';
 import { simulaColpo as simula, traiettoria as linea } from './simula';
 
 /** Crea lo stato iniziale. La mappa arriva dal generatore (battaglia/gen). Il turno 1 parte in fase 'inquadra'. */
@@ -72,6 +73,7 @@ export function creaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata): Stato
     },
     esito: null,
   };
+  creaBarili(s, mappa.barili);
   iniziaTurno(s, []); // gli eventi del turno 1 li ripete il primo avanzaTick
   return s;
 }
@@ -164,9 +166,12 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
   return simula(s, piano);
 }
 
-/** Punti della traiettoria prevista (linea tratteggiata): la usa il render. Non muta `s`. */
-export function traiettoria(s: StatoBattaglia, maxPunti = 60): Punto[] {
-  return linea(s, maxPunti);
+/**
+ * Punti della traiettoria prevista (linea tratteggiata): la usa il render. Non muta `s`.
+ * `maxRimbalzi` (opzionale, granata): la linea si ferma a quel rimbalzo; senza, segue tutta la miccia fino all'esplosione.
+ */
+export function traiettoria(s: StatoBattaglia, maxPunti = 60, maxRimbalzi?: number): Punto[] {
+  return linea(s, maxPunti, maxRimbalzi);
 }
 
 /** Il pirata attivo (o undefined a battaglia finita). */

@@ -3,7 +3,7 @@
 // sale dal turno 12, fine a tempo al turno 18 (parità al difensore), eliminazione, ritirata dell'attaccante,
 // lapide-barilotto a fine risoluzione, risoluzione forzata dopo 10 s (caso 8).
 
-import type { EsitoBattaglia, EventoBattaglia, FaseTurno, MotivoFine, Pirata, StatoBattaglia } from '../../core/tipi';
+import type { EsitoBattaglia, EventoBattaglia, FaseTurno, MotivoFine, Pirata, Proiettile, StatoBattaglia } from '../../core/tipi';
 import { intero } from '../../core/rng';
 import { daGradi } from '../../core/trig';
 import { ARMA } from '../../contenuti/armi';
@@ -12,7 +12,8 @@ import { aggiornaPirata, annega, fermo, inAcqua, inGioco } from './pirata';
 import { esplodi } from './esplosione';
 import { bersagliDi, colpoIstantaneo, durataColpi, fisicaDi, spara, tickColpo } from './armi';
 import { muoviProiettile } from './proiettili';
-import { MICCIA_LAPIDE_TICK, RISOLUZIONE_MIN_TICK, VITA_MAX_PROIETTILE } from './costanti';
+import { MICCIA_LAPIDE_TICK, VITA_MAX_PROIETTILE } from './costanti';
+import { apriCassa, attivo as proiettileAttivo, bersagliOggetti, centroOggetto, eOggetto, forseCassa, scendiCassa } from './oggetti';
 
 export function pirataDelTurno(s: StatoBattaglia): Pirata | undefined {
   return s.pirati.find((p) => p.id === s.turno.pirata);
@@ -20,7 +21,7 @@ export function pirataDelTurno(s: StatoBattaglia): Pirata | undefined {
 
 export function cambiaFase(s: StatoBattaglia, f: FaseTurno, eventi: EventoBattaglia[]): void {
   const t = s.turno;
-  t.fase = f; t.inizioFase = s.tick; t.camminata = 0;
+  t.fase = f; t.inizioFase = s.tick; t.camminata = 0; t.fermoDa = -1;
   eventi.push({ t: 'fase', fase: f });
 }
 
@@ -66,6 +67,7 @@ export function iniziaTurno(s: StatoBattaglia, eventi: EventoBattaglia[]): void 
   s.vento = max > 0 ? intero(s, -max, max) : 0;
   eventi.push({ t: 'turnoIniziato', numero: t.numero, squadra: t.squadra, pirata: p.id, vento: s.vento });
   cambiaFase(s, 'inquadra', eventi);
+  forseCassa(s, eventi);
 }
 
 function contaVivi(s: StatoBattaglia, sq: 0 | 1): number {
@@ -100,7 +102,7 @@ export function concludi(s: StatoBattaglia, vincitore: 0 | 1, motivo: MotivoFine
 
 /** Porta la battaglia in fase 'fine' (anche dopo una ritirata decisa da eseguiComando). */
 function chiudiBattaglia(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
-  s.proiettili.length = 0;
+  s.proiettili = s.proiettili.filter((p) => !proiettileAttivo(p));
   s.turno.camminata = 0;
   cambiaFase(s, 'fine', eventi);
   eventi.push({ t: 'fine', esito: s.esito! });
@@ -146,42 +148,66 @@ function creaLapidi(s: StatoBattaglia, eventi: EventoBattaglia[]): number {
   return n;
 }
 
-/** Un'esplosione in risoluzione (lapide) fa ripartire l'attesa minima: si vedono i numeri prima del turno dopo. */
+/** Un'esplosione in risoluzione allunga il tetto dei 10 s (le catene di lapidi e barili hanno il loro tempo). */
 function dopoEsplosione(s: StatoBattaglia): void {
   if (s.turno.fase === 'risoluzione') s.turno.inizioFase = s.tick;
 }
 
-/** Un tick per tutti i proiettili: volo, rimbalzi, urti, miccia, mare. */
+/** Ciurma di chi ha lanciato il proiettile (per il tratto del Teschio), o null. */
+function ciurmaDi(s: StatoBattaglia, pr: Proiettile) {
+  if (pr.lanciatore < 0) return null;
+  const p = s.pirati.find((q) => q.id === pr.lanciatore);
+  return p ? s.squadre[p.squadra].ciurma : null;
+}
+
+/** Fa scoppiare un proiettile (arma, lapide, barile o cassa). */
+function scoppia(s: StatoBattaglia, pr: Proiettile, x: number, y: number, eventi: EventoBattaglia[]): void {
+  if (pr.tipo === 'cassa') {
+    const c = centroOggetto(pr);
+    esplodi(s, c.x, c.y, 'lapide', null, eventi, BIL.casse.esplosione);
+  } else if (pr.tipo === 'barile') {
+    const c = centroOggetto(pr);
+    esplodi(s, c.x, c.y, 'barile', null, eventi);
+  } else {
+    esplodi(s, x, y, pr.arma, ciurmaDi(s, pr), eventi);
+  }
+  dopoEsplosione(s);
+}
+
+/** Un tick per tutti i proiettili: volo, rimbalzi, urti, miccia, mare, casse col paracadute e casse aperte. */
 function aggiornaProiettili(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
   if (s.proiettili.length === 0) return;
-  const bersagli = bersagliDi(s);
-  const restano = [];
-  for (const pr of s.proiettili) {
-    const ciurma = pr.lanciatore >= 0 ? s.squadre[s.pirati.find((p) => p.id === pr.lanciatore)?.squadra ?? 0].ciurma : null;
-    const urto = muoviProiettile(s.terreno, s.terreno.mare, s.vento, pr, fisicaDi(pr.arma), bersagli);
-    if (urto) {
-      if (urto.tipo === 'mare') {
-        eventi.push({ t: 'splash', x: urto.x, y: urto.y, grande: false });
-        continue;
+  const bersagli = [...bersagliDi(s), ...bersagliOggetti(s.proiettili)];
+  const tolti = new Set<number>();
+  // si scorre una copia: le esplosioni possono accendere altri oggetti, ma non aggiungere proiettili
+  for (const pr of s.proiettili.slice()) {
+    if (tolti.has(pr.id)) continue;
+    if (pr.tipo === 'cassa') {
+      if (pr.tickEsplosione < 0) {
+        const r = scendiCassa(s.terreno, s.terreno.mare, s.vento, pr);
+        if (r === 'mare') { eventi.push({ t: 'splash', x: pr.x, y: s.terreno.mare, grande: false }); tolti.add(pr.id); continue; }
+        if (apriCassa(s, pr, eventi, (x, y) => { esplodi(s, x, y, 'lapide', null, eventi, BIL.casse.trappola); dopoEsplosione(s); })) {
+          tolti.add(pr.id); continue;
+        }
       }
-      if (urto.tipo === 'rimbalzo') {
-        eventi.push({ t: 'rimbalzo', proiettile: pr.id, x: urto.x, y: urto.y });
-      } else {
-        esplodi(s, urto.x, urto.y, pr.arma, ciurma, eventi);
-        dopoEsplosione(s);
-        continue;
+    } else if (!(pr.tipo === 'barile' && pr.fermo && pr.tickEsplosione < 0) || !solidoSotto(s, pr)) {
+      const urto = muoviProiettile(s.terreno, s.terreno.mare, s.vento, pr, fisicaDi(pr.arma), pr.tipo === 'barile' ? null : bersagli);
+      if (urto) {
+        if (urto.tipo === 'mare') { eventi.push({ t: 'splash', x: urto.x, y: urto.y, grande: false }); tolti.add(pr.id); continue; }
+        if (urto.tipo === 'rimbalzo') eventi.push({ t: 'rimbalzo', proiettile: pr.id, x: urto.x, y: urto.y });
+        else { tolti.add(pr.id); scoppia(s, pr, urto.x, urto.y, eventi); continue; }
       }
     }
-    if (pr.tickEsplosione >= 0 && s.tick >= pr.tickEsplosione) {
-      esplodi(s, pr.x, pr.y, pr.arma, ciurma, eventi);
-      dopoEsplosione(s);
-      continue;
-    }
+    if (pr.tickEsplosione >= 0 && s.tick >= pr.tickEsplosione) { tolti.add(pr.id); scoppia(s, pr, pr.x, pr.y, eventi); continue; }
     // rete di sicurezza: niente proiettili eterni (es. uscito di lato e mai ricaduto)
-    if (pr.tickEsplosione < 0 && s.tick - s.turno.inizioFase > VITA_MAX_PROIETTILE) continue;
-    restano.push(pr);
+    if (!eOggetto(pr) && pr.tickEsplosione < 0 && s.tick - s.turno.inizioFase > VITA_MAX_PROIETTILE) tolti.add(pr.id);
   }
-  s.proiettili = restano;
+  if (tolti.size) s.proiettili = s.proiettili.filter((p) => !tolti.has(p.id));
+}
+
+function solidoSotto(s: StatoBattaglia, pr: Proiettile): boolean {
+  const t = s.terreno, x = Math.floor(pr.x), y = Math.floor(pr.y) + 1;
+  return x >= 0 && y >= 0 && x < t.w && y < t.h && t.maschera[y * t.w + x] !== 0;
 }
 
 /** Avanza di un tick. */
@@ -237,22 +263,26 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
       if (a.tipo === 'istantanea' && attivoInGioco) {
         for (let k = 1; k < (a.colpi ?? 1); k++) if (inFase === tickColpo(t.arma, k)) colpoIstantaneo(s, attivo!, eventi);
       }
-      if (s.proiettili.length === 0 && inFase >= durataColpi(t.arma)) cambiaFase(s, attivoInGioco ? 'fuga' : 'risoluzione', eventi);
+      if (!s.proiettili.some(proiettileAttivo) && inFase >= durataColpi(t.arma)) cambiaFase(s, attivoInGioco ? 'fuga' : 'risoluzione', eventi);
       break;
     }
     case 'fuga':
       if (!attivoInGioco || inFase >= BIL.turno.fugaTick) cambiaFase(s, 'risoluzione', eventi);
       break;
     case 'risoluzione': {
-      let tuttoFermo = s.proiettili.length === 0 && s.pirati.every(fermo);
+      // passa appena tutto è fermo da BIL.turno.risoluzioneFermoTick (m1-ritmo §3)
+      let tuttoFermo = !s.proiettili.some(proiettileAttivo) && s.pirati.every(fermo);
       if (!tuttoFermo && inFase >= BIL.turno.risoluzioneMaxTick) {
-        // caso 8: chi vibra si ferma d'ufficio, i proiettili rimasti spariscono
+        // caso 8: chi vibra si ferma d'ufficio, i proiettili in volo spariscono (barili e casse restano)
         for (const p of s.pirati) if (p.stato === 'vivo') { p.vx = 0; p.vy = 0; p.aTerra = true; p.yInizioCaduta = p.y; }
-        s.proiettili.length = 0;
+        s.proiettili = s.proiettili.filter((p) => !proiettileAttivo(p));
         tuttoFermo = true;
+        t.fermoDa = s.tick - BIL.turno.risoluzioneFermoTick;
       }
-      if (!tuttoFermo || inFase < RISOLUZIONE_MIN_TICK) break;
-      if (creaLapidi(s, eventi) > 0) { t.inizioFase = s.tick; break; } // si aspetta che le lapidi esplodano
+      if (!tuttoFermo) { t.fermoDa = -1; break; }
+      if (t.fermoDa < 0) t.fermoDa = s.tick;
+      if (s.tick - t.fermoDa < BIL.turno.risoluzioneFermoTick) break;
+      if (creaLapidi(s, eventi) > 0) { t.inizioFase = s.tick; t.fermoDa = -1; break; } // si aspetta che le lapidi esplodano
       fineTurno(s, eventi);
       break;
     }

@@ -84,7 +84,7 @@ export const it = {
     cassaRum: (pv: number) => `Rum! +${pv} PV`,
     cassaTrappola: 'Trappola!',
     joystick: 'Cammina e salta: trascina il pollice',
-    joystickMira: 'Mira: trascina il pomello oro, FUOCO al centro per sparare',
+    joystickMira: 'Mira: trascina il pomello oro; si spara col tasto FUOCO accanto',
     veloce: 'Turno dell\'IA più veloce',
     velocita: (f: number) => `×${f}`,
     griglia: 'Armi',

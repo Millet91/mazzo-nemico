@@ -1,5 +1,12 @@
 // Avvio di PixiJS 8: canvas a schermo intero, risoluzione min(dpr, 1,5) (00 §1.2), pausa in background.
 import { Application } from 'pixi.js';
+// Pixi 8 registra i "pipe" del renderer con import di effetto. Con i pezzi separati di Vite la registrazione del
+// testo finiva nel pezzo del regista, caricato DOPO app.init: il renderer nasceva senza pipe 'text' e la battaglia
+// si bloccava al primo frame (solo nella build di produzione). Qui si importano prima di app.init tutte le
+// famiglie di oggetti che la battaglia usa fuori dal nucleo (Sprite, Graphics, Container sono già nel nucleo).
+// Se si usa un'altra famiglia (Mesh, TilingSprite, NineSliceSprite, ParticleContainer, BitmapText…) va aggiunta
+// qui: lo controlla tests/render/pipe-pixi.test.ts.
+import 'pixi.js/text';
 import { bus } from '../core/bus';
 import { PALETTE, hex } from '../core/palette';
 import { MisuraFps } from './misura-fps';

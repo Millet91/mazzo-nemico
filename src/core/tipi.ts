@@ -12,7 +12,7 @@ import type { IdCiurma } from './palette';
 export type { IdCiurma };
 
 /** Versione delle regole: si alza quando un cambio rompe i replay salvati (05 n. 14). */
-export const VERSIONE_REGOLE = 1;
+export const VERSIONE_REGOLE = 2;
 
 // ─── Mondo e terreno ──────────────────────────────────────────────────────────────────────────────
 

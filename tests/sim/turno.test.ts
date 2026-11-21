@@ -6,6 +6,7 @@ import { daGradi, normalizza } from '../../src/core/trig';
 import { avanzaTick, eseguiComando, pirataAttivo } from '../../src/battaglia/sim';
 import type { EventoBattaglia } from '../../src/core/tipi';
 import { MATERIALE } from '../../src/core/tipi';
+import { dannoArma } from '../../src/battaglia/sim/esplosione';
 import { avanza, avanzaFinche, battagliaPiatta, eventiDi, inAzione, pirata, rettangolo, spara, SUOLO, terrenoPiatto } from './aiuti';
 
 const TIMER = BIL.turno.timerMozzo * TICK_AL_SECONDO;
@@ -182,8 +183,8 @@ describe('Le 4 armi di M1', () => {
     expect(eventiDi(ev, 'esplosione')).toHaveLength(1);
     expect(eventiDi(ev, 'cratere')).toHaveLength(1);
     const d = eventiDi(ev, 'danno').find((e) => e.pirata === n.id)!;
-    expect(d.quanto).toBeGreaterThan(30);
-    expect(d.quanto).toBeLessThanOrEqual(49);
+    expect(d.quanto).toBeGreaterThan(ARMA.cannone.danno * 0.66);
+    expect(d.quanto).toBeLessThanOrEqual(dannoArma('cannone', 'teschio'));
   });
 
   it('granata: esplode allo scadere della miccia, non all\'impatto', () => {

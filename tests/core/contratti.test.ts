@@ -49,11 +49,14 @@ describe('Armi e bilanciamento', () => {
     expect(Object.keys(dotazioneIniziale())).toEqual(ARMI_ATTIVE);
     for (const a of ARMI) expect(T.armi[a.id]).toBeTruthy();
   });
-  it('numeri di 00 §1.3 per le armi di M1', () => {
-    expect([ARMA.cannone.danno, ARMA.cannone.raggio, ARMA.cannone.vento]).toEqual([45, 55, true]);
-    expect([ARMA.granata.danno, ARMA.granata.raggio, ARMA.granata.vento, ARMA.granata.rimbalzo]).toEqual([40, 50, false, 0.5]);
-    expect([ARMA.pistola.danno, ARMA.pistola.colpi, ARMA.pistola.portata]).toEqual([18, 2, 500]);
-    expect([ARMA.sciabola.danno, ARMA.sciabola.spintaFissa, ARMA.sciabola.angoloSpinta]).toEqual([25, 450, 45]);
+  it('numeri delle 4 armi Base: studio v2, PIANO §7 (regole versione 2)', () => {
+    expect(VERSIONE_REGOLE).toBe(2);
+    expect([ARMA.cannone.danno, ARMA.cannone.raggio, ARMA.cannone.vento]).toEqual([60, 70, true]);
+    expect([ARMA.granata.danno, ARMA.granata.raggio, ARMA.granata.vento, ARMA.granata.rimbalzo]).toEqual([52, 64, false, 0.5]);
+    expect([ARMA.pistola.danno, ARMA.pistola.colpi, ARMA.pistola.portata]).toEqual([28, 2, 500]);
+    expect([ARMA.sciabola.danno, ARMA.sciabola.spintaFissa, ARMA.sciabola.angoloSpinta]).toEqual([40, 450, 45]);
+    expect([BIL.ia.livelli.mozzo.erroreGradi, BIL.ia.livelli.mozzo.errorePotenza]).toEqual([14, 0.35]);
+    expect([BIL.macerie.danno, BIL.macerie.maxPerTurno]).toEqual([8, 20]);
   });
   it('fisica di 00 §1.2 in px/tick', () => {
     expect(BIL.fisica.gravita).toBeCloseTo(0.1667, 4);

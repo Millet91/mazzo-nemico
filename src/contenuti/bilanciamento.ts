@@ -130,8 +130,6 @@ export const BIL = {
   mira: {
     /** anello di mira attorno al pirata, px CSS */
     anelloPx: 100,
-    /** zona da cui parte la fionda: cerchio attorno al pirata, px CSS (correzione mira, Lead design 21/11) */
-    zonaFiondaPx: 140,
     /** trascinamento massimo = potenza 100%, px CSS */
     trascinamentoMaxPx: 160,
     /** frazione del volo mostrata dalla traiettoria tratteggiata */

@@ -30,6 +30,7 @@ export function mappaFatta(id: string, r?: Pick<RichiestaMappa, 'bioma' | 'varia
     specchiata: false,
     decorazioni: d.decorazioni.map((x) => ({ ...x })),
     barili: d.barili.map((p) => ({ ...p })),
+    ...(d.appigli ? { appigli: d.appigli.map((a) => ({ ...a })) } : {}),
     arte: d.arte,
   };
 }

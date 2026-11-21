@@ -20,6 +20,25 @@ describe('mappe fatte a mano', () => {
       expect(mappa.spawn[1]).toHaveLength(5);
     });
 
+    it(`${id}: scale e liane rispettano scale-e-liane.md`, () => {
+      const mappa = mappaFatta(id)!;
+      const ap = mappa.appigli ?? [];
+      const { w, maschera: m } = mappa.terreno;
+      const pieno = (x: number, y: number) => m[y * w + x] !== 0;
+      expect(ap.filter((a) => a.x < w / 2).length).toBe(ap.filter((a) => a.x >= w / 2).length);
+      for (const a of ap) {
+        const lungo = a.yBasso - a.yAlto;
+        expect(lungo, `${a.tipo} ${a.x}`).toBeGreaterThanOrEqual(60);
+        expect(lungo, `${a.tipo} ${a.x}`).toBeLessThanOrEqual(220);
+        for (let y = a.yAlto; y < a.yBasso; y++) expect(pieno(a.x, y), `${a.tipo} ${a.x} nel solido a ${y}`).toBe(false);
+        // in cima un piano alla quota yAlto entro 14 px dall'asse
+        let bordo = 99;
+        for (let d = 0; d <= 14; d++) for (const x of [a.x - d, a.x + d]) if (pieno(x, a.yAlto) && !pieno(x, a.yAlto - 1)) bordo = Math.min(bordo, d);
+        expect(bordo, `${a.tipo} ${a.x}: piano in cima`).toBeLessThanOrEqual(14);
+        for (const p of [...mappa.spawn[0], ...mappa.spawn[1]]) expect(Math.abs(p.x - a.x), `${a.tipo} ${a.x} vicino allo spawn ${p.x}`).toBeGreaterThanOrEqual(40);
+      }
+    });
+
     it(`${id}: ogni battaglia riceve una maschera sua`, () => {
       const a = mappaFatta(id)!, b = mappaFatta(id)!;
       a.terreno.maschera[500000] = 9;

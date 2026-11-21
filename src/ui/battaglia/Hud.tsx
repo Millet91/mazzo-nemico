@@ -2,28 +2,30 @@
 //
 // [II] [PV + emblema A]   ⏱ timer  ~vento~   [PV + emblema B]
 //                                                      [⌖] (solo col pirata fuori schermo)
-//                                       [miccia]   45° · 60%
-//                                        [ARMA]
-//  (movimento)                          [FUOCO]    ( mira )
 //
-// Doppio joystick fisso (scelta del proprietario 21/11): vedi Joystick.tsx e leve.ts. Nel turno del giocatore la
-// leva di movimento resta sempre a schermo: accesa in azione e in fuga, al 50% nelle altre fasi (così la fuga
-// parte senza rialzare il dito). Con "Comandi classici": [◀][▶] … [▲][▼] [SALTA][FUOCO] come prima.
+//      [salta]                                              [miccia] [ARMA]
+//   [◀]       [▶]  [sali][scendi]               45° · 60%           [FUOCO]
+//
+// Comandi v3 (21/11, il proprietario ha bocciato i joystick: coprivano la visuale): niente joystick. Si mira
+// trascinando il mirino oro attaccato al pirata, che è disegnato e toccato sul canvas (render/mirino.ts,
+// render/input.ts). Qui restano pochi tasti piccoli e trasparenti ai bordi: frecce e salto a sinistra, FUOCO
+// e ARMA a destra; [sali][scendi] compaiono solo vicino a una scala o liana. Tutto il resto dello schermo è
+// della visuale. Nel turno del giocatore le frecce restano a schermo anche in volo (spente), così la fuga
+// parte senza rialzare il dito. Con "Comandi classici": [◀][▶] … [▲][▼] [SALTA][FUOCO] come prima.
 // Mancini: i due lati si scambiano. I tasti usano i pointer event (non click) così due pollici lavorano insieme.
 import type { ComponentChildren } from 'preact';
-import { useEffect, useMemo } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { bus, type VistaBattaglia, type VistaSquadra } from '../../core/bus';
 import { COLORI_CIURMA } from '../../core/palette';
 import { T } from '../../testi/it';
 import { tocco } from '../../piattaforma/haptics';
 import {
-  alzo, barraVento, comandiVisibili, creaDoppioTocco, creaGrillettoUnico, creaRipetitore, frazioneTimer,
-  micciaSuccessiva, miraAttiva, PASSO_MIRA, usaMiccia,
+  alzo, barraVento, comandiVisibili, creaDoppioTocco, creaFrecce, creaGrilletto, creaGrillettoUnico, creaRipetitore, creaSalto,
+  frazioneTimer, micciaSuccessiva, miraAttiva, PASSO_MIRA, usaMiccia,
 } from './logica';
 import { apriPausa, banner, cambiaVelocitaIa, grigliaAperta, invia, velocitaIa } from './stato';
 import { EMBLEMA, ICONA_ARMA } from './segnaposto';
-import { comandiClassici, mancini } from '../preferenze';
-import { JoystickMira, JoystickMovimento, modoArrampicata, TastoFuoco } from './Joystick';
+import { comandiClassici, mancini, mirinoUsato, segnaMirinoUsato } from '../preferenze';
 import { suona } from '../../piattaforma/audio';
 import { GrigliaArmi } from './GrigliaArmi';
 
@@ -118,10 +120,113 @@ function ChipMiccia({ v, attivo }: { v: VistaBattaglia; attivo: boolean }) {
   );
 }
 
+const ICONE = {
+  sinistra: 'M15 5 7 12l8 7z',
+  destra: 'M9 5l8 7-8 7z',
+  su: 'M5 15l7-8 7 8z',
+  giu: 'M5 9l7 8 7-8z',
+};
+function Icona({ d }: { d: string }) {
+  return <svg class="icona" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d={d} fill="currentColor" /></svg>;
+}
+/** salto: un arco con la punta, come la parabola del salto */
+function IconaSalto() {
+  return (
+    <svg class="icona" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 19C5 9 12 5 19 10" /><path d="M19 4v6h-6" />
+    </svg>
+  );
+}
+
+/**
+ * Movimento (comandi v3): ◀ ▶ piccole e trasparenti, salto sopra; vicino a una scala o liana compaiono sali e
+ * scendi. `accesa` = la sim accetta il movimento (azione e fuga); spente restano a schermo e ricordano il dito.
+ */
+function PadMovimento({ v, accesa }: { v: VistaBattaglia; accesa: boolean }) {
+  const frecce = useMemo(() => creaFrecce(invia, () => bus.battaglia.peek()?.arrampicata === 'appeso'), []);
+  const salto = useMemo(() => creaSalto(
+    () => invia({ t: 'salta', indietro: false }),
+    () => { tocco(); invia({ t: 'salta', indietro: true }); },
+  ), []);
+  const sale = useRef<-1 | 0 | 1>(0);
+  const acc = useRef(accesa);
+  acc.current = accesa;
+  const arrampica = (dir: -1 | 0 | 1) => {
+    if (dir === sale.current) return;
+    sale.current = dir;
+    invia({ t: 'arrampica', dir });
+  };
+  useEffect(() => {
+    frecce.attiva(accesa);
+    if (!accesa) { salto.annulla(); arrampica(0); }
+  }, [accesa]);
+  const scala = (v.arrampicata ?? 'libero') !== 'libero';
+  useEffect(() => { if (!scala) arrampica(0); }, [scala]);
+  // se il turno finisce col dito sopra, il pirata si ferma
+  useEffect(() => () => { frecce.attiva(false); salto.annulla(); arrampica(0); }, []);
+  return (
+    <div class={`pad-muovi ${accesa ? '' : 'spento'} ${scala ? 'con-scala' : ''}`} data-testid="pad-muovi">
+      <Tasto id="tasto-sinistra" label={T.battaglia.sinistra} cls="mini" giu={() => frecce.premi(-1)} su={() => frecce.rilascia(-1)}>
+        <span class="disco"><Icona d={ICONE.sinistra} /></span>
+      </Tasto>
+      <Tasto id="tasto-destra" label={T.battaglia.destra} cls="mini" giu={() => frecce.premi(1)} su={() => frecce.rilascia(1)}>
+        <span class="disco"><Icona d={ICONE.destra} /></span>
+      </Tasto>
+      <Tasto id="tasto-salta" label={T.battaglia.saltaAiutoV3} cls="mini" giu={() => { if (acc.current) salto.premi(); }} su={() => salto.rilascia()}>
+        <span class="disco"><IconaSalto /></span>
+      </Tasto>
+      {scala && (
+        <>
+          <Tasto id="tasto-sali" label={T.battaglia.sali} cls="mini scala" giu={() => { if (acc.current) arrampica(-1); }} su={() => arrampica(0)}>
+            <span class="disco"><Icona d={ICONE.su} /></span>
+          </Tasto>
+          <Tasto id="tasto-scendi" label={T.battaglia.scendi} cls="mini scala" giu={() => { if (acc.current) arrampica(1); }} su={() => arrampica(0)}>
+            <span class="disco"><Icona d={ICONE.giu} /></span>
+          </Tasto>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * FUOCO (comandi v3): spara al rilascio del dito dentro il tasto (scivolando fuori si annulla) e una volta sola
+ * per turno. Con la tastiera (Invio o Spazio) spara subito.
+ */
+function TastoFuoco({ turno }: { turno: number }) {
+  const [premuto, setPremuto] = useState(false);
+  const g = useMemo(() => creaGrilletto(() => invia({ t: 'fuoco' })), []);
+  const dentro = (e: PointerEvent): boolean => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)) <= r.width / 2 + 10;
+  };
+  return (
+    <button type="button" id="tasto-fuoco" data-testid="tasto-fuoco" class={`tasto fuoco testo ${premuto ? 'premuto' : ''}`}
+      aria-label={T.battaglia.fuoco}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* puntatore sintetico */ }
+        g.premi();
+        setPremuto(true);
+        tocco();
+      }}
+      onPointerMove={(e) => { if (g.premuto) setPremuto(dentro(e)); }}
+      onPointerUp={(e) => {
+        if (g.rilascia(dentro(e), turno)) suona('tocco');
+        setPremuto(false);
+      }}
+      onPointerCancel={() => { g.annulla(); setPremuto(false); }} onLostPointerCapture={() => setPremuto(false)}
+      onClick={(e) => { if (e.detail === 0) { g.premi(); g.rilascia(true, turno); } }}
+      onContextMenu={(e) => e.preventDefault()}>
+      {T.battaglia.fuoco}
+    </button>
+  );
+}
+
 export function Hud({ v }: { v: VistaBattaglia }) {
   const cfg = bus.richiestaBattaglia.value;
   const vedi = comandiVisibili(v);
-  // turno del giocatore, in qualunque fase: la leva di movimento resta a schermo
+  // turno del giocatore, in qualunque fase: le frecce restano a schermo
   const mioTurno = v.tocca === 'umano' && !v.esito && v.fase !== 'fine';
   const mira = miraAttiva(v);
 
@@ -137,6 +242,9 @@ export function Hud({ v }: { v: VistaBattaglia }) {
     if (!mira) { t.su.rilascia(); t.giu.rilascia(); }
     if (!vedi) t.salta.annulla();
   }, [mira, vedi, t]);
+
+  // il suggerimento "trascina il mirino" sparisce per sempre alla prima mira
+  useEffect(() => bus.comandi.ascolta((c) => { if (c.t === 'mira' && !mirinoUsato.value) void segnaMirinoUsato(); }), []);
 
   const fermaCammino = () => invia({ t: 'muovi', dir: 0 });
   const conMiccia = usaMiccia(v.arma);
@@ -173,18 +281,20 @@ export function Hud({ v }: { v: VistaBattaglia }) {
         <div class="medita" data-testid="medita" role="status">{T.battaglia.medita}</div>
       )}
 
-      {vedi && <div class={`mira-info ${comandiClassici.value ? '' : 'doppio'}`} data-testid="mira">{T.battaglia.mira(alzo(v.miraGradi), Math.round(v.potenza))}</div>}
+      {vedi && <div class={`mira-info ${comandiClassici.value ? '' : 'v3'}`} data-testid="mira">{T.battaglia.mira(alzo(v.miraGradi), Math.round(v.potenza))}</div>}
 
       {mioTurno && !comandiClassici.value && (
         <>
-          <JoystickMovimento accesa={vedi} modo={modoArrampicata(v)} />
+          <PadMovimento v={v} accesa={vedi} />
           {mira && (
-            <>
-              <JoystickMira v={v} />
-              <div class="fuoco-doppio"><TastoFuoco turno={v.numeroTurno} /></div>
-              <div class="sopra-mira">{conMiccia && <ChipMiccia v={v} attivo={mira} />}</div>
-              <div class="arma-doppio"><TastoArma v={v} attivo={mira} /></div>
-            </>
+            <div class="pad-tiro" data-testid="pad-tiro">
+              {conMiccia && <ChipMiccia v={v} attivo={mira} />}
+              <TastoArma v={v} attivo={mira} />
+              <TastoFuoco turno={v.numeroTurno} />
+            </div>
+          )}
+          {mira && !mirinoUsato.value && v.arma !== 'sciabola' && !grigliaAperta.value && (
+            <div class="suggerimento-mirino" data-testid="suggerimento-mirino" role="status">{T.battaglia.suggerimentoMirino}</div>
           )}
         </>
       )}

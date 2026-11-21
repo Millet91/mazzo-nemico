@@ -1,9 +1,9 @@
-// QA M1 · regole del doppio joystick (design/comandi/doppio-joystick.md, "Zone di tocco"), sulla battaglia vera
-// con tocchi veri (CDP). Si aggiunge a qa-caso22.spec.ts (due pollici insieme):
-// - un trascinamento che parte sulla corona di mira non spara mai, e al rilascio la mira resta;
+// QA M1 · regole dei comandi v3 (21/11: niente joystick, mirino oro da trascinare attaccato al pirata), sulla
+// battaglia vera con tocchi veri (CDP). Si aggiunge a qa-caso22.spec.ts (due pollici insieme):
+// - trascinare il mirino non spara mai, e al rilascio la mira resta;
 // - un tocco su FUOCO non muove la mira; doppio tocco su FUOCO = un solo sparo;
-// - il pinch fuori dai joystick arriva al canvas (zoom) e non produce comandi.
-// Proprietario: Lead test/QA.
+// - il pinch lontano dal mirino arriva al canvas (zoom) e non produce comandi.
+// Proprietario: Lead test/QA (adattato dall'agente Comandi al passaggio dal doppio joystick al mirino).
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 
 test.use({ viewport: { width: 800, height: 360 }, hasTouch: true, isMobile: true });
@@ -36,16 +36,24 @@ async function prepara(page: Page, context: BrowserContext) {
   const comandi = () => page.evaluate(() => (window as any).__comandi as { t: string }[]);
   const fase = () => page.evaluate(() => (window as any).__kaboom.bus.battaglia.value.fase as string);
   const testoMira = () => page.getByTestId('mira').innerText();
-  return { mira: await centro('joystick-mira'), fuoco: await centro('tasto-fuoco'), tocca, comandi, fase, testoMira };
+  await page.waitForTimeout(600); // la camera finisce di inquadrare il pirata
+  const mira = (await page.evaluate(() => (window as any).__kaboom.mirino())) as { x: number; y: number };
+  return { mira, fuoco: await centro('tasto-fuoco'), tocca, comandi, fase, testoMira };
 }
 
-test('la corona di mira non spara mai e al rilascio la mira resta', async ({ page, context }) => {
+async function prepara2(page: Page) {
+  const b = (await page.getByTestId('tasto-fuoco').boundingBox())!;
+  return { fuoco: { x: b.x + b.width / 2, y: b.y + b.height / 2 } };
+}
+
+test('trascinare il mirino non spara mai e al rilascio la mira resta', async ({ page, context }) => {
   const { mira, tocca, comandi, fase, testoMira } = await prepara(page, context);
   const prima = await testoMira();
-  await tocca('touchStart', [{ x: mira.x - 55, y: mira.y, id: 1 }]);
-  for (let i = 1; i <= 6; i++) await tocca('touchMove', [{ x: mira.x - 55, y: mira.y - 8 * i, id: 1 }]);
-  // il dito finisce proprio sopra FUOCO: il trascinamento è nato sulla corona, quindi non deve sparare
-  await tocca('touchMove', [{ x: mira.x, y: mira.y, id: 1 }]);
+  const { fuoco } = await prepara2(page);
+  await tocca('touchStart', [{ x: mira.x - 10, y: mira.y, id: 1 }]);
+  for (let i = 1; i <= 6; i++) await tocca('touchMove', [{ x: mira.x - 10, y: mira.y - 8 * i, id: 1 }]);
+  // il dito finisce proprio sopra FUOCO: il trascinamento è nato sul mirino, quindi non deve sparare
+  await tocca('touchMove', [{ x: fuoco.x, y: fuoco.y, id: 1 }]);
   await tocca('touchEnd', []);
   await page.waitForTimeout(300);
   const c = await comandi();
@@ -55,7 +63,7 @@ test('la corona di mira non spara mai e al rilascio la mira resta', async ({ pag
   const dopo = await testoMira();
   expect(dopo).not.toBe(prima);
   await page.waitForTimeout(300);
-  expect(await testoMira()).toBe(dopo); // il pomello resta dov'è
+  expect(await testoMira()).toBe(dopo); // il mirino resta dov'è
 });
 
 test('FUOCO non muove la mira e il doppio tocco spara una volta sola', async ({ page, context }) => {
@@ -72,10 +80,11 @@ test('FUOCO non muove la mira e il doppio tocco spara una volta sola', async ({ 
   await expect.poll(fase).not.toBe('azione');
 });
 
-test('il pinch fuori dai joystick arriva al canvas e non comanda il pirata', async ({ page, context }) => {
+test('il pinch lontano dal mirino arriva al canvas e non comanda il pirata', async ({ page, context }) => {
   const { tocca, comandi, fase } = await prepara(page, context);
-  await tocca('touchStart', [{ x: 360, y: 150, id: 1 }, { x: 440, y: 150, id: 2 }]);
-  for (let i = 1; i <= 5; i++) await tocca('touchMove', [{ x: 360 - 15 * i, y: 150, id: 1 }, { x: 440 + 15 * i, y: 150, id: 2 }]);
+  // due dita in basso al centro, lontano dal mirino (che sta sopra il pirata) e dai tasti
+  await tocca('touchStart', [{ x: 360, y: 300, id: 1 }, { x: 440, y: 300, id: 2 }]);
+  for (let i = 1; i <= 5; i++) await tocca('touchMove', [{ x: 360 - 15 * i, y: 300, id: 1 }, { x: 440 + 15 * i, y: 300, id: 2 }]);
   await tocca('touchEnd', []);
   expect(await page.evaluate(() => (window as any).__dita)).toEqual(['CANVAS', 'CANVAS']);
   expect(await comandi()).toEqual([]);

@@ -1,29 +1,29 @@
 // Inquadratura automatica della mira (scelta del proprietario 21/11: "mentre miri la visuale si allarga da sola").
 // Parte PURA, testata in Node. Dati il pirata che tira e il punto dove cade il colpo, trova lo zoom più alto
 // (mai oltre quello scelto dal giocatore) e lo spostamento più piccolo della camera con cui si vedono tutti e
-// due, senza finire sotto la barra in alto o sotto le due leve negli angoli in basso.
+// due, senza finire sotto la barra in alto o sotto i tasti negli angoli in basso.
 //
-// La parte libera dello schermo ha la forma di una T: la fascia larga sopra le leve e la colonna in mezzo
-// alle leve. Ogni punto deve stare in una delle due.
+// La parte libera dello schermo ha la forma di una T: la fascia larga sopra i tasti e la colonna in mezzo
+// ai tasti. Ogni punto deve stare in una delle due.
 
 export interface Punto { x: number; y: number }
 export interface Rett { x0: number; x1: number; y0: number; y1: number }
 
-/** margini in px CSS: bordi, barra in alto, riquadri delle leve negli angoli in basso */
+/** margini in px CSS: bordi, barra in alto, riquadri dei tasti negli angoli in basso (comandi v3) */
 export const INQUADRA = {
   lato: 56,
   alto: 96,
   basso: 48,
-  /** riquadro di ogni leva (la leva di mira aperta è 150 px, più FUOCO e la miccia) */
-  levaLarga: 246,
-  levaAlta: 196,
+  /** riquadro dei tasti in ogni angolo: frecce e salto da una parte, FUOCO, ARMA e "45° · 60%" dall'altra */
+  levaLarga: 212,
+  levaAlta: 170,
   /** la visuale si riallarga subito, ma si restringe solo se c'è almeno il 12% da guadagnare (niente "respiro") */
   bandaZoom: 1.12,
   /** tempo di assestamento della camera che inquadra, in ms */
   tau: 180,
 } as const;
 
-/** Le due zone libere dello schermo w×h (px CSS): fascia sopra le leve e colonna in mezzo. */
+/** Le due zone libere dello schermo w×h (px CSS): fascia sopra i tasti e colonna in mezzo. */
 export function zoneLibere(w: number, h: number): [Rett, Rett] {
   const I = INQUADRA;
   const fascia: Rett = { x0: I.lato, x1: w - I.lato, y0: I.alto, y1: Math.max(I.alto + 40, h - I.levaAlta) };

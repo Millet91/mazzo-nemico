@@ -5,7 +5,9 @@
 // - bus.comandi → Partita (timbrati col tick); bus.azioni → pausa, riprendi, esci, ricentra, velocità;
 // - a ogni frame: tick a passo fisso, eventi alla scena, VistaBattaglia e eventiBattaglia sul bus.
 //
-// Camera (agente Comandi, docs/tecnica/comandi-v2.md): segue il pirata di turno; mentre il giocatore mira si
+// Mirino (comandi v3, docs/tecnica/comandi-v3.md): il regista dice all'input dov'è il mirino sullo schermo e
+// trasforma il trascinamento in comandi `mira` sul bus.
+// Camera (agente Comandi): segue il pirata di turno; mentre il giocatore mira si
 // allarga da sola quanto basta per mostrare pirata e punto d'impatto (bus.zoomAutomaticoMira); pinch e
 // trascinamento sono sempre del giocatore e lo zoom scelto col pinch è quello a cui la visuale torna.
 import { effect } from '@preact/signals-core';
@@ -15,6 +17,8 @@ import type { Comando, ConfigBattaglia, EventoBattaglia } from '../../core/tipi'
 import { BIL } from '../../contenuti/bilanciamento';
 import { Camera, CIELO_EXTRA, SCOSSA_MAX_PX } from '../render/camera';
 import { inquadra, INQUADRA, zoomPigro } from '../render/inquadra';
+import { creaTrascinaMirino, mirinoDaMira } from '../render/mirino';
+import { tocco } from '../../piattaforma/haptics';
 import { InputBattaglia } from '../render/input';
 import { ScenaBattaglia } from '../render/scena-battaglia';
 import { Partita } from './partita';
@@ -67,6 +71,9 @@ export class Regista {
   private zoomMira: number = BIL.camera.zoomPredefinito;
   private obiettivoMira: { x: number; y: number; zoom: number; impatto: boolean } | null = null;
   private miraFerma = false;
+  /** trascinamento del mirino: manda `mira` sul bus come ogni altro comando del giocatore */
+  private readonly trascina = creaTrascinaMirino((c) => bus.comandi.invia(c));
+  private mirinoPreso = false;
   private eraInPausa = false;
   private prova: Prova | null = null;
   /** ms di fermo immagine rimasti */
@@ -75,6 +82,9 @@ export class Regista {
 
   constructor(private readonly app: Application, private readonly sfondo?: { radice: { visible: boolean } }) {
     attivo = this;
+    // gancio di prova (?prova): i test e2e chiedono dov'è il mirino per trascinarlo con tocchi veri
+    const prova = (globalThis as { __kaboom?: { mirino?: () => unknown } }).__kaboom;
+    if (prova) prova.mirino = () => this.mirino();
     this.camera.impostaSchermo(app.screen.width, app.screen.height);
     app.renderer.on('resize', (w: number, h: number) => this.camera.impostaSchermo(w, h));
     this.stacca.push(effect(() => {
@@ -111,6 +121,16 @@ export class Regista {
         this.zoomTorna = false;
         if (tipo === 'zoom') this.zoomGiocatore = this.camera.zoom;
       },
+      mirino: () => this.mirino(),
+      miraInizia: () => {
+        const s = this.partita?.s;
+        if (!s) return;
+        this.mirinoPreso = true;
+        this.trascina.inizia(mirinoDaMira(s.turno.mira.mezziGradi / 2, s.turno.mira.potenza));
+        tocco();
+      },
+      miraSposta: (dx, dy, dt) => { if (this.mirinoPreso && this.mirino()) this.trascina.sposta(dx, dy, dt); },
+      miraFine: () => { this.mirinoPreso = false; },
     });
     bus.battagliaInPausa.value = false;
     bus.eventiBattaglia.value = [];
@@ -145,6 +165,21 @@ export class Regista {
       case 'ricentra': this.ricentra(); break;
       case 'velocita': if (this.partita) this.partita.velocita = a.fattore; break;
     }
+  }
+
+  /**
+   * Centro del mirino sullo schermo (px CSS), o null se adesso non si può mirare: serve il turno del giocatore
+   * in fase d'azione e un'arma che si punta (la sciabola colpisce davanti al pirata).
+   */
+  mirino(): { x: number; y: number } | null {
+    const pa = this.partita;
+    if (!pa || pa.toccaIa || pa.s.esito || pa.s.turno.fase !== 'azione' || pa.s.turno.arma === 'sciabola') return null;
+    const s = pa.s;
+    const p = s.pirati.find((x) => x.id === s.turno.pirata && x.stato === 'vivo');
+    if (!p) return null;
+    const c = this.camera.schermoDaMondo(p.x, p.y);
+    const m = mirinoDaMira(s.turno.mira.mezziGradi / 2, s.turno.mira.potenza);
+    return { x: c.x + m.x, y: c.y + m.y };
   }
 
   /** Doppio tocco, tasto "torna sul pirata" o il pirata che si muove: la camera torna su di lui, col suo zoom. */
@@ -248,7 +283,7 @@ export class Regista {
 
   private opzioniDisegno() {
     const pa = this.partita!;
-    return { mira: !pa.toccaIa && pa.s.turno.fase === 'azione' && !pa.s.esito };
+    return { mira: !pa.toccaIa && pa.s.turno.fase === 'azione' && !pa.s.esito, mirinoPreso: this.mirinoPreso };
   }
 
   /**

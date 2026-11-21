@@ -1,4 +1,4 @@
-// Input della camera sul canvas (agente Comandi): trascinamento con inerzia, pinch, doppio tocco.
+// Input sul canvas (agente Comandi): mirino da trascinare; camera con trascinamento a inerzia, pinch, doppio tocco.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Camera, INERZIA_TAU_MS } from '../../src/battaglia/render/camera';
 import { InputBattaglia } from '../../src/battaglia/render/input';
@@ -17,13 +17,18 @@ function scena() {
   } as unknown as HTMLElement;
   let t = 0;
   const chiamate: string[] = [];
+  const stato: { mirino: { x: number; y: number } | null; mira: [number, number, number][] } = { mirino: null, mira: [] };
   const input = new InputBattaglia(el, {
     camera,
     ricentra: () => chiamate.push('ricentra'),
     cameraManuale: (tipo) => chiamate.push(tipo),
+    mirino: () => stato.mirino,
+    miraInizia: () => chiamate.push('miraInizia'),
+    miraSposta: (dx, dy, dt) => stato.mira.push([dx, dy, dt]),
+    miraFine: () => chiamate.push('miraFine'),
   }, () => t);
   const ev = (id: number, x: number, y: number): PointerEvent => ({ pointerId: id, clientX: x, clientY: y } as Ev as PointerEvent);
-  return { camera, input, chiamate, ev, avanti: (ms: number) => { t += ms; } };
+  return { camera, input, chiamate, stato, ev, avanti: (ms: number) => { t += ms; } };
 }
 
 describe('camera sul canvas', () => {
@@ -99,5 +104,56 @@ describe('camera sul canvas', () => {
     const x0 = camera.x;
     input.giu(ev(3, 10, 200)); avanti(16); input.muovi(ev(3, 200, 200)); input.su(ev(3, 200, 200));
     expect(camera.x).toBe(x0);
+  });
+
+  it('un dito che parte sul mirino mira e non sposta la camera; al rilascio non spara e non ricentra', () => {
+    const { camera, input, chiamate, stato, ev, avanti } = scena();
+    stato.mirino = { x: 520, y: 150 };
+    const x0 = camera.x;
+    input.giu(ev(1, 530, 160)); // entro 44 px dal mirino
+    expect(input.mirando).toBe(true);
+    avanti(16); input.muovi(ev(1, 560, 130));
+    avanti(16); input.muovi(ev(1, 570, 120));
+    input.su(ev(1, 570, 120));
+    expect(stato.mira).toEqual([[30, -30, 16], [10, -10, 16]]);
+    expect(chiamate).toEqual(['miraInizia', 'miraFine']);
+    expect(camera.x).toBe(x0);
+    expect(input.mirando).toBe(false);
+  });
+
+  it('un dito che parte lontano dal mirino è della camera, anche se poi ci passa sopra', () => {
+    const { camera, input, chiamate, stato, ev, avanti } = scena();
+    stato.mirino = { x: 520, y: 150 };
+    const x0 = camera.x;
+    input.giu(ev(1, 300, 150));
+    avanti(16); input.muovi(ev(1, 520, 150));
+    expect(stato.mira).toEqual([]);
+    expect(chiamate).toContain('sposta');
+    expect(camera.x).not.toBe(x0);
+  });
+
+  it('mentre un dito tiene il mirino, l\'altro può spostare la visuale: i due non si disturbano', () => {
+    const { camera, input, chiamate, stato, ev, avanti } = scena();
+    stato.mirino = { x: 520, y: 150 };
+    input.giu(ev(1, 520, 150));
+    const x0 = camera.x, z0 = camera.zoom;
+    input.giu(ev(2, 200, 250));
+    avanti(16); input.muovi(ev(2, 150, 250));
+    expect(camera.x).toBeGreaterThan(x0);
+    expect(camera.zoom).toBe(z0); // non è un pinch: il dito del mirino non conta
+    avanti(16); input.muovi(ev(1, 540, 150));
+    expect(stato.mira).toEqual([[20, 0, 32]]);
+    input.su(ev(2, 150, 250)); input.su(ev(1, 540, 150));
+    expect(chiamate.at(-1)).toBe('miraFine');
+  });
+
+  it('senza mirino (turno dell\'IA, volo) lo stesso tocco sposta la camera', () => {
+    const { camera, input, stato, ev, avanti } = scena();
+    stato.mirino = null;
+    const x0 = camera.x;
+    input.giu(ev(1, 520, 150));
+    avanti(16); input.muovi(ev(1, 480, 150));
+    expect(input.mirando).toBe(false);
+    expect(camera.x).toBeGreaterThan(x0);
   });
 });

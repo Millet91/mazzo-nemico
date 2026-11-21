@@ -261,75 +261,53 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 .tasto.arma .icona-arma { font-size: 36px; filter: drop-shadow(0 2px 2px #0008); }
 .tasto.veloce.acceso { background: var(--oro); color: var(--inchiostro); text-shadow: none; border-color: var(--oro-ombra); }
 
-/* doppio joystick fisso (scelta del proprietario 21/11, design/comandi/doppio-joystick.md), rifatto dall'agente
-   Comandi: a riposo piccoli (movimento 72, mira 80) e si allargano a 120 e 150 quando li tocchi; FUOCO staccato.
-   .zona-comando è il centro (0×0): con l'area sicura predefinita (bordo 56, basso 16) il movimento ha il centro
-   a 100 dal bordo e 92 dal basso, la mira a 110 dal bordo e 100 dal basso. Il cerchio di tocco è la base + 16 px. */
-.zona-comando { position: absolute; width: 0; height: 0; }
-.zona-movimento { left: calc(var(--bordo-corto) + 44px); bottom: calc(var(--sicura-b) + 76px); }
-.zona-mira { right: calc(var(--bordo-corto) + 54px); bottom: calc(var(--sicura-b) + 84px); }
-.hud.mancini .zona-movimento { left: auto; right: calc(var(--bordo-corto) + 44px); }
-.hud.mancini .zona-mira { right: auto; left: calc(var(--bordo-corto) + 54px); }
-.cerchio-tocco {
-  position: absolute; left: 50%; top: 50%; border-radius: 50%; pointer-events: auto; touch-action: none;
-  width: var(--tocco); height: var(--tocco); transform: translate(-50%, -50%);
+/* comandi v3 (21/11: il proprietario ha bocciato i joystick, coprivano la visuale). Pochi tasti piccoli e
+   trasparenti ai bordi; il mirino si trascina sul canvas. Ogni tasto tiene 64 px di area di tocco, ma il disco
+   che si vede è di 46 px e lascia vedere la mappa sotto.
+   Sinistra: ◀ ▶ in basso, salto sopra in mezzo; sali e scendi a destra delle frecce solo vicino a una scala.
+   Destra: FUOCO in basso, ARMA sopra, miccia a sinistra di ARMA, "45° · 60%" a sinistra di FUOCO. */
+.pad-muovi { position: absolute; left: var(--bordo-corto); bottom: var(--sicura-b); width: 140px; height: 140px; }
+.pad-muovi .tasto { position: absolute; }
+.pad-muovi #tasto-sinistra { left: 0; bottom: 0; }
+.pad-muovi #tasto-destra { left: 76px; bottom: 0; }
+.pad-muovi #tasto-salta { left: 38px; bottom: 76px; }
+.pad-muovi #tasto-sali { left: 152px; bottom: 76px; }
+.pad-muovi #tasto-scendi { left: 152px; bottom: 0; }
+.tasto.mini { background: transparent; border: 0; }
+.tasto.mini .disco {
+  width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: rgba(255, 255, 255, .9);
+  background: rgba(19, 41, 58, .38); border: 1.5px solid rgba(255, 255, 255, .38);
+  transition: background 80ms linear, border-color 80ms linear;
 }
-.zona-movimento { --tocco: 104px; --scala: .6; }
-.zona-movimento.attivo { --tocco: 152px; }
-.zona-mira { --tocco: 112px; --scala: .5333; }
-.zona-mira.attivo { --tocco: 182px; }
-.zona-comando.attivo { --scala: 1; }
-.base-joystick {
-  position: absolute; left: 50%; top: 50%; border-radius: 50%; pointer-events: none;
-  background: rgba(19, 41, 58, .55); border: 2px solid rgba(255, 255, 255, .25);
-  transform: translate(-50%, -50%) scale(var(--scala)); opacity: .75;
-  transition: transform 120ms ease-out, opacity 120ms ease-out;
+.tasto.mini .icona { filter: drop-shadow(0 1px 2px #000a); }
+.tasto.mini.premuto .disco { background: rgba(19, 41, 58, .8); border-color: #fff; }
+.tasto.mini.scala .disco { color: var(--oro); border-color: rgba(255, 200, 61, .6); }
+/* fasi in cui la sim non accetta il movimento (volo, risoluzione): i tasti restano a schermo, più spenti */
+.pad-muovi.spento .disco { opacity: .45; }
+.hud.mancini .pad-muovi { left: auto; right: var(--bordo-corto); }
+.hud.mancini .pad-muovi #tasto-sali, .hud.mancini .pad-muovi #tasto-scendi { left: auto; right: 152px; }
+
+.pad-tiro { position: absolute; right: var(--bordo-corto); bottom: var(--sicura-b); width: 64px; height: 140px; }
+.pad-tiro .tasto { position: absolute; right: 0; }
+.pad-tiro #tasto-fuoco { bottom: 0; width: 64px; height: 64px; font-size: 14px; opacity: .92; }
+.pad-tiro #tasto-arma { bottom: 76px; }
+.pad-tiro #tasto-arma .cerchio-arma { width: 50px; height: 50px; border-width: 2px; opacity: .92; }
+.pad-tiro #tasto-arma .icona-arma { font-size: 28px; }
+.pad-tiro #chip-miccia { right: 76px; bottom: 84px; background: rgba(19, 41, 58, .6); }
+.tasto.fuoco.premuto { transform: scale(.94); box-shadow: 0 0 0 5px rgba(255, 255, 255, .55); opacity: 1; }
+.mira-info.v3 {
+  right: calc(var(--bordo-corto) + 76px); bottom: calc(var(--sicura-b) + 20px); background: rgba(19, 41, 58, .6);
+  font-size: 13px; padding: 3px 8px;
 }
-.zona-comando.attivo .base-joystick { opacity: 1; }
-/* fasi in cui la sim non accetta il movimento (inquadratura, volo, risoluzione): la leva resta a schermo al 50%
-   e ricorda il pollice, così la fuga parte subito (Lead design 21/11) */
-.zona-movimento.spenta .base-joystick { opacity: .5; }
-.zona-movimento.spenta .pomello { background: rgba(255, 255, 255, .3); border-color: rgba(255, 255, 255, .6); }
-/* a riposo la mira si confondeva con la roccia chiara: bordo più deciso (Lead design, PR #45) */
-.zona-mira:not(.attivo) .base-joystick { border-color: rgba(255, 255, 255, .4); }
-/* vicino o appeso a scala o liana: ▲▼ oro in alto e in basso sulla leva di movimento */
-.freccia-scala { position: absolute; left: 50%; transform: translateX(-50%); font-size: 16px; line-height: 1; color: var(--oro); text-shadow: 0 1px 2px #000a; }
-.freccia-scala.su { top: 6px; }
-.freccia-scala.giu { bottom: 6px; }
-.base-joystick.vicino .freccia-scala { opacity: .75; }
-/* libero: una punta bianca in alto ricorda che spingendo in su si salta */
-.guida-salto { position: absolute; left: 50%; top: 7px; transform: translateX(-50%); font-size: 13px; line-height: 1; color: rgba(255, 255, 255, .55); text-shadow: 0 1px 2px #000a; }
-.base-joystick.movimento { width: 120px; height: 120px; }
-.base-joystick.mira { width: 150px; height: 150px; }
-.base-joystick .pomello {
-  position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%;
-  background: rgba(255, 255, 255, .55); border: 2px solid #fff; box-shadow: 0 2px 6px #0008; will-change: transform;
+.hud.mancini .pad-tiro { right: auto; left: var(--bordo-corto); }
+.hud.mancini .pad-tiro #chip-miccia { right: auto; left: 76px; }
+.hud.mancini .mira-info.v3 { right: auto; left: calc(var(--bordo-corto) + 76px); }
+/* la prima volta: una riga in basso al centro spiega il mirino; sparisce per sempre alla prima mira */
+.suggerimento-mirino {
+  position: absolute; left: 50%; bottom: calc(var(--sicura-b) + 8px); transform: translateX(-50%); white-space: nowrap;
+  padding: 6px 14px; border-radius: 14px; background: rgba(19, 41, 58, .8); border: 1px solid rgba(255, 200, 61, .6);
+  color: var(--oro); font-weight: 900; font-size: 14px; animation: respira 1.6s ease-in-out infinite;
 }
-/* la mira: un anello sottile segna la potenza piena, un punto il centro (potenza zero) */
-.base-joystick.mira::before {
-  content: ''; position: absolute; left: 50%; top: 50%; width: 136px; height: 136px; margin: -68px 0 0 -68px; border-radius: 50%;
-  border: 2px dashed rgba(255, 200, 61, .35);
-}
-.base-joystick.mira::after {
-  content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%;
-  background: rgba(255, 255, 255, .45);
-}
-.pomello-mira {
-  position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; z-index: 1;
-  background: var(--oro); border: 2px solid var(--oro-ombra); box-shadow: 0 2px 6px #0008; will-change: transform;
-}
-/* FUOCO 72 px a sinistra della mira (centro a 236 dal bordo e 56 dal basso), ARMA sopra, miccia sopra ARMA,
-   "45° · 60%" sopra la mira. FUOCO spara al rilascio: premuto si illumina, scivolando fuori torna normale. */
-.fuoco-doppio { position: absolute; right: calc(var(--bordo-corto) + 144px); bottom: calc(var(--sicura-b) + 4px); }
-.fuoco-doppio .tasto.fuoco { width: 72px; height: 72px; font-size: 17px; }
-.tasto.fuoco.premuto { transform: scale(.94); box-shadow: 0 0 0 5px rgba(255, 255, 255, .55); }
-.arma-doppio { position: absolute; right: calc(var(--bordo-corto) + 148px); bottom: calc(var(--sicura-b) + 88px); }
-.sopra-mira { position: absolute; right: calc(var(--bordo-corto) + 180px); bottom: calc(var(--sicura-b) + 164px); transform: translateX(50%); }
-.mira-info.doppio { right: calc(var(--bordo-corto) + 54px); bottom: calc(var(--sicura-b) + 167px); transform: translateX(50%); }
-.hud.mancini .fuoco-doppio { right: auto; left: calc(var(--bordo-corto) + 144px); }
-.hud.mancini .arma-doppio { right: auto; left: calc(var(--bordo-corto) + 148px); }
-.hud.mancini .sopra-mira { right: auto; left: calc(var(--bordo-corto) + 180px); transform: translateX(-50%); }
-.hud.mancini .mira-info.doppio { right: auto; left: calc(var(--bordo-corto) + 54px); transform: translateX(-50%); }
 /* ricentra: 44 px sotto la barra in alto a destra, solo quando il pirata di turno è fuori schermo (Lead design) */
 .tasto-ricentra {
   position: absolute; top: calc(var(--sicura-a) + 56px); right: var(--bordo-corto); width: 44px; height: 44px; padding: 0;

@@ -1,10 +1,14 @@
-// Input sul canvas della battaglia (00 §9.16, doppio joystick): sul canvas resta solo la camera, cioè
-// trascinamento con un dito (con un po' di inerzia al rilascio), pinch per lo zoom 0,5-2,0 e doppio tocco per
-// tornare sul pirata. Mira, movimento e sparo stanno nei controlli DOM dell'HUD, che stanno sopra il canvas e
-// prendono il dito con la pointer capture: un tocco che comincia su una leva o un tasto qui non arriva proprio.
-// Niente trascinamento entro 24 px dai bordi laterali (gesto "indietro" di Android).
+// Input sul canvas della battaglia (comandi v3, docs/tecnica/comandi-v3.md). Sul canvas si fanno due cose:
+// - prendere il MIRINO oro attaccato al pirata e trascinarlo (angolo e potenza del tiro);
+// - tutto il resto è la camera: trascinamento con un dito (con un po' di inerzia), pinch per lo zoom 0,5-2,0,
+//   doppio tocco per tornare sul pirata.
+// Ogni dito appartiene a quello che tocca quando si appoggia e non cambia finché non si alza: un dito che parte
+// sul mirino mira e basta, uno che parte altrove muove la visuale. I tasti dell'HUD sono elementi DOM sopra il
+// canvas: un tocco che comincia lì qui non arriva. Niente trascinamento entro 24 px dai bordi laterali (gesto
+// "indietro" di Android).
 import { BIL } from '../../contenuti/bilanciamento';
 import type { Camera } from './camera';
+import { prendeMirino } from './mirino';
 
 const DOPPIO_TOCCO_MS = 300;
 const TOCCO_MAX_PX = 12;
@@ -22,6 +26,12 @@ export interface GestoriInput {
   ricentra(): void;
   /** il giocatore ha preso la camera: 'sposta' = trascinamento, 'zoom' = pinch o rotella (ha scelto lui lo zoom) */
   cameraManuale(tipo: 'sposta' | 'zoom'): void;
+  /** centro del mirino sullo schermo (px CSS del canvas), o null se adesso non si può mirare */
+  mirino(): { x: number; y: number } | null;
+  /** il dito ha preso il mirino / lo sposta di (dx, dy) px in dtMs / lo lascia */
+  miraInizia(): void;
+  miraSposta(dx: number, dy: number, dtMs: number): void;
+  miraFine(): void;
 }
 
 interface Dito { x: number; y: number; x0: number; y0: number; t0: number; mosso: boolean }
@@ -32,6 +42,8 @@ export class InputBattaglia {
   private pinch = { d0: 1, zoom0: 1, mx: 0, my: 0 };
   private ultimoTocco = { t: -1e9, x: 0, y: 0 };
   private vel = { vx: 0, vy: 0, t: 0 };
+  /** il dito che tiene il mirino (non conta per la camera) */
+  private ditoMira: { id: number; x: number; y: number; t: number } | null = null;
   private readonly via: () => void;
 
   constructor(private readonly el: HTMLElement, private readonly g: GestoriInput, private readonly ora: () => number = () => performance.now()) {
@@ -68,6 +80,11 @@ export class InputBattaglia {
 
   giu(e: PointerEvent): void {
     const p = this.punto(e);
+    if (!this.ditoMira && prendeMirino(p.x, p.y, this.g.mirino())) {
+      this.ditoMira = { id: e.pointerId, x: p.x, y: p.y, t: this.ora() };
+      this.g.miraInizia();
+      return;
+    }
     this.dita.set(e.pointerId, { x: p.x, y: p.y, x0: p.x, y0: p.y, t0: this.ora(), mosso: false });
     if (this.dita.size === 1) {
       // un dito appoggiato ferma la vista che scivola
@@ -84,6 +101,13 @@ export class InputBattaglia {
   }
 
   muovi(e: PointerEvent): void {
+    const m = this.ditoMira;
+    if (m && e.pointerId === m.id) {
+      const p = this.punto(e), ora = this.ora();
+      this.g.miraSposta(p.x - m.x, p.y - m.y, ora - m.t);
+      m.x = p.x; m.y = p.y; m.t = ora;
+      return;
+    }
     const d = this.dita.get(e.pointerId);
     if (!d) return;
     const p = this.punto(e);
@@ -112,6 +136,11 @@ export class InputBattaglia {
   }
 
   su(e: PointerEvent, annullato = false): void {
+    if (this.ditoMira && e.pointerId === this.ditoMira.id) {
+      this.ditoMira = null;
+      this.g.miraFine();
+      return;
+    }
     const d = this.dita.get(e.pointerId);
     if (!d) return;
     this.dita.delete(e.pointerId);
@@ -139,7 +168,11 @@ export class InputBattaglia {
     }
   }
 
+  /** true mentre un dito tiene il mirino */
+  get mirando(): boolean { return this.ditoMira !== null; }
+
   distruggi(): void {
+    if (this.ditoMira) { this.ditoMira = null; this.g.miraFine(); }
     this.via();
   }
 }

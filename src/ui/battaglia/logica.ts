@@ -1,7 +1,7 @@
 // Logica dell'HUD senza Preact né DOM, così si prova con Vitest (tests/ui/).
 // Qui stanno: la configurazione della Schermaglia di M1, le conversioni per i numeri mostrati,
 // i tasti "tenuti premuti" (◀ ▶ ▲ ▼), il doppio tocco di SALTA, la protezione di FUOCO e i banner.
-// La logica del doppio joystick sta in leve.ts.
+// Il mirino da trascinare sta in battaglia/render/mirino.ts; qui i tasti dei comandi v3 (frecce, salto, FUOCO).
 import type { ConfigBattaglia, EventoBattaglia, IdArma } from '../../core/tipi';
 import { VERSIONE_REGOLE } from '../../core/tipi';
 import type { VistaBattaglia } from '../../core/bus';
@@ -154,6 +154,91 @@ export function creaGrillettoUnico(spara: () => void) {
       spara();
       return true;
     },
+  };
+}
+
+/**
+ * FUOCO (comandi v3) spara al RILASCIO del dito dentro il tasto: chi lo tocca per sbaglio può annullare
+ * scivolando fuori. Un solo sparo per turno, anche col doppio tocco o con due dita.
+ */
+export function creaGrilletto(spara: () => void) {
+  let turnoSparato = -1;
+  let premuto = false;
+  return {
+    premi(): void { premuto = true; },
+    /** `dentro`: il dito si è alzato sopra il tasto. Restituisce true se il colpo è partito. */
+    rilascia(dentro: boolean, turno: number): boolean {
+      if (!premuto) return false;
+      premuto = false;
+      if (!dentro || turno === turnoSparato) return false;
+      turnoSparato = turno;
+      spara();
+      return true;
+    },
+    annulla(): void { premuto = false; },
+    get premuto() { return premuto; },
+  };
+}
+
+/** tenendo premuto SALTA per questo tempo parte il salto alto all'indietro */
+export const SALTO_ALTO_MS = 260;
+
+/**
+ * SALTA (comandi v3): un tocco = salto lungo in avanti, e parte quando alzi il dito (niente attesa del doppio
+ * tocco); tenendo premuto parte da solo il salto alto all'indietro. Un salto per pressione.
+ */
+export function creaSalto(avanti: () => void, alto: () => void, t: Tempi = TEMPI_VERI) {
+  let attesa: unknown = null;
+  return {
+    premi(): void {
+      if (attesa !== null) t.annulla(attesa);
+      attesa = t.dopo(SALTO_ALTO_MS, () => { attesa = null; alto(); });
+    },
+    rilascia(): void {
+      if (attesa === null) return;
+      t.annulla(attesa); attesa = null;
+      avanti();
+    },
+    annulla(): void { if (attesa !== null) t.annulla(attesa); attesa = null; },
+  };
+}
+
+/**
+ * Frecce ◀ ▶ (comandi v3): tengono la direzione premuta anche quando la sim non accetta il movimento (volo),
+ * così alla fuga il pirata riparte senza rialzare il dito. Appeso a scala o liana, una freccia = salta via da
+ * quel lato. `attiva(si)`: la sim accetta il movimento (fasi azione e fuga).
+ */
+export function creaFrecce(invia: (c: { t: 'muovi'; dir: -1 | 0 | 1 } | { t: 'salta'; indietro: boolean }) => void, appeso: () => boolean) {
+  let tenuta: -1 | 0 | 1 = 0;
+  let mandata: -1 | 0 | 1 = 0;
+  let accesa = true;
+  const manda = (d: -1 | 0 | 1) => { if (d !== mandata) { mandata = d; invia({ t: 'muovi', dir: d }); } };
+  return {
+    premi(dir: -1 | 1): void {
+      tenuta = dir;
+      if (!accesa) return;
+      if (appeso()) {
+        // dalla scala si salta via dal lato della freccia: il pirata si gira e salta
+        invia({ t: 'muovi', dir }); invia({ t: 'salta', indietro: false }); invia({ t: 'muovi', dir: 0 });
+        mandata = 0;
+        return;
+      }
+      manda(dir);
+    },
+    /** `dir`: la freccia rilasciata (se nel frattempo è stata premuta l'altra, quella resta) */
+    rilascia(dir: -1 | 1): void {
+      if (tenuta !== dir) return;
+      tenuta = 0;
+      if (accesa) manda(0);
+    },
+    attiva(si: boolean): void {
+      if (si === accesa) return;
+      if (!si) manda(0);
+      accesa = si;
+      mandata = 0;
+      if (si && tenuta !== 0 && !appeso()) manda(tenuta);
+    },
+    get tenuta() { return tenuta; },
   };
 }
 

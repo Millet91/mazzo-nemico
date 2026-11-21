@@ -10,6 +10,7 @@ import { BIL } from '../../contenuti/bilanciamento';
 import { traiettoria } from '../sim';
 import type { Camera } from './camera';
 import { frecciaBordo } from './bordo';
+import { MIRINO, mirinoDaMira } from './mirino';
 import { AppigliRender, puoAggrapparsi } from './appigli';
 import { Effetti } from './effetti';
 import { Forme, sprite, type IdForma } from './forme';
@@ -74,8 +75,10 @@ const SCIA_PV_AL_SECONDO = 80;
 const SCIA_PROIETTILE_MS = 2000 / 60;
 
 export interface OpzioniDisegno {
-  /** mostra anello e traiettoria (turno del giocatore umano, fase azione) */
+  /** mostra mirino oro e traiettoria (turno del giocatore umano, fase azione) */
   mira: boolean;
+  /** il giocatore sta tenendo il mirino col dito: si ingrandisce e compare l'anello della potenza piena */
+  mirinoPreso?: boolean;
 }
 
 export class ScenaBattaglia {
@@ -117,6 +120,12 @@ export class ScenaBattaglia {
   private readonly freccia: Sprite;
   /** corta freccia oro sopra il pirata nella direzione di mira (00 §9.16) */
   private readonly frecciaMira = new Graphics();
+  /** comandi v3: asta oro dal pirata al mirino (lunga quanto la potenza), mirino oro da trascinare, anello della potenza piena */
+  private readonly asta = new Graphics();
+  private readonly mirinoOro = new Graphics();
+  private readonly anelloPotenza = new Graphics();
+  /** distanza lungo la traiettoria del primo puntino, in px di schermo (dopo la freccia o dopo il mirino) */
+  private primoPuntino = PRIMO_PUNTINO_PX;
   /** grafica dipinta della mappa fatta a mano (null = mappa generata) */
   private readonly sfondi: SfondiMappa | null = null;
   private tempo = 0;
@@ -196,6 +205,31 @@ export class ScenaBattaglia {
     this.schermo.addChild(this.manoAperta, this.manoChiusa, this.contenitoreTraiettoria, this.freccia, this.effetti.schermo);
     // la freccia di mira sta sotto a nomi e PV: il numero dei PV del pirata che tira si deve leggere sempre
     this.schermo.addChildAt(this.frecciaMira, 0);
+
+    // comandi v3. Asta: disegnata lunga 100 px verso destra, poi allungata con scale.x (lo spessore non cambia)
+    this.asta
+      .moveTo(0, 0).lineTo(100, 0).stroke({ width: 7, color: hex(PALETTE.inchiostro), alpha: 0.45 })
+      .moveTo(0, 0).lineTo(100, 0).stroke({ width: 4, color: hex(PALETTE.oro) });
+    // mirino oro: disco pieno con bordo scuro e una croce, ben diverso dal mirino rosso dell'impatto
+    const R = MIRINO.raggio;
+    this.mirinoOro
+      .circle(0, 0, R + 2).fill({ color: hex(PALETTE.inchiostro), alpha: 0.45 })
+      .circle(0, 0, R).fill(hex(PALETTE.oro)).stroke({ width: 2.5, color: hex(PALETTE.oroOmbra) })
+      .circle(0, 0, R - 6).stroke({ width: 2, color: hex('#2B1B10'), alpha: 0.75 })
+      .moveTo(-R + 3, 0).lineTo(-4, 0).moveTo(4, 0).lineTo(R - 3, 0)
+      .moveTo(0, -R + 3).lineTo(0, -4).moveTo(0, 4).lineTo(0, R - 3).stroke({ width: 2, color: hex('#2B1B10'), alpha: 0.75 })
+      .circle(0, 0, 1.8).fill(hex('#2B1B10'));
+    // anello tratteggiato alla potenza piena, solo mentre si trascina
+    const tratti = 28;
+    for (let i = 0; i < tratti; i++) {
+      const a0 = (i / tratti) * Math.PI * 2, a1 = ((i + 0.55) / tratti) * Math.PI * 2;
+      this.anelloPotenza.moveTo(Math.cos(a0) * MIRINO.rMax, Math.sin(a0) * MIRINO.rMax).arc(0, 0, MIRINO.rMax, a0, a1);
+    }
+    this.anelloPotenza.stroke({ width: 2, color: hex(PALETTE.oro), alpha: 0.5 });
+    this.asta.visible = this.mirinoOro.visible = this.anelloPotenza.visible = false;
+    this.schermo.addChildAt(this.asta, 0);
+    this.schermo.addChildAt(this.anelloPotenza, 0);
+    this.schermo.addChild(this.mirinoOro);
   }
 
   private creaPirata(p: Pirata): void {
@@ -363,8 +397,26 @@ export class ScenaBattaglia {
 
     // freccia di mira: parte dal pirata attivo e punta dove si tira (si vede anche nel turno dell'IA che mira)
     const mostraFreccia = !!attivo && t.fase === 'azione' && !s.esito && t.arma !== 'sciabola';
-    this.frecciaMira.visible = mostraFreccia;
-    if (attivo && mostraFreccia) {
+    // nel turno del giocatore al posto della freccia c'è il mirino da trascinare in cima all'asta
+    const mostraMirino = mostraFreccia && o.mira;
+    this.asta.visible = this.mirinoOro.visible = mostraMirino;
+    this.anelloPotenza.visible = mostraMirino && !!o.mirinoPreso;
+    this.primoPuntino = PRIMO_PUNTINO_PX;
+    if (attivo && mostraMirino) {
+      const c = aSchermo(attivo.x, attivo.y);
+      const m = mirinoDaMira(t.mira.mezziGradi / 2, t.mira.potenza);
+      const r = Math.hypot(m.x, m.y), rot = Math.atan2(m.y, m.x);
+      this.asta.position.set(c.x + Math.cos(rot) * MIRINO.astaDa, c.y + Math.sin(rot) * MIRINO.astaDa);
+      this.asta.rotation = rot;
+      this.asta.scale.x = Math.max(0.01, (r - MIRINO.astaDa - MIRINO.raggio) / 100);
+      this.mirinoOro.position.set(c.x + m.x, c.y + m.y);
+      this.mirinoOro.scale.set(o.mirinoPreso ? 1.2 : 1 + 0.05 * Math.sin(this.tempo / 260));
+      this.anelloPotenza.position.set(c.x, c.y);
+      // i puntini della traiettoria cominciano dopo il mirino
+      this.primoPuntino = r + 6;
+    }
+    this.frecciaMira.visible = mostraFreccia && !mostraMirino;
+    if (attivo && this.frecciaMira.visible) {
       const c = aSchermo(attivo.x, attivo.y);
       this.frecciaMira.position.set(c.x, c.y);
       // mezzi gradi: 0 = destra, 180 = su; sullo schermo la y va in basso
@@ -532,8 +584,8 @@ export class ScenaBattaglia {
     let usati = 0;
     if (punti.length) {
       let prima = aSchermo(punti[0].x, punti[0].y);
-      // i primi px li copre già la freccia di mira: i puntini partono dopo, così non coprono nome e PV
-      let resto = PRIMO_PUNTINO_PX;
+      // i primi px li coprono già la freccia di mira o l'asta col mirino: i puntini partono dopo
+      let resto = this.primoPuntino;
       let totale = 0;
       for (let i = 1; i < punti.length; i++) {
         const q = aSchermo(punti[i].x, punti[i].y);

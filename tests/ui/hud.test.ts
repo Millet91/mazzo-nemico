@@ -1,10 +1,10 @@
 // L1 dell'HUD (agente D): logica dei tasti, griglia 4×4, configurazione della Schermaglia, banner, testi.
-// Il doppio joystick ha i suoi test in tests/ui/leve.test.ts (agente Comandi).
+// Il mirino da trascinare ha i suoi test in tests/render/mirino.test.ts (agente Comandi); qui i tasti dei comandi v3.
 import { describe, it, expect } from 'vitest';
 import {
-  alzo, bannerDaEventi, barraVento, celleGriglia, comandiVisibili, configSchermaglia, creaDoppioTocco,
-  creaGrillettoUnico, creaRipetitore, micciaSuccessiva, miraAttiva, PASSO_MIRA, RIPETI_OGNI_MS,
-  DURATA_BANNER_MS, type Tempi,
+  alzo, bannerDaEventi, barraVento, celleGriglia, comandiVisibili, configSchermaglia, creaDoppioTocco, creaFrecce,
+  creaGrilletto, creaGrillettoUnico, creaRipetitore, creaSalto, micciaSuccessiva, miraAttiva, PASSO_MIRA, RIPETI_OGNI_MS,
+  DURATA_BANNER_MS, SALTO_ALTO_MS, type Tempi,
 } from '../../src/ui/battaglia/logica';
 import { dotazioneIniziale } from '../../src/contenuti/armi';
 import { BIL } from '../../src/contenuti/bilanciamento';
@@ -166,5 +166,115 @@ describe('Banner delle casse', () => {
     expect(bannerDaEventi([{ t: 'cassaCaduta', proiettile: 1, x: 100 }], v)).toEqual(['Cassa in arrivo!']);
     expect(bannerDaEventi([{ t: 'cassaAperta', proiettile: 1, pirata: 0, contenuto: 'rum' }], v)).toEqual(['Rum! +25 PV']);
     expect(bannerDaEventi([{ t: 'cassaAperta', proiettile: 1, pirata: 0, contenuto: 'trappola' }], v)).toEqual(['Trappola!']);
+  });
+});
+
+describe('comandi v3 · FUOCO al rilascio', () => {
+  it('spara al rilascio dentro il tasto, una volta sola per turno', () => {
+    let spari = 0;
+    const g = creaGrilletto(() => spari++);
+    g.premi();
+    expect(spari).toBe(0);
+    expect(g.rilascia(true, 3)).toBe(true);
+    g.premi();
+    expect(g.rilascia(true, 3)).toBe(false); // doppio tocco
+    expect(spari).toBe(1);
+    g.premi();
+    g.rilascia(true, 5);
+    expect(spari).toBe(2);
+  });
+
+  it('scivolando fuori dal tasto lo sparo si annulla e il turno resta buono', () => {
+    let spari = 0;
+    const g = creaGrilletto(() => spari++);
+    g.premi();
+    expect(g.rilascia(false, 3)).toBe(false);
+    expect(spari).toBe(0);
+    g.premi();
+    expect(g.rilascia(true, 3)).toBe(true);
+  });
+
+  it('un rilascio senza pressione non spara', () => {
+    let spari = 0;
+    const g = creaGrilletto(() => spari++);
+    expect(g.rilascia(true, 1)).toBe(false);
+    g.premi(); g.annulla();
+    expect(g.rilascia(true, 1)).toBe(false);
+    expect(spari).toBe(0);
+  });
+});
+
+describe('comandi v3 · SALTA', () => {
+  it('tocco breve = salto lungo in avanti, subito al rilascio', () => {
+    const { t, avanza: avanti } = orologio();
+    const c: string[] = [];
+    const s = creaSalto(() => c.push('avanti'), () => c.push('alto'), t);
+    s.premi(); avanti(90); s.rilascia();
+    expect(c).toEqual(['avanti']);
+    avanti(1000);
+    expect(c).toEqual(['avanti']);
+  });
+
+  it('tenuto premuto = salto alto all\'indietro, una volta sola', () => {
+    const { t, avanza: avanti } = orologio();
+    const c: string[] = [];
+    const s = creaSalto(() => c.push('avanti'), () => c.push('alto'), t);
+    s.premi(); avanti(SALTO_ALTO_MS + 10);
+    expect(c).toEqual(['alto']);
+    s.rilascia();
+    expect(c).toEqual(['alto']);
+  });
+
+  it('annullato (fine del turno col dito sopra) non salta', () => {
+    const { t, avanza: avanti } = orologio();
+    const c: string[] = [];
+    const s = creaSalto(() => c.push('avanti'), () => c.push('alto'), t);
+    s.premi(); s.annulla(); avanti(1000); s.rilascia();
+    expect(c).toEqual([]);
+  });
+});
+
+describe('comandi v3 · frecce', () => {
+  const crea = (appeso = false) => {
+    const c: unknown[] = [];
+    let ap = appeso;
+    const f = creaFrecce((x) => c.push(x), () => ap);
+    return { c, f, appeso: (v: boolean) => { ap = v; } };
+  };
+
+  it('tenuta = cammina, rilasciata = si ferma', () => {
+    const { c, f } = crea();
+    f.premi(1); f.rilascia(1);
+    f.premi(-1); f.rilascia(-1);
+    expect(c).toEqual([{ t: 'muovi', dir: 1 }, { t: 'muovi', dir: 0 }, { t: 'muovi', dir: -1 }, { t: 'muovi', dir: 0 }]);
+  });
+
+  it('due dita: passando da una freccia all\'altra il rilascio della prima non ferma il pirata', () => {
+    const { c, f } = crea();
+    f.premi(1); f.premi(-1); f.rilascia(1);
+    expect(c).toEqual([{ t: 'muovi', dir: 1 }, { t: 'muovi', dir: -1 }]);
+    f.rilascia(-1);
+    expect(c.at(-1)).toEqual({ t: 'muovi', dir: 0 });
+  });
+
+  it('in volo si ferma e tace; alla fuga riparte con la freccia ancora tenuta', () => {
+    const { c, f } = crea();
+    f.premi(1);
+    f.attiva(false);
+    expect(c).toEqual([{ t: 'muovi', dir: 1 }, { t: 'muovi', dir: 0 }]);
+    f.rilascia(1); f.premi(-1); // cambia freccia durante il volo: niente comandi
+    expect(c).toHaveLength(2);
+    f.attiva(true);
+    expect(c.at(-1)).toEqual({ t: 'muovi', dir: -1 });
+    f.rilascia(-1);
+    expect(c.at(-1)).toEqual({ t: 'muovi', dir: 0 });
+  });
+
+  it('appeso a scala o liana: una freccia = salta via da quel lato', () => {
+    const { c, f } = crea(true);
+    f.premi(-1);
+    expect(c).toEqual([{ t: 'muovi', dir: -1 }, { t: 'salta', indietro: false }, { t: 'muovi', dir: 0 }]);
+    f.rilascia(-1);
+    expect(c).toHaveLength(3);
   });
 });

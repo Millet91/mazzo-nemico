@@ -9,8 +9,8 @@ Il proprietario ha chiesto di rifare il giro dello studio: ogni ruolo **prova il
 4. Dopo il piano: realizzazione con **Fable (impegno alto)** per prima mappa + combattimento; **Opus** per mappa del mondo in stile fisico (come Risiko) e intero primo scenario.
 
 ## Dove sta il gioco da provare
-- **Attenzione:** `main` è ancora M0 (schermata vuota). Il gioco giocabile è sul ramo **`claude/m1-integrazione`** (e nell'APK della pre-release `apk-prova`). Per giocarlo: `git checkout claude/m1-integrazione && npm ci && npm run build && npx vite preview`, poi Playwright/Chromium headless (`require('playwright')`), screenshot a 800×360 e 1080×486, tocchi veri.
-- Il vostro lavoro scritto va su **`claude/studio-v2`**, solo nella cartella `docs/progetto/studio-v2/` (nessun cambio al codice). Un file per ruolo: `<ruolo>.md`.
+- **Attenzione:** `main` contiene solo lo scheletro M0 (nessuna battaglia). Il gioco giocabile è sul ramo **`claude/m1-integrazione`** (e nell'APK della pre-release `apk-prova`). Per giocarlo: `git checkout claude/m1-integrazione && npm ci && npm run build && npx vite preview`, poi Playwright/Chromium headless (`require('playwright')`), screenshot a 800×360 e 1080×486, tocchi veri.
+- Il vostro lavoro scritto va su **`claude/studio-v2`** (parte da m1-integrazione), solo nella cartella `docs/progetto/studio-v2/` (nessun cambio al codice). Un file per ruolo: `<ruolo>.md`.
 
 ## Formato del vostro documento (max ~800 parole, italiano semplice)
 1. **Cosa ho provato** (3-5 righe: che build, cosa ho fatto davvero, che screenshot ho guardato).

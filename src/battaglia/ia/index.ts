@@ -5,7 +5,8 @@
 //   stato.rng della battaglia (l'IA non deve cambiare la sim) e MAI Math.random.
 // - `creaIa` restituisce il client usato dal ciclo di gioco (B). Gira in un Web Worker (05 n. 19, 00 §1.5);
 //   dove i Worker non esistono (test su Node) o se il worker si rompe, calcola sul posto con lo stesso risultato.
-//   Lo stato arriva al worker clonato da postMessage (structured clone): l'originale non si tocca.
+//   Lo stato arriva al worker clonato da postMessage (una sola copia completa): l'originale non si tocca.
+//   Se il worker non risponde entro TEMPO_MASSIMO_MS (3 s), si calcola sul posto con lo stesso risultato.
 //
 // Cosa fa il ciclo di gioco con il PianoIa (accordo con B):
 //   `camminata` (assente per il Mozzo) → cammina `tick` tick in `dir`; poi `arma`, `miccia` se c'è,
@@ -44,39 +45,54 @@ export function creaIa(): ClientIa {
   if (!worker) return clientLocale();
 
   let prossimo = 1;
-  const attese = new Map<number, { stato: StatoBattaglia; livello: LivelloIa; ok: (p: PianoIa) => void }>();
+  const attese = new Map<number, { stato: StatoBattaglia; livello: LivelloIa; ok: (p: PianoIa) => void; timer: ReturnType<typeof setTimeout> }>();
+  const risolvi = (id: number, piano?: PianoIa) => {
+    const a = attese.get(id);
+    if (!a) return;
+    attese.delete(id);
+    clearTimeout(a.timer);
+    a.ok(piano ?? decidi(a.stato, a.livello));
+  };
   const ripiega = () => {
     // il worker non risponde più: si calcola sul posto (stesso risultato, solo sul thread principale)
     worker?.terminate();
     worker = null;
-    for (const [id, a] of attese) { attese.delete(id); a.ok(decidi(a.stato, a.livello)); }
+    for (const id of [...attese.keys()]) risolvi(id);
   };
-  worker.onmessage = (e: MessageEvent<RispostaWorker>) => {
-    const a = attese.get(e.data.id);
-    if (!a) return;
-    attese.delete(e.data.id);
-    if ('piano' in e.data) a.ok(e.data.piano);
-    else a.ok(decidi(a.stato, a.livello));
-  };
+  worker.onmessage = (e: MessageEvent<RispostaWorker>) => risolvi(e.data.id, 'piano' in e.data ? e.data.piano : undefined);
   worker.onerror = (e) => { e.preventDefault(); ripiega(); };
 
   return {
     pensa(s, livello) {
       if (!worker) return Promise.resolve(decidi(s, livello));
       const id = prossimo++;
-      // copia per un eventuale ripiego: lo stato della battaglia intanto va avanti
-      const copia = structuredClone(s);
       return new Promise<PianoIa>((ok) => {
-        attese.set(id, { stato: copia, livello, ok });
-        worker!.postMessage({ id, stato: copia, livello } satisfies RichiestaWorker);
+        // una sola copia completa: quella di postMessage. Per il ripiego basta una fotografia senza maschera:
+        // mentre l'IA pensa (fase 'azione', prima dello sparo) la maschera non cambia, quindi si tiene il riferimento.
+        const foto = fotografia(s);
+        const timer = setTimeout(ripiega, TEMPO_MASSIMO_MS);
+        attese.set(id, { stato: foto, livello, ok, timer });
+        worker!.postMessage({ id, stato: s, livello } satisfies RichiestaWorker);
       });
     },
     chiudi() {
       worker?.terminate();
       worker = null;
+      for (const a of attese.values()) clearTimeout(a.timer);
       attese.clear();
     },
   };
+}
+
+/** Dopo questo tempo senza risposta il worker si considera bloccato e si calcola sul posto. */
+export const TEMPO_MASSIMO_MS = 3000;
+
+/** Copia dello stato senza ricopiare la maschera (2 MB): stesso piano di `decidi` sull'originale. */
+export function fotografia(s: StatoBattaglia): StatoBattaglia {
+  const { maschera } = s.terreno;
+  const copia: StatoBattaglia = structuredClone({ ...s, terreno: { ...s.terreno, maschera: new Uint8Array(0) } });
+  copia.terreno.maschera = maschera;
+  return copia;
 }
 
 function clientLocale(): ClientIa {

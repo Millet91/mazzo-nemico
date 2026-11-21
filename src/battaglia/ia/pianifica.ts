@@ -6,7 +6,7 @@
 //    granata su ogni bersaglio con alcuni angoli; la potenza iniziale viene dalla formula della gittata;
 //    poi corregge la potenza guardando dove è caduto il colpo simulato (budget in SIMULAZIONI, non in ms);
 // 3. dà un punteggio a ogni tiro (01 §8 / BIL.ia.punteggio) e sceglie a caso tra i migliori;
-// 4. aggiunge l'errore umano (triangolare, ±erroreGradi / ±errorePotenza) e controlla che il tiro sbagliato
+// 4. aggiunge l'errore umano (uniforme, ±erroreGradi sull'angolo, ±errorePotenza sulla gittata) e controlla che il tiro sbagliato
 //    non diventi un suicidio (simulazioni di riserva);
 // 5. dopo lo sparo fugge lontano dall'impatto o, se nessun tiro valeva la soglia, verso un riparo.
 //
@@ -305,16 +305,18 @@ function correggi(io: Pirata, l: Linea): boolean {
 
 // ─── errore umano, riparo, utilità ──────────────────────────────────────────────────────────────
 
-/** Errore triangolare in (−1, 1): più spesso piccolo, raramente al massimo. */
+/** Errore uniforme in [−1, 1) (01 §8; scelta del Lead design per M1: niente distribuzione triangolare). */
 function errore(rng: { rng: number }): number {
-  return casuale(rng) + casuale(rng) - 1;
+  return casuale(rng) * 2 - 1;
 }
 
 function conErrore(c: PianoColpo, par: ParLivello, rng: { rng: number }): PianoColpo {
   const def = ARMA[c.arma];
   const out = { ...c };
   if (def.usaAngolo) out.mezziGradi = normalizza(c.mezziGradi + Math.round(errore(rng) * par.erroreGradi * 2));
-  if (def.usaPotenza) out.potenza = limita(Math.round(c.potenza * (1 + errore(rng) * par.errorePotenza)), 1, 100);
+  // l'errore di potenza vale sulla GITTATA (decisione del Lead, M1): la gittata va con potenza², quindi
+  // ±15% di gittata = potenza × √(1 ± 0,15), circa ±7,5% di potenza
+  if (def.usaPotenza) out.potenza = limita(Math.round(c.potenza * Math.sqrt(1 + errore(rng) * par.errorePotenza)), 1, 100);
   return out;
 }
 

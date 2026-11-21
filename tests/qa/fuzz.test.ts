@@ -12,9 +12,10 @@ const SEMI = process.env.FUZZ_SEME ? [Number(process.env.FUZZ_SEME)] : Array.fro
 if (SIM_SEGNAPOSTO) console.info('[QA] sim segnaposto: invarianti di fisica e di fine battaglia rimandati all\'arrivo di A');
 
 describe(`QA · fuzz su ${SEMI.length} battaglie`, () => {
-  it('nessun invariante violato', () => {
+  // a blocchi di 100: un solo test lunghissimo fa scadere i messaggi interni di Vitest
+  for (let da = 0; da < SEMI.length; da += 100) it(`nessun invariante violato (battaglie ${da + 1}-${Math.min(da + 100, SEMI.length)})`, () => {
     const rotti: string[] = [];
-    for (const seme of SEMI) {
+    for (const seme of SEMI.slice(da, da + 100)) {
       const cfg = configCaso(seme);
       const p = gioca(cfg, pilotaCasuale(seme));
       if (p.violazioni.length) {
@@ -28,7 +29,7 @@ describe(`QA · fuzz su ${SEMI.length} battaglie`, () => {
       }
     }
     expect(rotti).toEqual([]);
-  }, 600_000);
+  }, 120_000);
 
   it('stesso seme e stessi comandi ⇒ stessi hash (determinismo)', () => {
     for (const seme of SEMI.slice(0, 5)) {

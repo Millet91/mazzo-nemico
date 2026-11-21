@@ -13,12 +13,12 @@ const { larghezza: W, altezza: H, inizioFondale } = BIL.mondo;
 export const SUOLO = 600;
 
 /** Isola piatta da x 200 a 1848 col suolo a y = SUOLO, più muri opzionali (x0, x1, cima). */
-export function mappaPiatta(spawn: [Punto[], Punto[]], muri: [number, number, number][] = []): MappaGenerata {
+export function mappaPiatta(spawn: [Punto[], Punto[]], muri: [number, number, number][] = [], barili: Punto[] = []): MappaGenerata {
   const m = new Uint8Array(W * H); // 0 = aria
   for (let y = SUOLO; y < inizioFondale; y++) m.fill(MATERIALE.terra, y * W + 200, y * W + W - 200);
   m.fill(MATERIALE.ferro, inizioFondale * W);
   for (const [x0, x1, cima] of muri) for (let y = cima; y < SUOLO; y++) m.fill(MATERIALE.roccia, y * W + x0, y * W + x1);
-  return { terreno: { w: W, h: H, maschera: m, mare: BIL.mondo.mareIniziale }, spawn, bioma: 'isola', semeUsato: 1, tentativi: 1, specchiata: false, decorazioni: [] };
+  return { terreno: { w: W, h: H, maschera: m, mare: BIL.mondo.mareIniziale }, spawn, bioma: 'isola', semeUsato: 1, tentativi: 1, specchiata: false, decorazioni: [], barili };
 }
 
 export function config(seme = 7): ConfigBattaglia {
@@ -32,9 +32,9 @@ export function config(seme = 7): ConfigBattaglia {
 }
 
 /** Uno contro uno sulla piatta: l'IA (squadra 1) in `xIa`, il bersaglio (squadra 0) in `xBersaglio`. Tocca all'IA. */
-export function duello(xBersaglio: number, xIa: number, opz: { seme?: number; vento?: number; muri?: [number, number, number][] } = {}): StatoBattaglia {
+export function duello(xBersaglio: number, xIa: number, opz: { seme?: number; vento?: number; muri?: [number, number, number][]; barili?: number[] } = {}): StatoBattaglia {
   const spawn: [Punto[], Punto[]] = [[{ x: xBersaglio, y: SUOLO }], [{ x: xIa, y: SUOLO }]];
-  const s = creaBattaglia(config(opz.seme ?? 7), mappaPiatta(spawn, opz.muri));
+  const s = creaBattaglia(config(opz.seme ?? 7), mappaPiatta(spawn, opz.muri, (opz.barili ?? []).map((x) => ({ x, y: SUOLO }))));
   const ia = s.pirati.find((p) => p.squadra === 1)!;
   s.turno.squadra = 1;
   s.turno.pirata = ia.id;

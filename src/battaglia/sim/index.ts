@@ -68,7 +68,7 @@ export function creaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata): Stato
     turno: {
       numero: 0, squadra: 1, pirata: -1, fase: 'inquadra', inizioFase: 0, timerAvviato: false, tickRimasti: 0,
       arma: 'cannone', mira: miraIniziale(1), miccia: BIL.mira.micciaPredefinita,
-      camminata: 0, sparato: false,
+      camminata: 0, sparato: false, fermoDa: -1,
     },
     esito: null,
   };

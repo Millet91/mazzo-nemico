@@ -199,6 +199,8 @@ export interface StatoTurno {
   camminata: -1 | 0 | 1;
   /** lo sparo di questo turno c'è già stato */
   sparato: boolean;
+  /** in 'risoluzione': tick da cui tutto è fermo (−1 = qualcosa si muove). La sim lo azzera a −1 a ogni cambio di fase */
+  fermoDa: number;
 }
 
 export type MotivoFine = 'eliminazione' | 'tempo' | 'ritirata';

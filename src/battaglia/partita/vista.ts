@@ -3,7 +3,7 @@ import type { VistaBattaglia, VistaSquadra } from '../../core/bus';
 import type { StatoBattaglia } from '../../core/tipi';
 import { inGradi } from '../../core/trig';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
-import { appiglioVicino } from '../sim/appigli';
+import { appiglioSotto, appiglioVicino } from '../sim/appigli';
 
 export function creaVista(s: StatoBattaglia, iaPensa: boolean): VistaBattaglia {
   const t = s.turno;
@@ -12,7 +12,8 @@ export function creaVista(s: StatoBattaglia, iaPensa: boolean): VistaBattaglia {
   const attivo = s.pirati.find((p) => p.id === t.pirata);
   const arrampicata = !attivo || attivo.stato !== 'vivo' ? 'libero'
     : attivo.appeso >= 0 ? 'appeso'
-    : appiglioVicino(s, attivo.x, attivo.y) ? 'vicino' : 'libero';
+    // vicino = può aggrapparsi: lungo l'appiglio, oppure dal piano in cima ("scendi" lo porta sull'asse)
+    : appiglioVicino(s, attivo.x, attivo.y) || appiglioSotto(s, attivo) ? 'vicino' : 'libero';
   const squadra = (i: 0 | 1): VistaSquadra => {
     const pirati = s.pirati.filter((p) => p.squadra === i);
     const vivi = pirati.filter((p) => p.stato === 'vivo');

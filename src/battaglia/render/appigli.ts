@@ -4,6 +4,7 @@
 import { Container, Graphics } from 'pixi.js';
 import type { Appiglio, Pirata, TipoAppiglio } from '../../core/tipi';
 import { BIL } from '../../contenuti/bilanciamento';
+import { sulPianoInCima } from '../sim/appigli';
 
 const MONTANTE = 0x6b4226;
 const PIOLO = 0xc9a26b;
@@ -22,7 +23,9 @@ const GRAVITA_PEZZO = 900; // px/s²
 /** true se il pirata (vivo, non appeso) è abbastanza vicino a un appiglio per aggrapparsi */
 export function puoAggrapparsi(p: Pirata, appigli: readonly Appiglio[], presa: number = BIL.arrampicata.presa): boolean {
   if (p.stato !== 'vivo' || p.appeso >= 0) return false;
-  return appigli.some((a) => Math.abs(p.x - a.x) <= presa && p.y >= a.yAlto - presa && p.y <= a.yBasso + presa);
+  if (appigli.some((a) => Math.abs(p.x - a.x) <= presa && p.y >= a.yAlto - presa && p.y <= a.yBasso + presa)) return true;
+  // in piedi sul piano in cima: "scendi" lo porta sulla scala (stessa regola della sim)
+  return appigli.some((a) => sulPianoInCima(a, p));
 }
 
 /** quote dei pioli di una scala da yAlto a yBasso (il primo a 4 px dalla cima) */

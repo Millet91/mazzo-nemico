@@ -112,6 +112,10 @@ export const BIL = {
     presa: 8,
     /** un pezzo di appiglio più corto di così sparisce */
     pezzoMinimo: 10,
+    /** in cima il pirata passa dalla scala al piano accanto (e dal piano alla scala, con "scendi") fino a questa distanza dall'asse */
+    passaggioCima: 20,
+    /** "scendi" dall'alto: i piedi stanno sul piano in cima, al più tanto sopra o sotto la cima dell'appiglio */
+    piediCima: 12,
   },
 
   /** barili di polvere già piazzati dal generatore (m1-ritmo §9; 06 §2 Porto e §7.4) */

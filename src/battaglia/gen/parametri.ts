@@ -57,6 +57,8 @@ export const REGOLE = {
   appiglioLontanoDaSpawn: 40,
   appiglioPiano: 24,
   appiglioCima: 8,
+  /** mappe fatte a mano: il piano in cima può cominciare fino a tanto dall'asse (asse ad almeno 10 px dal muro, capsula larga 12) */
+  appiglioPianoEntro: 14,
 } as const;
 
 /** Parametri del bioma Isola tropicale (06 §2, 00 §2.2). */

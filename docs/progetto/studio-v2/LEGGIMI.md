@@ -7,6 +7,8 @@ Il proprietario ha chiesto di rifare il giro dello studio: ogni ruolo **prova il
 2. **La mappa va ridisegnata in alta definizione** (Cala Pappagallo).
 3. **I comandi v3 (PR #62, mirino da trascinare, niente joystick) sono meglio di prima**: si tengono, si rifiniscono.
 4. Dopo il piano: realizzazione con **Fable (impegno alto)** per prima mappa + combattimento; **Opus** per mappa del mondo in stile fisico (come Risiko) e intero primo scenario.
+5. **Il combattimento in stile Worms nel 2026 è noioso (secondo messaggio del proprietario).** Worms è vecchio: poco dinamico, molto lento, armi troppo "basiche". Si **tiene** la parte tattica/strategica e il "rompicapo" di capire dove e quando mirare per massimizzare i danni. Si **cambia**: (a) più ritmo (turni e azioni più veloci, meno attese); (b) armi meno banali, con effetti e interazioni; (c) **più elementi ambientali** (cose che reagiscono: barili, strutture, acqua, fuoco, funi, piattaforme, pericoli) e **distruttibilità più interattiva del semplice cratere** (crolli, cedimenti, pezzi che cadono e fanno danno, strutture che si staccano). Ogni ruolo propone cosa cambia nel suo campo.
+6. **Bug: le scale non funzionano, la scalata si ferma a metà.** Chi prova il gioco lo verifica e lo riporta; il Pacchetto 1 deve ripararlo.
 
 ## Dove sta il gioco da provare
 - **Attenzione:** `main` contiene solo lo scheletro M0 (nessuna battaglia). Il gioco giocabile è sul ramo **`claude/m1-integrazione`** (e nell'APK della pre-release `apk-prova`). Per giocarlo: `git checkout claude/m1-integrazione && npm ci && npm run build && npx vite preview`, poi Playwright/Chromium headless (`require('playwright')`), screenshot a 800×360 e 1080×486, tocchi veri.

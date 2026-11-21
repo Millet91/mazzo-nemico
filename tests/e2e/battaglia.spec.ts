@@ -286,10 +286,19 @@ test('joystick: cammina, salta in avanti, salto alto all\'indietro; ARMA rotonda
     expect(zona.x).toBeGreaterThanOrEqual(24);
     expect(zona.x + zona.w).toBeLessThanOrEqual(f.width / 2 + 1);
 
+    // a riposo il fantasma sta fermo in basso a sinistra (~100 px dal bordo, 90 dal basso, 25%)
+    const fantasma = page.getByTestId('joystick-fantasma');
+    await expect(fantasma).toBeVisible();
+    const [g] = await rettangoli(page, '[data-testid="joystick-fantasma"]');
+    expect(Math.abs(g.x + g.w / 2 - 100)).toBeLessThanOrEqual(2);
+    expect(Math.abs(f.height - (g.y + g.h / 2) - 90)).toBeLessThanOrEqual(2);
+    expect(await fantasma.evaluate((e) => getComputedStyle(e).opacity)).toBe('0.25');
+
     const x0 = zona.x + zona.w / 2, y0 = zona.y + zona.h / 2;
     await page.mouse.move(x0, y0);
     await page.mouse.down();
-    await expect(page.locator('.joystick')).toBeVisible();
+    await expect(page.locator('.joystick:not(.fantasma)')).toBeVisible();
+    await expect(fantasma).toHaveCount(0);
     await page.mouse.move(x0 + 40, y0, { steps: 4 });       // destra
     await page.mouse.move(x0 - 40, y0, { steps: 8 });       // sinistra
     await page.mouse.move(x0, y0, { steps: 4 });            // centro: si ferma
@@ -297,7 +306,8 @@ test('joystick: cammina, salta in avanti, salto alto all\'indietro; ARMA rotonda
     await page.mouse.move(x0, y0 - 50, { steps: 4 });       // in alto: salto avanti
     await page.mouse.move(x0, y0, { steps: 4 });
     await page.mouse.up();
-    await expect(page.locator('.joystick')).toHaveCount(0);
+    await expect(page.locator('.joystick:not(.fantasma)')).toHaveCount(0);
+    await expect(fantasma).toBeVisible();
     let c = (await registro(page)).comandi;
     // passando dal centro si ferma un attimo (zona morta)
     expect(c).toEqual([{ t: 'muovi', dir: 1 }, { t: 'muovi', dir: 0 }, { t: 'muovi', dir: -1 }, { t: 'muovi', dir: 0 }, { t: 'salta', indietro: false }]);
@@ -433,6 +443,8 @@ test('Impostazioni: mancini, comandi classici, volume e Diagnostica', async ({ p
   // con i mancini il joystick sta a destra
   const [zona] = await rettangoli(page, '[data-testid="joystick"]');
   expect(zona.x).toBeGreaterThanOrEqual(400 - 1);
+  const [g] = await rettangoli(page, '[data-testid="joystick-fantasma"]');
+  expect(Math.abs(800 - (g.x + g.w / 2) - 100)).toBeLessThanOrEqual(2);
 });
 
 // Piano QA §2 L4: HUD della battaglia vera a seme fisso, al tick 0 e al tick 600 (10 s: il timer parte dopo 2 s,

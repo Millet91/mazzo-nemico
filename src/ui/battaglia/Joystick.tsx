@@ -59,6 +59,12 @@ export function Joystick() {
       }}
       onPointerUp={fine} onPointerCancel={fine}
       onContextMenu={(e) => e.preventDefault()}>
+      {/* a riposo un joystick fantasma fermo fa capire che qui si cammina (design M1, giro di controllo) */}
+      {!pos && (
+        <div class="joystick fantasma" data-testid="joystick-fantasma" aria-hidden="true">
+          <div class="pomello" />
+        </div>
+      )}
       {pos && (
         <div class="joystick" style={{ left: `${pos.cx}px`, top: `${pos.cy}px` }}>
           <div class="pomello" style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }} />

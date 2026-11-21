@@ -151,8 +151,13 @@ export interface StatoCarriera {
   sceneViste: string[];
   /** acquisto "Sblocca tutto" fatto (Play Billing) */
   completo: boolean;
+  /** isole che in questo round hanno già attaccato o sono appena state conquistate: non attaccano più fino al
+   *  round dopo (si svuota a ogni round). Evita la conquista a catena in un round solo. */
+  usate: IdIsola[];
   /** contatori per stelle e telemetria del capitolo in corso */
   piratiPersi: number;
+  /** pirati persi nelle battaglie Bandiera e Duello (★★★ del cap. 1) */
+  perditeSfide: number;
   battaglieGiocate: number;
 }
 

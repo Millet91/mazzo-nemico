@@ -93,6 +93,8 @@ export class WaveSim {
   allyLoss: Record<number, number> = {};
   truccatoTop: DeckCard[] = [];
   all: WC[] = [];
+  /** solo per i test: Coda fissa (id di carta = gettone nuovo, numero = uid del mazzo), senza pescata */
+  fixed: (string | number)[] | null = null;
 
   constructor(run: RunState, spec: WaveSpec, seed: number, asso: Asso | null = null, silent = false) {
     this.run = run;
@@ -400,6 +402,14 @@ export class WaveSim {
     const rng = this.rng;
     // 1. mescola il mazzo intero
     this.pile = rng.shuffle([...run.deck]);
+    if (this.fixed) {
+      this.queue = this.fixed.map((x) => {
+        if (typeof x === 'number') { const dc = run.deck.find((d) => d.uid === x)!; this.pile = this.pile.filter((p) => p !== dc); this.drawn.add(x); return this.mk(dc.def, x); }
+        return this.mk(x, null);
+      });
+      if (spec.boss) this.queue.push(this.mk(spec.boss, null));
+      return;
+    }
     // 2. Trucchi prima della pescata, nell'ordine dei posti
     for (const t of run.def.trucchi) {
       if (t === 'scartine') {

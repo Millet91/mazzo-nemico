@@ -400,7 +400,7 @@ function afterWave(s: RunState, out: WaveOutcome, lumiBefore: number) {
   s.phase = 'summary';
 }
 
-function lealtaTick(s: RunState, drawn: number[], extra: Record<number, number>): string[] {
+export function lealtaTick(s: RunState, drawn: number[], extra: Record<number, number>): string[] {
   const out: string[] = [];
   for (const x of s.deck) {
     if (x.owner !== 'baro') continue;

@@ -120,7 +120,15 @@ export const APPIGLI: { tipo: 'scala' | 'liana'; x: number; yAlto: number; yBass
 /** Etichette per il pittore (canale verde della PNG dei materiali). */
 export const TAG = { foglie: 1, edificio: 2, rovina: 3, ponte: 4 } as const;
 
-export function costruisciMaschera(): { m: Uint8Array; sup: Float64Array; tag: Uint8Array } {
+/**
+ * Variante "prologo" (Lead design, 10 §2 e 16 §3): molo di legno al posto del relitto, gradino di 20 px sulla
+ * Terrazza bassa sinistra tra la partenza e la cassa di Rum. Il resto della forma è uguale.
+ */
+export type Variante = 'base' | 'prologo';
+export const MOLO = { x0: 72, x1: 236, piano: 880, spessore: 10 };
+export const GRADINO = { x0: 338, x1: 424, alto: 20 };
+
+export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array; sup: Float64Array; tag: Uint8Array } {
   const sup = superficieDisegnata();
   const m = new Uint8Array(W * H);
   const tag = new Uint8Array(W * H);
@@ -180,9 +188,9 @@ export function costruisciMaschera(): { m: Uint8Array; sup: Float64Array; tag: U
   for (const g of GROTTE) for (let y = g.y - g.ry; y <= g.y + g.ry; y++) for (let x = g.x - g.rx; x <= g.x + g.rx; x++) {
     if (((x - g.x) / g.rx) ** 2 + ((y - g.y) / g.ry) ** 2 <= 1) m[y * W + x] = MATERIALE.aria;
   }
-  // relitto: scafo di legno inclinato e arenato sulla spiaggia
+  // relitto: scafo di legno inclinato e arenato sulla spiaggia (nel prologo c'è il molo)
   const R = RELITTO;
-  for (let x = R.x0; x <= R.x1; x++) {
+  if (variante === 'base') for (let x = R.x0; x <= R.x1; x++) {
     const t = (x - R.x0) / (R.x1 - R.x0);
     const linea = R.chiglia + (R.ponte - R.chiglia) * t;
     const ponte = Math.round(linea - 46 * Math.sin(Math.PI * (0.15 + 0.7 * t)) - 10);
@@ -219,8 +227,22 @@ export function costruisciMaschera(): { m: Uint8Array; sup: Float64Array; tag: U
     const cx = (t.x0 + t.x1) / 2;
     for (let y = t.piano - 64; y < t.piano - 28; y++) { const l = ((y - (t.piano - 64)) / 36) * 34; for (let x = Math.round(cx - l); x <= cx + l; x++) if (y > t.piano - 60 + Math.abs(x - cx) * 36 / 34 - 4 || y > t.piano - 40) legno(x, y); }
   }
+  if (variante === 'prologo') {
+    // molo: tavolato sopra il mare, pali fino al fondale ogni 32 px, attaccato alla spiaggia
+    for (let x = MOLO.x0; x <= MOLO.x1; x++) {
+      for (let y = MOLO.piano; y < MOLO.piano + MOLO.spessore; y++) if (!m[y * W + x]) legno(x, y);
+      if ((x - MOLO.x0) % 32 < 7) for (let y = MOLO.piano + MOLO.spessore; y < FONDALE; y++) if (!m[y * W + x]) legno(x, y);
+    }
+    // gradino: terra in più sulla Terrazza bassa, con i bordi un po' smussati
+    // gradino: ripiano piano 20 px sopra l'inizio della terrazza, con lo spigolo un po' smussato
+    const cima = Math.round(sup[GRADINO.x0]) - GRADINO.alto;
+    for (let x = GRADINO.x0; x <= GRADINO.x1; x++) {
+      const top = cima + Math.max(0, 3 - (x - GRADINO.x0));
+      for (let y = top; y < Math.round(sup[x]) + 2; y++) if (!m[y * W + x]) metti(x, y, y < top + 8 ? MATERIALE.sabbia : MATERIALE.terra);
+    }
+  }
   // cespugli fitti
-  for (const b of CESPUGLI) for (let y = b.y - b.ry; y <= b.y + b.ry; y++) for (let x = b.x - b.rx; x <= b.x + b.rx; x++) {
+  for (const b of CESPUGLI.filter((c) => variante === 'base' || Math.abs(c.x - 380) > 60)) for (let y = b.y - b.ry; y <= b.y + b.ry; y++) for (let x = b.x - b.rx; x <= b.x + b.rx; x++) {
     const n = Math.sin(x * 0.7) * 0.08 + Math.cos(y * 0.9) * 0.08;
     if (((x - b.x) / b.rx) ** 2 + ((y - b.y) / b.ry) ** 2 <= 1 + n) { metti(x, y, MATERIALE.terra); tag[y * W + x] = TAG.foglie; }
   }

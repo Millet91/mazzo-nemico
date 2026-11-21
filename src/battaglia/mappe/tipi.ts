@@ -16,6 +16,10 @@ export interface DatiMappaFatta {
   /** scale e liane (contratto MappaGenerata.appigli): segmenti verticali in aria, non nella maschera */
   appigli?: { tipo: TipoAppiglio; x: number; yAlto: number; yBasso: number }[];
   decorazioni: Decorazione[];
+  /** mappa da copione (Prologo): spawn fissi, non passa la validazione di equità */
+  copione?: boolean;
+  /** punti con nome per la scena (es. cassa, veliero, cartello del Prologo) */
+  segnaposti?: Record<string, Punto>;
   /** maschera compressa (rle.ts) */
   maschera: string;
 }

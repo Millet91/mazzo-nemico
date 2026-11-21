@@ -4,8 +4,8 @@ import { tocco } from '../../piattaforma/haptics';
 import { COLORI_CIURMA } from '../../core/palette';
 import type { IdCiurma } from '../../core/tipi';
 import { PIRATI_MAX, PIRATI_MIN } from './logica';
-import { avviaSchermaglia, mappaSchermaglia, sceltaSchermaglia } from './stato';
-import { impostaPiratiSchermaglia, piratiSchermaglia } from '../preferenze';
+import { avviaSchermaglia, sceltaSchermaglia } from './stato';
+import { impostaPiratiSchermaglia, mappaSchermaglia, piratiSchermaglia } from '../preferenze';
 import { EMBLEMA } from './segnaposto';
 
 function Contatore({ lato, ciurma, etichetta }: { lato: 0 | 1; ciurma: IdCiurma; etichetta: string }) {

@@ -6,7 +6,7 @@ import { impostaVolume } from '../piattaforma/audio';
 import { PIRATI_PREDEFINITI } from './battaglia/logica';
 
 const CHIAVE = 'hud';
-interface PreferenzeHud { mancini: boolean; comandiClassici: boolean; volume: number; pirati: [number, number] }
+interface PreferenzeHud { mancini: boolean; comandiClassici: boolean; volume: number; pirati: [number, number]; calaVista?: boolean }
 
 /** HUD specchiato per i mancini. */
 export const mancini = signal(false);
@@ -16,6 +16,12 @@ export const comandiClassici = signal(false);
 export const volume = signal(0.8);
 /** pirati per lato nella Schermaglia (giocatore, Marina) */
 export const piratiSchermaglia = signal<[number, number]>([PIRATI_PREDEFINITI, PIRATI_PREDEFINITI]);
+
+/** mappa della Schermaglia: '' = generata dal seme, altrimenti l'id di una mappa fatta a mano (battaglia/mappe).
+ *  Lead design 21/11/2026: la prima Schermaglia è Cala Pappagallo, poi la scelta predefinita torna "Isola a caso". */
+export const mappaSchermaglia = signal<string>('cala-pappagallo');
+/** Cala Pappagallo già giocata almeno una volta su questo telefono */
+let calaVista = false;
 
 /** Avvisato quando cambia la scelta dei comandi. */
 const ascoltatoriClassici = new Set<(v: boolean) => void>();
@@ -31,6 +37,8 @@ export async function caricaPreferenzeHud(): Promise<void> {
     mancini.value = !!p.mancini;
     comandiClassici.value = !!p.comandiClassici;
     if (typeof p.volume === 'number') volume.value = Math.max(0, Math.min(1, p.volume));
+    calaVista = !!p.calaVista;
+    if (calaVista) mappaSchermaglia.value = '';
     if (Array.isArray(p.pirati) && p.pirati.length === 2) piratiSchermaglia.value = [Number(p.pirati[0]) || 3, Number(p.pirati[1]) || 3];
   } catch { /* restano i valori predefiniti */ }
   impostaVolume(volume.value);
@@ -38,7 +46,7 @@ export async function caricaPreferenzeHud(): Promise<void> {
 }
 
 async function salva(): Promise<void> {
-  const p: PreferenzeHud = { mancini: mancini.value, comandiClassici: comandiClassici.value, volume: volume.value, pirati: piratiSchermaglia.value };
+  const p: PreferenzeHud = { mancini: mancini.value, comandiClassici: comandiClassici.value, volume: volume.value, pirati: piratiSchermaglia.value, calaVista };
   try { await Preferences.set({ key: CHIAVE, value: JSON.stringify(p) }); } catch { /* non bloccare */ }
 }
 
@@ -58,5 +66,13 @@ export async function impostaVolumeHud(v: number): Promise<void> {
 
 export async function impostaPiratiSchermaglia(p: [number, number]): Promise<void> {
   piratiSchermaglia.value = p;
+  await salva();
+}
+
+/** Dopo la prima battaglia su Cala Pappagallo la scelta predefinita diventa "Isola a caso" (resta selezionabile). */
+export async function segnaMappaGiocata(id: string): Promise<void> {
+  if (calaVista || id !== 'cala-pappagallo') return;
+  calaVista = true;
+  mappaSchermaglia.value = '';
   await salva();
 }

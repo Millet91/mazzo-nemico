@@ -10,13 +10,11 @@ import type { VistaBattaglia } from '../../core/bus';
 import { bannerDaEventi, configSchermaglia, DURATA_BANNER_MS, semeNuovo, squadraUmana } from './logica';
 import { vibraPerEventi } from './vibrazioni';
 import { suona, type Suono } from '../../piattaforma/audio';
-import { piratiSchermaglia } from '../preferenze';
+import { mappaSchermaglia, piratiSchermaglia, segnaMappaGiocata } from '../preferenze';
 import { puntoSuiComandi } from './zone';
 
 /** schermata di scelta della Schermaglia (1-5 pirati per lato) aperta */
 export const sceltaSchermaglia = signal(false);
-/** mappa della Schermaglia: '' = generata dal seme, altrimenti l'id di una mappa fatta a mano (battaglia/mappe) */
-export const mappaSchermaglia = signal<string>('cala-pappagallo');
 /** ×2 sui turni dell'IA (bus.azioni 'velocita'); B lo rimette a 1 a ogni battaglia nuova */
 export const velocitaIa = signal<1 | 2>(1);
 
@@ -35,11 +33,16 @@ export function invia(c: Comando): void {
   bus.comandi.invia(c);
 }
 
-export function avviaSchermaglia(): void {
+/** mappa dell'ultima Schermaglia: "Rigioca" la ripete */
+let ultimaMappa = '';
+
+export function avviaSchermaglia(mappa: string = mappaSchermaglia.value): void {
   azzeraHud();
   sceltaSchermaglia.value = false;
   velocitaIa.value = 1;
-  bus.richiestaBattaglia.value = configSchermaglia(semeNuovo(), piratiSchermaglia.value, mappaSchermaglia.value || undefined);
+  ultimaMappa = mappa;
+  bus.richiestaBattaglia.value = configSchermaglia(semeNuovo(), piratiSchermaglia.value, mappa || undefined);
+  void segnaMappaGiocata(mappa);
 }
 
 export function cambiaVelocitaIa(): void {
@@ -80,7 +83,7 @@ export function esci(): void {
 
 export function rigioca(): void {
   esci();
-  avviaSchermaglia();
+  avviaSchermaglia(ultimaMappa);
 }
 
 /** Tasto indietro di Android in battaglia: chiude la griglia, apre o chiude la pausa. */

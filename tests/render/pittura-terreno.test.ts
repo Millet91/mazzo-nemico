@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LATO_TILE, dipingiRettangolo, rettangoloCratere, tileToccate, COLORI_MATERIALE } from '../../src/battaglia/render/pittura-terreno';
+import { FONDO_CAVITA_ALFA, LATO_TILE, dipingiRettangolo, rettangoloCratere, tileToccate, COLORI_MATERIALE } from '../../src/battaglia/render/pittura-terreno';
 import { MATERIALE } from '../../src/core/tipi';
 import { PALETTE, hex } from '../../src/core/palette';
 
@@ -43,7 +43,8 @@ describe('Pittura del terreno', () => {
     for (let y = 350; y < 370; y++) for (let x = 100; x < 120; x++) m[y * W + x] = MATERIALE.aria;
     const buf = new Uint8ClampedArray(LATO_TILE * LATO_TILE * 4);
     dipingiRettangolo(m, o, W, H, buf, 0, 256, 0, 256, 256, 512);
-    expect(pixel(buf, 110, 360, 0, 256)[3]).toBe(0);
+    // buco chiuso dentro la terra: fondo scuro, non cielo
+    expect(pixel(buf, 110, 360, 0, 256)[3]).toBe(FONDO_CAVITA_ALFA);
     expect(vicino(pixel(buf, 120, 360, 0, 256), PALETTE.bordoBruciato)).toBe(true);
     expect(vicino(pixel(buf, 130, 360, 0, 256), PALETTE.bordoBruciato)).toBe(false);
   });
@@ -70,5 +71,19 @@ describe('Erba solo all\'aperto', () => {
     const pavimento = pixel(buf, 120, 400, 0, 256);
     expect(vicino(pavimento, PALETTE.erbaLuce) || vicino(pavimento, PALETTE.erba)).toBe(false);
     expect(vicino(pixel(buf, 120, 401, 0, 256), COLORI_MATERIALE[MATERIALE.terra], 30)).toBe(true);
+  });
+  it('dentro una grotta chiusa si vede terra scura, in un cratere aperto il cielo', () => {
+    const o = mondo();
+    const m = o.slice();
+    // grotta chiusa: aria da y 320 a 360, colonne 40-80 (sopra resta terra)
+    for (let y = 320; y < 360; y++) for (let x = 40; x < 80; x++) m[y * W + x] = MATERIALE.aria;
+    // cratere aperto dalla superficie: colonne 150-170 fino a y 300
+    for (let y = 256; y < 300; y++) for (let x = 150; x < 170; x++) m[y * W + x] = MATERIALE.aria;
+    const buf = new Uint8ClampedArray(LATO_TILE * LATO_TILE * 4);
+    dipingiRettangolo(m, o, W, H, buf, 0, 256, 0, 256, 256, 512);
+    const grotta = pixel(buf, 60, 340, 0, 256);
+    expect(grotta[3]).toBe(FONDO_CAVITA_ALFA);
+    expect(vicino(grotta, PALETTE.terraProfonda)).toBe(true);
+    expect(pixel(buf, 160, 280, 0, 256)[3]).toBe(0);
   });
 });

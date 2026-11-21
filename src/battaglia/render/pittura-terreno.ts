@@ -108,6 +108,23 @@ export function superficieOriginale(originale: Uint8Array, w: number, h: number)
   return sup;
 }
 
+/** Per ogni colonna, la quota dell'ultimo pixel solido della maschera INIZIALE (−1 se la colonna è tutta aria). */
+const fondi = new WeakMap<Uint8Array, Int32Array>();
+export function fondoOriginale(originale: Uint8Array, w: number, h: number): Int32Array {
+  let f = fondi.get(originale);
+  if (f) return f;
+  f = new Int32Array(w).fill(-1);
+  for (let x = 0; x < w; x++) {
+    for (let y = h - 1; y >= 0; y--) if (originale[y * w + x] !== MATERIALE.aria) { f[x] = y; break; }
+  }
+  fondi.set(originale, f);
+  return f;
+}
+
+/** fondo delle cavità chiuse (grotte, buchi, crateri coperti): terra profonda al 70% */
+export const FONDO_CAVITA_ALFA = Math.round(255 * 0.7);
+let cimaRiga = new Int32Array(0);
+
 /**
  * Dipinge il rettangolo [x0, x1) × [y0, y1) (coordinate di mondo, dentro la tile) nel buffer RGBA della tile
  * che ha l'angolo in (tx, ty). `originale` è la maschera all'inizio della battaglia.
@@ -123,6 +140,14 @@ export function dipingiRettangolo(
   const rw = x1 - x0;
   const scavi = segnaScavi(maschera, originale, w, h, x0, y0, rw, y1 - y0);
   const sup = superficieOriginale(originale, w, h);
+  const fondo = fondoOriginale(originale, w, h);
+  // per ogni colonna, il primo pixel solido di ADESSO dall'alto: l'aria sotto di lui non vede il cielo
+  if (cimaRiga.length < rw) cimaRiga = new Int32Array(rw);
+  for (let x = x0; x < x1; x++) {
+    let c = h;
+    for (let y = 0; y < y1; y++) if (maschera[y * w + x] !== MATERIALE.aria) { c = y; break; }
+    cimaRiga[x - x0] = c;
+  }
   for (let y = y0; y < y1; y++) {
     let k = ((y - ty) * LATO_TILE + (x0 - tx)) * 4;
     const riga = y * w;
@@ -130,7 +155,13 @@ export function dipingiRettangolo(
     for (let x = x0; x < x1; x++, k += 4) {
       const i = riga + x;
       const mat = maschera[i];
-      if (mat === MATERIALE.aria) { buf[k + 3] = 0; continue; }
+      if (mat === MATERIALE.aria) {
+        // cavità chiusa: coperta da terreno sopra e con terreno (iniziale) sotto → fondo di terra scura
+        if (y > cimaRiga[x - x0] && y < fondo[x]) {
+          buf[k] = PROFONDA_RGB[0]; buf[k + 1] = PROFONDA_RGB[1]; buf[k + 2] = PROFONDA_RGB[2]; buf[k + 3] = FONDO_CAVITA_ALFA;
+        } else buf[k + 3] = 0;
+        continue;
+      }
       let c = COLORI_MATERIALE[mat];
       let r = c[0], g = c[1], b = c[2];
       if (mat === MATERIALE.terra) {

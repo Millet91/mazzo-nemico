@@ -42,6 +42,8 @@ Principio: **animazione guidata dallo stato della sim** (aTerra, vx, vy, appeso,
 - **Arte/UI**: il rig usa la palette `COLORI_CIURMA`; i volti restano della versione segnaposto finché non arriva l'immagine di stile.
 - **Bilanciamento / QA**: solo punto 10 (replay, `fermo()`, IA Mozzo).
 - **Mappe**: le liane devono sporgere ~14 px dall'appiglio per le mani.
+- **Bug scale (secondo feedback), solo ipotesi letta dal codice, non riprodotta:** in `aggiornaAppeso` il pirata sale solo se `!capsulaUrta(t, p.x, ny)`; con la capsula larga 12 px, dove il fianco della roccia sporge, la salita si blocca a metà. Va verificato e riparato dal Pacchetto 1 (Render e input / Fisica) prima di animare la salita.
+- **Ritmo (secondo feedback):** i punti 2, 3 e 10 tolgono attese visive (passo con ritmo vero, frenata corta, rialzarsi in 400 ms, nessuna posa di attesa oltre 300 ms).
 
 ## 6. Domanda per il proprietario
 Tetto di crediti Magnific per i pezzi del pirata (disponibili: 35)?

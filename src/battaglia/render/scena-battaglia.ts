@@ -47,7 +47,19 @@ interface VisPirata {
   morte: number;
   annegato: boolean;
   passo: number;
+  /** PV mostrati dalla scia bianca della barra (scende 300 ms dopo il colpo) */
+  vitaScia: number;
+  /** ms dall'ultimo calo dei PV, per far partire la scia */
+  sciaMs: number;
 }
+
+/** il lampo bianco del pirata colpito dura 80 ms (m1-ritmo §4) */
+const LAMPO_MS = 80;
+/** la scia bianca della barra PV parte dopo 300 ms e scende a 80 PV/s (m1-ritmo §6) */
+const SCIA_RITARDO_MS = 300;
+const SCIA_PV_AL_SECONDO = 80;
+/** sbuffo di scia dietro a cannone e granata ogni 2 tick (m1-ritmo §5) */
+const SCIA_PROIETTILE_MS = 2000 / 60;
 
 export interface OpzioniDisegno {
   /** mostra anello e traiettoria (turno del giocatore umano, fase azione) */
@@ -78,7 +90,8 @@ export class ScenaBattaglia {
   private readonly acqua = new Graphics();
   private readonly decorazioni: Sprite[] = [];
   private readonly pirati = new Map<number, VisPirata>();
-  private readonly proiettili = new Map<number, Sprite>();
+  private readonly proiettili = new Map<number, { sp: Sprite; paracadute: Sprite | null; scia: number }>();
+  private readonly fineTraiettoria: Sprite;
   private readonly puntini: Sprite[] = [];
   private readonly anelloTerra: Sprite;
   private readonly freccia: Sprite;
@@ -114,6 +127,9 @@ export class ScenaBattaglia {
     this.freccia = sprite(this.forme.get('freccia'));
     this.mondo.addChild(this.anelloTerra, this.strato.pirati, this.strato.proiettili, this.strato.traiettoria, this.effetti.mondo, this.acqua);
 
+    this.fineTraiettoria = sprite(this.forme.get('cerchietto'));
+    this.fineTraiettoria.visible = false;
+    this.strato.traiettoria.addChild(this.fineTraiettoria);
     for (let i = 0; i < PUNTI_TRAIETTORIA; i++) {
       const p = sprite(this.forme.get('puntino'));
       p.visible = false;
@@ -165,6 +181,7 @@ export class ScenaBattaglia {
     const v: VisPirata = {
       id: p.id, radice, corpo, lampo, braccio, etichetta, barra, pv, nome,
       ultimaVita: -1, ultimoX: p.x, colpito: -1, atterrato: -1, morte: -1, annegato: false, passo: 0,
+      vitaScia: p.vita, sciaMs: 0,
     };
     this.pirati.set(p.id, v);
     this.disegnaBarra(v, p);
@@ -174,9 +191,11 @@ export class ScenaBattaglia {
     const col = COLORI_CIURMA[this.s.squadre[p.squadra].ciurma];
     const larghezza = 34, alt = 6;
     const k = Math.max(0, Math.min(1, p.vita / p.vitaMax));
+    const ks = Math.max(k, Math.min(1, v.vitaScia / p.vitaMax));
     v.barra.clear()
-      .roundRect(-larghezza / 2 - 1, -alt / 2 - 1 - 3, larghezza + 2, alt + 2, 3).fill(hex(PALETTE.inchiostro))
-      .roundRect(-larghezza / 2, -alt / 2 - 3, Math.max(1, larghezza * k), alt, 2.5).fill(hex(col.colore));
+      .roundRect(-larghezza / 2 - 1, -alt / 2 - 1 - 3, larghezza + 2, alt + 2, 3).fill(hex(PALETTE.inchiostro));
+    if (ks > k) v.barra.roundRect(-larghezza / 2, -alt / 2 - 3, Math.max(1, larghezza * ks), alt, 2.5).fill(0xffffff);
+    if (k > 0) v.barra.roundRect(-larghezza / 2, -alt / 2 - 3, Math.max(1, larghezza * k), alt, 2.5).fill(hex(col.colore));
     v.pv.text = String(Math.max(0, p.vita));
     v.ultimaVita = p.vita;
   }
@@ -185,7 +204,10 @@ export class ScenaBattaglia {
   eventi(ev: readonly EventoBattaglia[]): void {
     for (const e of ev) {
       switch (e.t) {
-        case 'cratere': this.terreno.cratere(e.x, e.y, e.raggio); this.decorazioniSenzaTerra(e.x, e.y, e.raggio); break;
+        case 'cratere':
+          this.effetti.zolle(e.x, e.y, e.raggio, this.terreno.coloreOriginale(e.x, e.y, e.raggio));
+          this.terreno.cratere(e.x, e.y, e.raggio); this.decorazioniSenzaTerra(e.x, e.y, e.raggio);
+          break;
         case 'esplosione': this.effetti.esplosione(e.x, e.y, e.raggio); break;
         case 'splash': this.effetti.splash(e.x, e.y, e.grande); break;
         case 'colpoPistola': this.effetti.lineaPistola(e.da.x, e.da.y, e.a.x, e.a.y); break;
@@ -195,7 +217,8 @@ export class ScenaBattaglia {
           break;
         }
         case 'danno': {
-          this.effetti.numero(e.quanto, e.x, e.y);
+          const p = this.s.pirati.find((x) => x.id === e.pirata);
+          this.effetti.numero(e.pirata, e.quanto, e.x, e.y, !!p && p.vita <= 0);
           const v = this.pirati.get(e.pirata);
           if (v) v.colpito = 0;
           break;
@@ -206,6 +229,12 @@ export class ScenaBattaglia {
           if (v && v.morte < 0) { v.morte = 0; v.annegato = e.causa === 'mare'; }
           const p = this.s.pirati.find((x) => x.id === e.pirata);
           if (p && e.causa === 'pv') this.effetti.fumo(p.x, p.y);
+          if (p && e.causa === 'mare') this.effetti.cappello(p.x);
+          break;
+        }
+        case 'cassaAperta': {
+          const p = this.s.pirati.find((x) => x.id === e.pirata);
+          if (p && e.contenuto === 'rum') this.effetti.numero(p.id, -BIL.casse.rumPv, p.x, p.y - 20, false);
           break;
         }
         default: break;
@@ -235,16 +264,18 @@ export class ScenaBattaglia {
     const k = camera.scala;
     this.scala = k;
     this.mondo.scale.set(k);
-    this.mondo.position.set(camera.w / 2 - camera.x * k, camera.h / 2 - camera.y * k);
+    this.mondo.position.set(camera.w / 2 - (camera.x + camera.ox) * k, camera.h / 2 - (camera.y + camera.oy) * k);
     const aSchermo = (x: number, y: number) => camera.schermoDaMondo(x, y);
 
     this.terreno.aggiorna();
     this.disegnaCielo(camera, deltaMS);
     this.disegnaAcqua(camera);
+    this.effetti.impostaMare(s.terreno.mare);
+    this.animaDecorazioni();
 
     const t = s.turno;
     const attivo = s.pirati.find((p) => p.id === t.pirata && p.stato === 'vivo');
-    for (const p of s.pirati) this.aggiornaPirata(p, deltaMS, aSchermo, p === attivo && t.fase === 'azione');
+    for (const p of s.pirati) this.aggiornaPirata(p, deltaMS, aSchermo, p === attivo && t.fase === 'azione', attivo);
 
     // pirata attivo: anello a terra e freccia che rimbalza (00 §2.1)
     const mostraMarcatore = !!attivo && t.fase !== 'fine' && t.fase !== 'risoluzione';
@@ -267,17 +298,28 @@ export class ScenaBattaglia {
       this.anelloMira.alpha = o.fiondaAttiva ? 1 : 0.6;
     }
 
-    this.aggiornaProiettili();
+    this.aggiornaProiettili(deltaMS);
     this.aggiornaTraiettoria(o.mira && !!attivo);
     this.effetti.aggiorna(deltaMS, aSchermo);
   }
 
-  private aggiornaPirata(p: Pirata, deltaMS: number, aSchermo: (x: number, y: number) => Punto, mira: boolean): void {
+  private aggiornaPirata(p: Pirata, deltaMS: number, aSchermo: (x: number, y: number) => Punto, mira: boolean, attivo: Pirata | undefined): void {
     const v = this.pirati.get(p.id);
     if (!v) return;
     const piedi = p.y + MEZZA_CAPSULA;
     v.radice.position.set(p.x, piedi);
-    if (p.vita !== v.ultimaVita) this.disegnaBarra(v, p);
+    // barra PV con la scia bianca che scende in ritardo
+    if (p.vita > v.vitaScia) v.vitaScia = p.vita;
+    let ridisegna = p.vita !== v.ultimaVita;
+    if (p.vita < v.ultimaVita) v.sciaMs = 0;
+    if (v.vitaScia > p.vita) {
+      v.sciaMs += deltaMS;
+      if (v.sciaMs > SCIA_RITARDO_MS) {
+        v.vitaScia = Math.max(p.vita, v.vitaScia - (SCIA_PV_AL_SECONDO * deltaMS) / 1000);
+        ridisegna = true;
+      }
+    }
+    if (ridisegna) this.disegnaBarra(v, p);
 
     if (p.stato !== 'vivo' && v.morte < 0) { v.morte = 0; v.annegato = p.stato === 'annegato'; }
     if (v.morte >= 0) {
@@ -304,8 +346,9 @@ export class ScenaBattaglia {
       return;
     }
 
-    // verso (l'occhio guarda dove va il pirata)
-    let sx = p.verso, sy = 1, rot = 0, dy = 0;
+    // verso (l'occhio guarda dove va il pirata); chi aspetta fermo si gira verso il pirata attivo (m1-ritmo §10)
+    let sx: number = p.verso, sy = 1, rot = 0, dy = 0;
+    if (attivo && attivo !== p && p.aTerra && Math.abs(p.vx) < 0.01 && Math.abs(attivo.x - p.x) > 4) sx = attivo.x > p.x ? 1 : -1;
     // idle: respiro 1 → 0,97 in 1 s
     sy = 1 - 0.015 * (1 + Math.sin((this.tempo / 1000) * Math.PI * 2 + p.id));
     const cammina = Math.abs(p.x - v.ultimoX) > 0.05 && p.aTerra;
@@ -326,7 +369,7 @@ export class ScenaBattaglia {
     let tremolio = 0;
     if (v.colpito >= 0) {
       v.colpito += deltaMS;
-      v.lampo.alpha = Math.max(0, 1 - v.colpito / 200);
+      v.lampo.alpha = v.colpito < LAMPO_MS ? 1 : 0;
       tremolio = v.colpito < 250 ? (Math.floor(v.colpito / 30) % 2 ? 3 : -3) : 0;
       if (v.colpito > 250) v.colpito = -1;
     } else v.lampo.alpha = 0;
@@ -348,30 +391,53 @@ export class ScenaBattaglia {
     v.etichetta.position.set(Math.round(e.x), Math.round(e.y));
   }
 
-  private aggiornaProiettili(): void {
+  private aggiornaProiettili(deltaMS: number): void {
     const visti = new Set<number>();
     for (const pr of this.s.proiettili) {
       visti.add(pr.id);
-      let sp = this.proiettili.get(pr.id);
-      if (!sp) {
-        sp = sprite(this.forme.get(pr.tipo === 'cassa' ? 'barile' : pr.tipo /* segnaposto finché B non disegna la cassa */));
-        this.proiettili.set(pr.id, sp);
+      let v = this.proiettili.get(pr.id);
+      if (!v) {
+        const sp = sprite(this.forme.get(pr.tipo));
+        let paracadute: Sprite | null = null;
+        if (pr.tipo === 'cassa') { paracadute = sprite(this.forme.get('paracadute')); sp.addChild(paracadute); }
+        v = { sp, paracadute, scia: 0 };
+        this.proiettili.set(pr.id, v);
         this.strato.proiettili.addChild(sp);
       }
+      const sp = v.sp;
       sp.position.set(pr.x, pr.y);
-      if (pr.tipo === 'granata' || pr.tipo === 'barile') { if (!pr.fermo) sp.rotation += pr.vx * 0.08; }
+      if (pr.tipo === 'granata') { if (!pr.fermo) sp.rotation += pr.vx * 0.08; }
+      if (v.paracadute) {
+        // il paracadute ondeggia mentre la cassa scende e sparisce quando tocca terra
+        v.paracadute.visible = !pr.fermo;
+        sp.rotation = pr.fermo ? 0 : Math.sin(this.tempo / 300 + pr.id) * 0.12;
+      }
+      // scia di fumo dietro a cannone e granata in volo
+      if ((pr.tipo === 'palla' || pr.tipo === 'granata') && !pr.fermo) {
+        v.scia += deltaMS;
+        if (v.scia >= SCIA_PROIETTILE_MS) { v.scia = 0; this.effetti.scia(pr.x - pr.vx * 2, pr.y - pr.vy * 2); }
+      }
     }
-    for (const [id, sp] of this.proiettili) if (!visti.has(id)) { sp.destroy(); this.proiettili.delete(id); }
+    for (const [id, v] of this.proiettili) if (!visti.has(id)) { v.sp.destroy({ children: true }); this.proiettili.delete(id); }
+  }
+
+  /** Palme e cespugli ondeggiano, di più quando c'è vento (m1-ritmo §10). */
+  private animaDecorazioni(): void {
+    const forza = 0.025 + Math.abs(this.s.vento) * 0.008;
+    const verso = Math.sign(this.s.vento) * 0.02;
+    this.decorazioni.forEach((d, i) => {
+      d.rotation = verso + Math.sin(this.tempo / 700 + i * 1.7) * forza;
+    });
   }
 
   private aggiornaTraiettoria(mostra: boolean): void {
     if (!mostra) {
-      if (this.chiaveTraiettoria) { for (const p of this.puntini) p.visible = false; this.chiaveTraiettoria = ''; }
+      if (this.chiaveTraiettoria) { for (const p of this.puntini) p.visible = false; this.fineTraiettoria.visible = false; this.chiaveTraiettoria = ''; }
       return;
     }
     const s = this.s;
     const attivo = s.pirati.find((p) => p.id === s.turno.pirata);
-    const chiave = `${s.turno.mira.mezziGradi}|${s.turno.mira.potenza}|${s.turno.arma}|${s.vento}|${attivo?.x.toFixed(1)}|${attivo?.y.toFixed(1)}`;
+    const chiave = `${s.turno.mira.mezziGradi}|${s.turno.mira.potenza}|${s.turno.arma}|${s.turno.miccia}|${s.vento}|${attivo?.x.toFixed(1)}|${attivo?.y.toFixed(1)}`;
     if (chiave === this.chiaveTraiettoria) return;
     this.chiaveTraiettoria = chiave;
     const punti = traiettoria(s, PUNTI_TRAIETTORIA);
@@ -386,6 +452,10 @@ export class ScenaBattaglia {
         d.scale.set(i % 2 ? 0.55 : 0.75);
       } else d.visible = false;
     }
+    // granata a traiettoria intera: un cerchietto dove esplode con la miccia scelta (m1-ritmo §8)
+    const fine = punti[punti.length - 1];
+    this.fineTraiettoria.visible = s.turno.arma === 'granata' && s.config.traiettoriaCompleta && !!fine;
+    if (fine) this.fineTraiettoria.position.set(fine.x, fine.y);
   }
 
   private disegnaCielo(camera: Camera, deltaMS: number): void {
@@ -402,11 +472,13 @@ export class ScenaBattaglia {
         .circle(camera.w * 0.18, camera.h * 0.55, camera.h * 0.09).fill(hex(PALETTE.sole));
       this.nuvole.forEach((n, i) => { n.position.set((camera.w * (i + 0.3)) / 4, camera.h * (0.12 + 0.08 * (i % 3))); n.scale.set(camera.h / 400); });
     }
-    // nuvole: scorrono piano e si spostano un poco con la camera (parallasse)
+    // nuvole: vanno col vento (velocità ∝ vento, m1-ritmo §10); senza vento scorrono appena
     this.nuvole.forEach((n, i) => {
-      n.x += ((6 + 4 * (i % 3)) * deltaMS) / 1000;
+      const v = this.s.vento === 0 ? 4 : this.s.vento * (8 + 3 * (i % 3));
+      n.x += (v * deltaMS) / 1000;
       const largo = 160 * n.scale.x;
       if (n.x - largo > camera.w) n.x = -largo;
+      if (n.x + largo < 0) n.x = camera.w + largo;
     });
   }
 
@@ -431,8 +503,8 @@ export class ScenaBattaglia {
         .rect(-w, mare + 60, w * 3, fondo - mare).fill(hex(PALETTE.mareFondo));
     }
     // onde: scorrono di lato (periodo 40·2π px) e respirano
-    this.acqua.x = ((this.tempo / 1000) * 18) % (Math.PI * 80);
-    this.acqua.y = this.mareDisegnato + Math.sin(this.tempo / 700) * 1.5;
+    this.acqua.x = ((this.tempo / 1000) * (30 + Math.abs(this.s.vento) * 6) * (this.s.vento < 0 ? -1 : 1)) % (Math.PI * 80);
+    this.acqua.y = this.mareDisegnato + Math.sin(this.tempo / 550) * 3;
     void camera;
   }
 

@@ -105,7 +105,7 @@ function braccio(r: Renderer): Forma {
 
 export type IdForma =
   | 'braccio' | 'lampo' | 'palla' | 'granata' | 'frammento' | 'barile' | 'mina' | 'lapide'
-  | 'cerchio' | 'nuvola' | 'anello' | 'freccia' | 'puntino' | 'palma' | 'masso' | 'rovina' | 'cespuglio' | 'segnaposto';
+  | 'cerchio' | 'nuvola' | 'anello' | 'cerchietto' | 'cappello' | 'cassa' | 'paracadute' | 'freccia' | 'puntino' | 'palma' | 'masso' | 'rovina' | 'cespuglio' | 'segnaposto';
 
 export class Forme {
   private readonly ciurme = new Map<IdCiurma, Forma>();
@@ -121,7 +121,27 @@ export class Forme {
       .circle(0, 0, 5.5).fill(hex('#3E5A3A')).stroke({ width: 1, color: dark })
       .rect(-1.5, -8, 3, 3).fill(hex('#6B6B6B')).moveTo(0, -8).quadraticCurveTo(3, -11, 4, -9).stroke({ width: 1, color: hex(PALETTE.oro) })));
     this.altre.set('frammento', forma(r, g().circle(0, 0, 2.5).fill(hex('#3A3A44'))));
-    this.altre.set('barile', forma(r, g().roundRect(-7, -8, 14, 16, 4).fill(hex(PALETTE.legno)).rect(-7, -4, 14, 2).rect(-7, 2, 14, 2).fill(hex(PALETTE.legnoScuro))));
+    // barile di polvere: appoggiato al suolo, base in (0, 0) (MappaGenerata.barili = centro della base)
+    this.altre.set('barile', forma(r, g()
+      .roundRect(-8, -18, 16, 18, 4).fill(hex(PALETTE.legno)).stroke({ width: 1, color: hex(PALETTE.legnoScuro) })
+      .rect(-8, -14, 16, 2).rect(-8, -5, 16, 2).fill(hex(PALETTE.legnoScuro))
+      .circle(0, -9.5, 3.2).fill(hex(PALETTE.pericolo)).rect(-0.8, -11.5, 1.6, 4).fill(BIANCO)));
+    // cassa: base in (0, 0); il paracadute è una forma a parte, sopra
+    this.altre.set('cassa', forma(r, g()
+      .rect(-9, -16, 18, 16).fill(hex('#B07A45')).stroke({ width: 1.5, color: hex(PALETTE.legnoScuro) })
+      .moveTo(-9, -16).lineTo(9, 0).moveTo(9, -16).lineTo(-9, 0).stroke({ width: 1.5, color: hex(PALETTE.legnoScuro) })));
+    this.altre.set('paracadute', forma(r, (() => {
+      const p = g();
+      p.moveTo(-8, -16).lineTo(-20, -40).moveTo(8, -16).lineTo(20, -40).moveTo(0, -16).lineTo(0, -44)
+        .stroke({ width: 1, color: hex(PALETTE.pergamenaOmbra) });
+      p.arc(0, -40, 22, Math.PI, 0).closePath().fill(BIANCO).stroke({ width: 1.5, color: hex(PALETTE.pericolo) });
+      for (const x of [-11, 0, 11]) p.moveTo(x, -40).lineTo(x * 0.6, -60 + Math.abs(x) * 0.6);
+      p.stroke({ width: 1.5, color: hex(PALETTE.pericolo) });
+      return p;
+    })()));
+    this.altre.set('cappello', forma(r, g()
+      .ellipse(0, 0, 11, 3).fill(dark).poly([-7, 0, -5, -8, 5, -8, 7, 0]).fill(dark).circle(0, -4, 2).fill(BIANCO)));
+    this.altre.set('cerchietto', forma(r, g().circle(0, 0, 7).stroke({ width: 2, color: BIANCO })));
     this.altre.set('mina', forma(r, g().ellipse(0, 0, 7, 4).fill(hex('#E8B4B8')).stroke({ width: 1, color: dark })));
     // lapide-barilotto con il cappello (00 §1.4)
     this.altre.set('lapide', forma(r, g()

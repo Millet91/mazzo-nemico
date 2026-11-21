@@ -92,15 +92,15 @@ describe('Partita · ciclo di gioco', () => {
     expect(p.replay.comandi.map((c) => c.c.t)).toEqual(['ritirata']);
   });
 
-  it("turno dell'IA: medita ≥ 1 s, anima la mira, spara e fugge", async () => {
+  it("turno dell'IA: medita almeno pensieroMinimoMs, anima la mira, spara e fugge", async () => {
     const ia = iaFinta({ mezziGradi: 300, potenza: 90, fuga: -1 });
     const p = new Partita(config('umano', 'ia'), { ia });
     expect(creaVista(p.s, p.iaPensa).tocca).toBe('ia');
     frames(p, 1);
     await microtask();
     expect(p.iaPensa).toBe(true);
-    // prima di 1 s nessun comando
-    frames(p, 50); await microtask();
+    // prima della meditazione minima nessun comando
+    frames(p, Math.floor(BIL.ia.pensieroMinimoMs / FRAME) - 2); await microtask();
     expect(p.replay.comandi).toEqual([]);
     // dopo la meditazione e l'animazione della mira (0,6 s) arriva il fuoco
     for (let i = 0; i < 12; i++) { frames(p, 10); await microtask(); }

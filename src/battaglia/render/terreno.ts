@@ -2,7 +2,7 @@
 // rettangolo toccato, e si caricano sulla GPU al massimo 6 tile per frame (00 §1.2).
 import { Container, Sprite, Texture } from 'pixi.js';
 import type { Terreno } from '../../core/tipi';
-import { LATO_TILE, dipingiRettangolo, rettangoloCratere, tileToccate } from './pittura-terreno';
+import { COLORI_MATERIALE, LATO_TILE, dipingiRettangolo, rettangoloCratere, tileToccate } from './pittura-terreno';
 
 export const CARICAMENTI_PER_FRAME = 6;
 
@@ -84,6 +84,19 @@ export class TerrenoRender {
   }
 
   get inAttesa(): number { return this.coda.length; }
+
+  /** Colore del materiale che c'era (nella maschera iniziale) attorno a (x, y): serve alle zolle del cratere. */
+  coloreOriginale(x: number, y: number, raggio: number): number {
+    const { w, h } = this.terreno;
+    for (const [dx, dy] of [[0, 0], [0, 0.5], [0.5, 0.3], [-0.5, 0.3], [0, -0.4], [0.3, 0.8], [-0.3, 0.8]]) {
+      const px = Math.round(x + dx * raggio), py = Math.round(y + dy * raggio);
+      if (px < 0 || py < 0 || px >= w || py >= h) continue;
+      const m = this.originale[py * w + px];
+      if (m !== 0 && m !== 6) { const c = COLORI_MATERIALE[m]; return (c[0] << 16) | (c[1] << 8) | c[2]; }
+    }
+    const c = COLORI_MATERIALE[2];
+    return (c[0] << 16) | (c[1] << 8) | c[2];
+  }
 
   distruggi(): void {
     for (const t of this.tiles) t.texture.destroy(true);

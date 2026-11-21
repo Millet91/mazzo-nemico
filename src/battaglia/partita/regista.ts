@@ -9,7 +9,7 @@ import type { Application, Ticker } from 'pixi.js';
 import { bus, type AzioneBattaglia } from '../../core/bus';
 import type { ConfigBattaglia, EventoBattaglia } from '../../core/tipi';
 import { BIL } from '../../contenuti/bilanciamento';
-import { Camera } from '../render/camera';
+import { Camera, SCOSSA_MAX_PX } from '../render/camera';
 import { InputBattaglia } from '../render/input';
 import { ScenaBattaglia } from '../render/scena-battaglia';
 import { Partita } from './partita';
@@ -20,6 +20,9 @@ export type { RisultatoProvaFps };
 
 /** un frame lento non deve far saltare le animazioni */
 const DELTA_MASSIMO_MS = 100;
+/** fermo immagine dei colpi forti (m1-ritmo §4) */
+const FERMO_MS = 70;
+const FERMO_DANNO = 30;
 
 interface Prova {
   fine: number;
@@ -50,6 +53,8 @@ export class Regista {
   private fiondaAttiva = false;
   private eraInPausa = false;
   private prova: Prova | null = null;
+  /** ms di fermo immagine rimasti */
+  private fermoMs = 0;
   private readonly frame = (tk: Ticker) => this.aggiorna(tk.deltaMS);
 
   constructor(private readonly app: Application, private readonly sfondo?: { radice: { visible: boolean } }) {
@@ -76,6 +81,7 @@ export class Regista {
     this.app.stage.addChild(scena.cielo, scena.mondo, scena.schermo);
     if (this.sfondo) this.sfondo.radice.visible = false;
     this.camera.zoom = BIL.camera.zoomPredefinito;
+    this.fermoMs = 0;
     this.segui = 'pirata';
     const p = partita.s.pirati.find((x) => x.id === partita.s.turno.pirata);
     if (p) this.camera.vola(p.x, p.y, 0);
@@ -83,6 +89,8 @@ export class Regista {
       camera: this.camera,
       pirataMirabile: () => this.pirataMirabile(),
       mira: (m) => partita.comandoUmano({ t: 'mira', ...m }),
+      miraAttuale: () => ({ ...partita.s.turno.mira }),
+      fuoco: () => partita.comandoUmano({ t: 'fuoco' }),
       fionda: (a) => { this.fiondaAttiva = a; },
       ricentra: () => this.ricentra(),
       cameraManuale: () => { this.segui = 'libera'; },
@@ -150,8 +158,12 @@ export class Regista {
     }
     if (this.eraInPausa) { pa.sospendi(); this.eraInPausa = false; }
 
-    const eventi = pa.aggiorna(delta);
+    // fermo immagine (m1-ritmo §4): la sim si ferma 70 ms, la grafica no
+    let eventi: EventoBattaglia[] = [];
+    if (this.fermoMs > 0) this.fermoMs -= delta;
+    else eventi = pa.aggiorna(delta);
     if (eventi.length) {
+      this.impatto(eventi);
       scena.eventi(eventi);
       this.eventiCamera(eventi);
       bus.eventiBattaglia.value = eventi;
@@ -168,6 +180,25 @@ export class Regista {
   private opzioniDisegno() {
     const pa = this.partita!;
     return { mira: !pa.toccaIa && pa.s.turno.fase === 'azione' && !pa.s.esito, fiondaAttiva: this.fiondaAttiva };
+  }
+
+  /**
+   * Peso dei colpi (m1-ritmo §4): scossa = danno del frame × 0,12 px (max 10, 250 ms); fermo immagine 70 ms
+   * se il colpo fa almeno 30 danni o uccide; zoom +8% per 300 ms sulle uccisioni.
+   */
+  private impatto(eventi: readonly EventoBattaglia[]): void {
+    const s = this.partita!.s;
+    let danno = 0, uccide = false;
+    for (const e of eventi) {
+      if (e.t !== 'danno' || e.quanto <= 0) continue;
+      danno += e.quanto;
+      const p = s.pirati.find((x) => x.id === e.pirata);
+      if (p && p.vita <= 0) uccide = true;
+    }
+    if (!danno) return;
+    this.camera.scuoti(Math.min(SCOSSA_MAX_PX, danno * 0.12));
+    if (danno >= FERMO_DANNO || uccide) this.fermoMs = FERMO_MS;
+    if (uccide) this.camera.impulsoZoom();
   }
 
   private eventiCamera(eventi: readonly EventoBattaglia[]): void {

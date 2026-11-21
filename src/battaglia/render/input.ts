@@ -9,13 +9,39 @@ import { dentroAnello, fiondaAMira } from './fionda';
 const DOPPIO_TOCCO_MS = 300;
 const TOCCO_MAX_PX = 12;
 const TOCCO_MAX_MS = 250;
+/** fionda che spara al rilascio (m1-ritmo §1): rilasciare entro 24 px dal centro dell'anello annulla */
+export const ANNULLA_PX = 24;
+/** sotto il 5% di potenza il rilascio non spara */
+export const POTENZA_MINIMA_SPARO = 5;
+
+type Mira = { mezziGradi: number; potenza: number };
+
+/** "Comandi classici" (Impostazioni): false = al rilascio la mira resta e si spara col tasto. */
+let fiondaAlRilascio = true;
+export function impostaFiondaAlRilascio(attiva: boolean): void { fiondaAlRilascio = attiva; }
+export function fiondaSparaAlRilascio(): boolean { return fiondaAlRilascio; }
+
+/**
+ * Cosa fa il rilascio della fionda: `annulla` se il dito torna entro 24 px dal centro dell'anello,
+ * `spara` con la mira del trascinamento se la potenza è almeno 5%, altrimenti `niente` (resta la mira).
+ */
+export function esitoRilascio(rilascioDalCentroX: number, rilascioDalCentroY: number, m: Mira | null):
+  { t: 'annulla' } | { t: 'niente' } | { t: 'spara'; mira: Mira } {
+  if (Math.hypot(rilascioDalCentroX, rilascioDalCentroY) <= ANNULLA_PX) return { t: 'annulla' };
+  if (!m || m.potenza < POTENZA_MINIMA_SPARO) return { t: 'niente' };
+  return { t: 'spara', mira: m };
+}
 
 export interface GestoriInput {
   camera: Camera;
   /** posizione in px CSS del pirata attivo se il giocatore può mirare adesso, altrimenti null */
   pirataMirabile(): { x: number; y: number } | null;
   /** nuova mira dalla fionda */
-  mira(m: { mezziGradi: number; potenza: number }): void;
+  mira(m: Mira): void;
+  /** mira attuale (per rimetterla se il giocatore annulla la fionda) */
+  miraAttuale(): Mira;
+  /** spara (fionda rilasciata) */
+  fuoco(): void;
   /** la fionda è tenuta (per accendere l'anello) */
   fionda(attiva: boolean): void;
   /** doppio tocco */
@@ -31,6 +57,9 @@ export class InputBattaglia {
   private modo: 'nessuno' | 'fionda' | 'camera' | 'pinch' = 'nessuno';
   private ditoFionda = -1;
   private ultimaMira = '';
+  /** mira prima del trascinamento e centro dell'anello in px CSS */
+  private miraPrima: Mira = { mezziGradi: 0, potenza: 0 };
+  private centroAnello = { x: 0, y: 0 };
   private pinch = { d0: 1, zoom0: 1, mx: 0, my: 0 };
   private ultimoTocco = { t: -1e9, x: 0, y: 0 };
   private readonly via: () => void;
@@ -72,6 +101,8 @@ export class InputBattaglia {
       const pirata = this.g.pirataMirabile();
       if (pirata && dentroAnello(p.x, p.y, pirata.x, pirata.y)) {
         this.modo = 'fionda'; this.ditoFionda = e.pointerId; this.ultimaMira = '';
+        this.miraPrima = { ...this.g.miraAttuale() };
+        this.centroAnello = { x: pirata.x, y: pirata.y };
         this.g.fionda(true);
       } else if (p.x < BIL.camera.margineGestoIndietro || p.x > this.g.camera.w - BIL.camera.margineGestoIndietro) {
         this.modo = 'nessuno';
@@ -115,8 +146,13 @@ export class InputBattaglia {
     this.dita.delete(e.pointerId);
     const p = this.punto(e);
     if (this.modo === 'fionda' && e.pointerId === this.ditoFionda) {
-      // al rilascio la mira resta e NON spara (00 §3)
       this.g.fionda(false);
+      if (fiondaAlRilascio) {
+        const r = esitoRilascio(p.x - this.centroAnello.x, p.y - this.centroAnello.y, fiondaAMira(p.x - d.x0, p.y - d.y0));
+        if (r.t === 'annulla') this.g.mira(this.miraPrima);
+        else if (r.t === 'spara') { this.g.mira(r.mira); this.g.fuoco(); }
+      }
+      // con i "Comandi classici" al rilascio la mira resta e NON spara (00 §3)
       this.ditoFionda = -1;
       this.modo = 'nessuno';
       return;

@@ -75,11 +75,12 @@ for (let k = 0; k < 200; k++) {
 
 // decorazioni scelte a mano (x), appoggiate al suolo
 const decorazioni: Decorazione[] = ([
-  ['palma', 612, 1.1, false], ['masso', 652, 0.8, true], ['cespuglio', 758, 0.8, false], ['palma', 1912, 1, true],
-  ['cespuglio', 1290, 0.8, true], ['palma', 1436, 1.05, true], ['rovina', 1470, 0.9, false], ['masso', 1396, 0.8, false], ['palma', 330, 0.9, false],
+  ['palma', 136, 0.95, false], ['cespuglio', 758, 0.8, false], ['palma', 1912, 1, true], ['masso', 1960, 0.8, false],
+  ['cespuglio', 1290, 0.8, true], ['palma', 517, 0.9, true], ['palma', 1531, 0.9, false], ['masso', 337, 0.7, false], ['masso', 1711, 0.7, true],
 ] as [Decorazione['tipo'], number, number, boolean][])
+  .filter(([, x]) => { const b = Array.from({ length: 21 }, (_, k) => sup[x - 10 + k]); return Math.max(...b) - Math.min(...b) <= 14; })   // niente oggetti sui pendii ripidi
   .filter(([, x]) => [...spawn[0], ...spawn[1]].every((p) => Math.abs(p.x - x) >= REGOLE.decorazioniLontanoDaSpawn))
-  .map(([tipo, x, scala, specchio]) => ({ tipo, x, y: sup[x], scala, specchio }));
+  .map(([tipo, x, scala, specchio]) => ({ tipo, x, y: Math.max(...Array.from({ length: 21 }, (_, k) => sup[x - 10 + k])) + 2, scala, specchio }));   // piedi nel punto più basso della base
 
 const mappa: MappaGenerata = {
   terreno: { w: W, h: H, maschera: m, mare: MARE },

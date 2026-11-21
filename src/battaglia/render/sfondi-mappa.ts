@@ -8,8 +8,11 @@ import { Assets, Container, Sprite, Texture, TilingSprite } from 'pixi.js';
 import type { Camera } from './camera';
 
 /** altezza in px di mondo delle due strisce e quanto seguono la camera in orizzontale (1 = come il terreno) */
-const LONTANO = { alto: 190, segue: 0.12, sotto: 10 };
-const MEDIO = { alto: 260, segue: 0.3, sotto: 0.16 };
+// Parallasse leggero (il proprietario l'ha trovato troppo mosso): gli sfondi scorrono poco e cambiano poco con lo zoom.
+const LONTANO = { alto: 190, segue: 0.04, sotto: 10 };
+const MEDIO = { alto: 250, segue: 0.1, sotto: 0.16 };
+/** quanto la grandezza degli sfondi segue lo zoom (0 = fissa sullo schermo, 1 = come il terreno) */
+const SEGUE_ZOOM = 0.3;
 /** altezza in px di mondo degli oggetti di scena (a scala 1) */
 export const ALTEZZA_OGGETTO: Record<string, number> = { palma: 150, cespuglio: 42, masso: 38, rovina: 74 };
 
@@ -75,14 +78,14 @@ export class SfondiMappa {
       const t = this.cielo.texture;
       const s = Math.max(w / t.width, h / t.height) * 1.08;
       this.cielo.scale.set(s);
-      const giro = (camera.x / this.mondoW - 0.5) * t.width * s * 0.06;
+      const giro = (camera.x / this.mondoW - 0.5) * t.width * s * 0.015;
       this.cielo.position.set((w - t.width * s) / 2 - giro, (h - t.height * s) / 2);
     }
     const orizzonte = camera.schermoDaMondo(0, mare).y;
     for (const [st, p] of [[this.lontano, LONTANO], [this.medio, MEDIO]] as const) {
       if (!st) continue;
       // si rimpicciolisce meno del terreno quando si allontana lo zoom (è lontano)
-      const alto = p.alto * Math.sqrt(k) * Math.min(1.2, Math.max(0.55, Math.sqrt(k)));
+      const alto = p.alto * Math.min(1.15, Math.max(0.7, Math.pow(k, SEGUE_ZOOM)));
       const s = alto / st.texture.height;
       st.width = w;
       st.height = alto;

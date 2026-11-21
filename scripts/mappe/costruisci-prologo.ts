@@ -50,7 +50,9 @@ const segnaposti: Record<string, Punto> = {
 const decorazioni: Decorazione[] = ([
   ['palma', 612, 1.1, false], ['masso', 652, 0.8, true], ['palma', 1912, 1, true], ['cespuglio', 758, 0.8, false],
   ['cespuglio', 1290, 0.8, true], ['palma', 1436, 1.05, true], ['masso', 1396, 0.8, false], ['palma', 1560, 1, false], ['cespuglio', 1700, 0.9, true],
-] as [Decorazione['tipo'], number, number, boolean][]).map(([tipo, x, scala, specchio]) => ({ tipo, x, y: sup[x], scala, specchio }));
+] as [Decorazione['tipo'], number, number, boolean][])
+  .filter(([, x]) => { const b = Array.from({ length: 21 }, (_, k) => sup[x - 10 + k]); return Math.max(...b) - Math.min(...b) <= 14; })   // niente oggetti sui pendii ripidi
+  .map(([tipo, x, scala, specchio]) => ({ tipo, x, y: Math.max(...Array.from({ length: 21 }, (_, k) => sup[x - 10 + k])) + 2, scala, specchio }));   // piedi nel punto più basso della base
 
 for (const [n, p] of Object.entries({ scarlatta, pirata, cassa, marinaio1, marinaio2 })) {
   const sotto = m[p.y * W + p.x] !== MATERIALE.aria, sopra = m[(p.y - 1) * W + p.x] === MATERIALE.aria;

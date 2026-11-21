@@ -81,7 +81,14 @@ def main():
         s = chiave(s)
         _, _, y0, y1 = riquadro(s)
         s = s.crop((0, y0, s.size[0], s.size[1]))
-        salva(s.resize((round(alto * s.size[0] / s.size[1]), alto), Image.LANCZOS), os.path.join(dest, nome + '.webp'))
+        # la striscia si ripete: accanto alla sua copia specchiata non si vede la cucitura (niente ritagli)
+        doppia = Image.new('RGBA', (s.size[0] * 2, s.size[1]))
+        doppia.paste(s, (0, 0)); doppia.paste(s.transpose(Image.FLIP_LEFT_RIGHT), (s.size[0], 0))
+        s = doppia
+        largo = round(alto * s.size[0] / s.size[1])
+        if largo > 4096:   # i telefoni non caricano texture più larghe
+            alto, largo = round(alto * 4096 / largo), 4096
+        salva(s.resize((largo, alto), Image.LANCZOS), os.path.join(dest, nome + '.webp'))
 
     o = apri(cartella, 'oggetti')
     if o is not None:

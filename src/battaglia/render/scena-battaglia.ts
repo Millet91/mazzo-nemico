@@ -302,12 +302,15 @@ export class ScenaBattaglia {
     const { w, h, maschera } = this.s.terreno;
     for (const d of this.decorazioni) {
       if (!d.visible || Math.abs(d.x - x) > r + 20 || Math.abs(d.y - y) > r + 20) continue;
-      let appoggi = 0;
-      for (const dx of [-6, 0, 6]) {
-        const px = Math.round(d.x + dx), py = Math.round(d.y + 2);
-        if (px >= 0 && px < w && py >= 0 && py < h && maschera[py * w + px] !== 0) appoggi++;
+      // serve terreno sotto il centro e sotto quasi tutta la base, entro 4 px dai piedi: niente piante che volano
+      let appoggi = 0, centro = false;
+      for (const dx of [-10, -5, 0, 5, 10]) {
+        const px = Math.round(d.x + dx);
+        let ok = false;
+        for (let dy = 0; dy <= 4 && !ok; dy++) { const py = Math.round(d.y + dy); ok = px >= 0 && px < w && py >= 0 && py < h && maschera[py * w + px] !== 0; }
+        if (ok) { appoggi++; if (dx === 0) centro = true; }
       }
-      if (appoggi < 2) d.visible = false;
+      if (!centro || appoggi < 4) d.visible = false;
     }
   }
 

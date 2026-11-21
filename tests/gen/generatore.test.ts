@@ -41,7 +41,7 @@ describe('Generatore · determinismo', () => {
   // Impronte d'oro: se cambiano per una modifica voluta del generatore, si aggiornano in un commit a parte
   // (piano QA). Se cambiano senza motivo, il generatore non è più deterministico.
   it('impronte d\'oro dei semi 7, 42, 1234', () => {
-    expect([7, 42, 1234].map((s) => impronta(generaMappa(richiesta(s))))).toEqual(['6c320321', '583e7428', '7c04b64b']);
+    expect([7, 42, 1234].map((s) => impronta(generaMappa(richiesta(s))))).toEqual(['bad26d24', 'b6948918', '33cfb0db']);
   });
 
   it('semi diversi ⇒ mappe diverse', () => {
@@ -204,6 +204,26 @@ describe('Generatore · tentativi e seme di riserva', () => {
   it('al terzo tentativo riuscito: semeUsato = seme + 2, tentativi = 3', () => {
     const m = conTentativi(richiesta(10), (seme) => (seme === 12 ? tentativo(seme, richiesta(seme)) : null));
     expect([m.semeUsato, m.tentativi]).toEqual([12, 3]);
+  });
+});
+
+describe('Generatore · barili di polvere (m1-ritmo §9)', () => {
+  it('3-4 barili, appoggiati al suolo in piano, sopra il mare e ad almeno 200 px da ogni spawn', () => {
+    const B = BIL.barili;
+    const problemi: string[] = [];
+    for (const m of MAPPE) {
+      const sup = superficie(m.terreno.maschera);
+      const barili = m.barili ?? [];
+      if (barili.length < B.min || barili.length > B.max) problemi.push(`seme ${m.semeUsato}: ${barili.length} barili`);
+      for (const b of barili) {
+        for (let x = b.x - 10; x <= b.x + 10; x++) if (sup[x] !== b.y) problemi.push(`seme ${m.semeUsato}: barile (${b.x}, ${b.y}) non in piano`);
+        if (b.y > m.terreno.mare - 60) problemi.push(`seme ${m.semeUsato}: barile (${b.x}, ${b.y}) troppo vicino al mare`);
+        for (const p of [...m.spawn[0], ...m.spawn[1]]) {
+          if (Math.sqrt((b.x - p.x) ** 2 + (b.y - p.y) ** 2) < B.distanzaMinimaSpawn) problemi.push(`seme ${m.semeUsato}: barile (${b.x}, ${b.y}) vicino a (${p.x}, ${p.y})`);
+        }
+      }
+    }
+    expect(problemi).toEqual([]);
   });
 });
 

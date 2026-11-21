@@ -17,6 +17,8 @@ import { superficie } from './analisi';
 import { specchiaMaschera, terrenoIsola } from './isola';
 import { MONDO, REGOLE } from './parametri';
 import { conTentativi } from './tentativi';
+import { BIL } from '../../contenuti/bilanciamento';
+import { piazzaBarili } from './barili';
 import { controllaInsieme, distanzaMare, postiValidi, type Posto } from './spawn';
 import { validaMassa } from './valida';
 
@@ -110,6 +112,10 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
 
   const piedi = (p: Posto): Punto => ({ x: p.x, y: p.y });
   let sx = scelti[0].map(piedi), dx = scelti[1].map(piedi);
+  let barili = piazzaBarili(s, maschera, sup, mare, [...sx, ...dx]);
+  if (barili.length < BIL.barili.min) return null;
+  // le spianate dei barili toccano la maschera: si ricontrollano linee di tiro e colpi
+  if (controllaInsieme(maschera, sup, mare, scelti, true).length) return null;
   let decor = decorazioni(s, sup, mare, [...sx, ...dx]);
   if (specchiata) {
     specchiaMaschera(maschera);
@@ -117,6 +123,7 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
     sx = sx.map(sp);
     dx = dx.map(sp);
     decor = decor.map((d) => ({ ...d, x: W - 1 - d.x, specchio: !d.specchio })).reverse();
+    barili = barili.map((b) => ({ x: W - 1 - b.x, y: b.y })).reverse();
   }
   // lato 0 (attaccante) = il gruppo scelto a sinistra; con lo specchio finisce a destra.
   // Ordine: dal più interno al più esterno. La sim usa i primi N posti, quindi con meno di 5 pirati
@@ -133,6 +140,7 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
     tentativi: 1,
     specchiata,
     decorazioni: decor,
+    barili,
   };
 }
 

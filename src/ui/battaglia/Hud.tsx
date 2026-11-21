@@ -129,11 +129,11 @@ const ICONE = {
 function Icona({ d }: { d: string }) {
   return <svg class="icona" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d={d} fill="currentColor" /></svg>;
 }
-/** salto: un arco con la punta, come la parabola del salto */
+/** salto: doppia freccia in su con il suolo sotto (richiesta del Lead design: la freccia curva sembrava "ripeti") */
 function IconaSalto() {
   return (
     <svg class="icona" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 19C5 9 12 5 19 10" /><path d="M19 4v6h-6" />
+      <path d="M6 11l6-6 6 6" /><path d="M6 17l6-6 6 6" /><path d="M8 21.5h8" stroke-width="2" opacity=".7" />
     </svg>
   );
 }

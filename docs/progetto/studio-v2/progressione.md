@@ -45,6 +45,8 @@ Build di `claude/m1-integrazione` (`npm ci`, `npm run build`, `vite preview`), C
 - **Narrativa:** le scene di 16 §4 restano; aggiungere 6 battute di «premio».
 - **Onboarding/UX:** attacco unito e rinforzi si insegnano a 1C; 10 va riscritto sul cap. 1.
 - **Bilanciamento:** `sim capitolo 1` con i tre scontri.
+- **UX (`ux.md` dec. 3):** vuole il Rampino «Gancio» dal turno 1. Io lo darei al Forte Uncino (1C). Proposta di compromesso: nel Prologo c'è un solo punto con Rampino scritto, e il premio di 1C è il Rampino **in Stiva a ogni battaglia**; decide il Producer.
+- **Mondo (`mondo.md` D8):** scrive 7 battaglie; io 6 conquiste + 1 eventuale ripetizione. Stesso scenario, solo un conteggio diverso.
 - **Conflitto con 00/15:** 15 consegna gli sblocchi a fine capitolo; qui sono per isola. Cambia solo il momento, non l'elenco.
 
 ## 6. Domande per il proprietario

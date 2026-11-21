@@ -18,7 +18,7 @@ import {
 } from './logica';
 import { apriPausa, banner, cambiaVelocitaIa, grigliaAperta, invia, velocitaIa } from './stato';
 import { EMBLEMA, ICONA_ARMA } from './segnaposto';
-import { comandiClassici, mancini } from '../preferenze';
+import { comandiClassici, mancini, SPARI_GUIDATI, spariGuidati } from '../preferenze';
 import { Joystick } from './Joystick';
 import { suona } from '../../piattaforma/audio';
 import { GrigliaArmi } from './GrigliaArmi';
@@ -158,6 +158,10 @@ export function Hud({ v }: { v: VistaBattaglia }) {
       )}
 
       {vedi && <div class="mira-info" data-testid="mira">{T.battaglia.mira(alzo(v.miraGradi), Math.round(v.potenza))}</div>}
+
+      {mira && !comandiClassici.value && spariGuidati.value < SPARI_GUIDATI && !grigliaAperta.value && (
+        <div class="suggerimento" role="status" data-testid="suggerimento-sparo">{T.battaglia.suggerimentoSparo}</div>
+      )}
 
       {vedi && !comandiClassici.value && (
         <>

@@ -10,7 +10,7 @@ import type { VistaBattaglia } from '../../core/bus';
 import { bannerDaEventi, configSchermaglia, DURATA_BANNER_MS, semeNuovo, squadraUmana } from './logica';
 import { vibraPerEventi } from './vibrazioni';
 import { suona, type Suono } from '../../piattaforma/audio';
-import { piratiSchermaglia, comandiClassici, suComandiClassici } from '../preferenze';
+import { piratiSchermaglia, comandiClassici, suComandiClassici, contaSparoGuidato } from '../preferenze';
 
 /** schermata di scelta della Schermaglia (1-5 pirati per lato) aperta */
 export const sceltaSchermaglia = signal(false);
@@ -47,7 +47,18 @@ export function cambiaVelocitaIa(): void {
 
 // La fionda che spara al rilascio è di B (render/input.ts, nel pezzo di Pixi): con "Comandi classici" si spegne.
 // Si carica con import.meta.glob così la UI non tira dentro Pixi e la build passa anche senza la funzione.
-const MODULI_INPUT = import.meta.glob<{ impostaFiondaAlRilascio?: (v: boolean) => void }>('../../battaglia/render/input.ts');
+type ModuloInput = { impostaFiondaAlRilascio?: (v: boolean) => void; toccoSullaFionda?: (x: number, y: number) => boolean };
+const MODULI_INPUT = import.meta.glob<ModuloInput>('../../battaglia/render/input.ts');
+/** modulo dell'input di B, quando è caricato (lo carica la battaglia) */
+let moduloInput: ModuloInput | null = null;
+void Object.values(MODULI_INPUT)[0]?.().then((m) => { moduloInput = m; }).catch(() => {});
+/**
+ * Il tocco in (clientX, clientY) spetta alla fionda sul canvas? (anello di mira del pirata attivo, di B)
+ * Se B non lo dice, il joystick non parte comunque nel terzo centrale dello schermo (vedi Joystick.tsx).
+ */
+export function toccoSullaFionda(x: number, y: number): boolean | null {
+  return moduloInput?.toccoSullaFionda ? moduloInput.toccoSullaFionda(x, y) : null;
+}
 export function applicaFiondaAlRilascio(attiva: boolean): void {
   const carica = Object.values(MODULI_INPUT)[0];
   if (!carica) return;
@@ -152,6 +163,8 @@ export function avviaAscoltoBattaglia(): () => void {
     ultimi = eventi;
     vibraPerEventi(eventi);
     suoniPerEventi(eventi, v);
+    // il suggerimento "trascina e lascia" sparisce dopo 2 spari del giocatore
+    if (v?.tocca === 'umano' && eventi.some((e) => e.t === 'sparo')) contaSparoGuidato();
     if (v) {
       codaBanner.push(...bannerDaEventi(eventi, v));
       if (timerBanner === undefined) prossimoBanner();

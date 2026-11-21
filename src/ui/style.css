@@ -263,13 +263,21 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 
 /* joystick (m1-ritmo §1): zona nella metà bassa a sinistra, a destra con i mancini; lascia 24 px al gesto indietro */
 .zona-joystick {
-  position: absolute; left: 24px; bottom: 0; width: calc(50% - 24px); height: 58%;
-  pointer-events: auto; touch-action: none;
+  /* solo in basso a sinistra, fuori dal terzo centrale dove di solito sta il pirata con l'anello di mira.
+     Niente pointer-events: i tocchi li prende Joystick.tsx da window, così quelli sull'anello vanno al canvas. */
+  position: absolute; left: 24px; bottom: 0; width: calc(40% - 24px); height: 50%;
+  pointer-events: none;
 }
 .hud.mancini .zona-joystick { left: auto; right: 24px; }
 .joystick {
   position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
   background: rgba(19, 41, 58, .35); border: 2px solid rgba(255, 255, 255, .25); pointer-events: none;
+}
+/* suggerimento della fionda (primi 2 spari) */
+.suggerimento {
+  position: absolute; left: 50%; top: calc(var(--sicura-a) + 124px); transform: translateX(-50%); pointer-events: none;
+  padding: 6px 14px; border-radius: 14px; background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF33;
+  font-weight: 900; font-size: 15px; white-space: nowrap; animation: respira 1.6s ease-in-out infinite;
 }
 /* fantasma a riposo: centro a ~100 px dal bordo e 90 dal basso, 25% */
 .joystick.fantasma { margin: 0; left: 20px; bottom: 34px; opacity: .25; }

@@ -107,7 +107,7 @@ export function validaMappa(mappa: MappaGenerata): string[] {
   // scale e liane (design/comandi/scale-e-liane.md): il campo è facoltativo (le mappe fatte a mano possono non averle)
   if (mappa.appigli) {
     const R = REGOLE, ap = mappa.appigli;
-    if (ap.length < R.appigliMin || ap.length > R.appigliMax) err.push(`${ap.length} scale/liane invece di ${R.appigliMin}-${R.appigliMax}`);
+    if (ap.length < R.appigliMin || ap.length > R.appigliMaxFatte) err.push(`${ap.length} scale/liane invece di ${R.appigliMin}-${R.appigliMaxFatte}`);
     const aSinistra = ap.filter((a) => a.x < W / 2).length;
     if (aSinistra * 2 !== ap.length) err.push(`scale/liane non uguali per lato: ${aSinistra} a sinistra, ${ap.length - aSinistra} a destra`);
     for (const a of ap) {

@@ -50,6 +50,8 @@ export const REGOLE = {
    *  40 px da uno spawn; la cima arriva entro 8 px da un piano largo almeno 24 px */
   appigliMin: 2,
   appigliMax: 4,
+  /** le mappe fatte a mano ne possono avere fino a 6 (Lead design 21/11/2026): è il limite del validatore */
+  appigliMaxFatte: 6,
   appiglioCorto: 60,
   appiglioLungo: 220,
   appiglioLontanoDaSpawn: 40,

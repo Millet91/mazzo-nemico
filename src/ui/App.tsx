@@ -1,4 +1,5 @@
-// Schermata minima di M0: canvas Pixi a tutto schermo (#palco), sopra la UI Preact con titolo e Impostazioni → Info.
+// Canvas Pixi a tutto schermo (#palco) e sopra la UI Preact: menu principale (Schermaglia, Impostazioni → Info,
+// Diagnostica, mancini) e, durante la battaglia, l'HUD di battaglia/.
 import { signal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
 import { bus } from '../core/bus';
@@ -6,8 +7,20 @@ import { T } from '../testi/it';
 import { INFO_BUILD } from '../core/build';
 import { tocco } from '../piattaforma/haptics';
 import { caricaImpostazioni, salvaImpostazioni } from '../piattaforma/impostazioni';
+import { Battaglia } from './battaglia/Battaglia';
+import { avviaAscoltoBattaglia, avviaSchermaglia, indietroInBattaglia, inBattaglia } from './battaglia/stato';
+import { Diagnostica, provaAttiva, statoFps } from './Diagnostica';
+import { caricaPreferenzeHud, impostaMancini, mancini } from './preferenze';
 
-type Pannello = null | 'impostazioni' | 'info';
+// avvio dell'HUD (main.tsx non è una cartella dell'HUD): preferenze salvate, banner e vibrazioni della battaglia
+void caricaPreferenzeHud();
+avviaAscoltoBattaglia();
+// gancio per i test Playwright (tests/e2e): con ?prova nell'indirizzo il bus è raggiungibile dalla pagina
+if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('prova')) {
+  (window as unknown as { __kaboom: unknown }).__kaboom = { bus, gestisciIndietro: () => gestisciIndietro() };
+}
+
+type Pannello = null | 'impostazioni' | 'info' | 'diagnostica';
 const pannello = signal<Pannello>(null);
 const avviso = signal('');
 let timerAvviso: ReturnType<typeof setTimeout> | undefined;
@@ -20,7 +33,8 @@ function mostraAvviso(testo: string) {
 
 /** Tasto indietro di Android: chiude il pannello aperto. Restituisce false se non c'era niente da chiudere. */
 export function gestisciIndietro(): boolean {
-  if (pannello.value === 'info') { pannello.value = 'impostazioni'; return true; }
+  if (indietroInBattaglia()) return true;
+  if (pannello.value === 'info' || pannello.value === 'diagnostica') { pannello.value = 'impostazioni'; return true; }
   if (pannello.value === 'impostazioni') { pannello.value = null; return true; }
   return false;
 }
@@ -83,21 +97,29 @@ function Info() {
 function PannelloImpostazioni() {
   const p = pannello.value;
   if (!p) return null;
+  if (provaAttiva.value) return <div class="avviso" role="status">{statoFps.value}</div>;
+  const titolo = p === 'info' ? T.info.titolo : p === 'diagnostica' ? T.diagnostica.titolo : T.impostazioni.titolo;
   return (
     <div class="scrim" onClick={(e) => { if (e.target === e.currentTarget) pannello.value = null; }}>
       <section class="modale" role="dialog" aria-modal="true" aria-labelledby="titolo-pannello">
         <header>
-          {p === 'info' && (
+          {p !== 'impostazioni' && (
             <Pulsante tipo="icona" label={T.impostazioni.indietro} onClick={() => (pannello.value = 'impostazioni')}>‹</Pulsante>
           )}
-          <h2 id="titolo-pannello">{p === 'info' ? T.info.titolo : T.impostazioni.titolo}</h2>
+          <h2 id="titolo-pannello">{titolo}</h2>
           <Pulsante tipo="icona" label={T.impostazioni.chiudi} onClick={() => (pannello.value = null)}>✕</Pulsante>
         </header>
         {p === 'impostazioni' ? (
           <div class="voci">
+            <button type="button" id="mancini" class="interruttore" role="switch" aria-checked={mancini.value}
+              onClick={() => { tocco(); void impostaMancini(!mancini.value); }}>
+              <span class="testi"><span class="etichetta">{T.impostazioni.mancini}</span><span class="nota">{T.impostazioni.manciniNota}</span></span>
+              <span class="stato-interruttore">{mancini.value ? T.impostazioni.acceso : T.impostazioni.spento}</span>
+            </button>
+            <Pulsante id="apri-diagnostica" onClick={() => (pannello.value = 'diagnostica')}>{T.impostazioni.diagnostica}</Pulsante>
             <Pulsante id="apri-info" onClick={() => (pannello.value = 'info')}>{T.impostazioni.info}</Pulsante>
           </div>
-        ) : (
+        ) : p === 'diagnostica' ? <Diagnostica /> : (
           <Info />
         )}
       </section>
@@ -109,10 +131,18 @@ export function App() {
   const errore = !bus.webgl2.value.ok
     ? { titolo: T.errori.webgl2Titolo, testo: T.errori.webgl2Testo }
     : bus.erroreGrafica.value ? { titolo: T.errori.webgl2Titolo, testo: bus.erroreGrafica.value } : null;
+  // #palco resta sempre lo stesso nodo: dentro c'è il canvas di Pixi, che non va ricreato
+  const battaglia = inBattaglia();
   return (
     <>
       <div id="palco" />
-      <main class="ui">
+      {battaglia ? (
+        <main class="ui in-battaglia" key="battaglia">
+          <ContatoreFps />
+          <Battaglia />
+        </main>
+      ) : (
+      <main class="ui" key="menu">
         <ContatoreFps />
         <div class="angolo">
           <Pulsante tipo="icona" id="apri-impostazioni" label={T.home.impostazioni} onClick={() => (pannello.value = 'impostazioni')}>⚙</Pulsante>
@@ -120,7 +150,12 @@ export function App() {
         <div class="titolo">
           <h1>{T.gioco.titolo}</h1>
           <p class="sottotitolo">{T.gioco.sottotitolo}</p>
-          <p class="cantiere">{T.home.lavoriInCorso}</p>
+        </div>
+        <div class="menu-principale">
+          <button type="button" id="schermaglia" class="btn primario grande" onClick={() => { tocco(); avviaSchermaglia(); }}>
+            <span>{T.home.schermaglia}</span>
+            <span class="sotto">{T.home.schermagliaSotto}</span>
+          </button>
         </div>
         {errore && (
           <div class="errore" role="alert">
@@ -129,7 +164,8 @@ export function App() {
           </div>
         )}
       </main>
-      <PannelloImpostazioni />
+      )}
+      {!battaglia && <PannelloImpostazioni />}
       {avviso.value && <div class="avviso" role="status">{avviso.value}</div>}
     </>
   );

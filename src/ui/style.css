@@ -113,3 +113,183 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 
 @keyframes entra { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: 1ms !important; transition-duration: 1ms !important; } }
+
+/* ─── Menu principale (M1) ─── */
+.menu-principale { position: absolute; left: 50%; bottom: max(14%, var(--sicura-b)); transform: translateX(-50%); }
+.btn.primario.grande {
+  height: auto; min-height: 72px; min-width: 260px; padding: 8px 28px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; font: 400 28px var(--font-titolo); letter-spacing: .5px;
+}
+.btn.primario.grande .sotto { font: 800 13px var(--font-testo); opacity: .8; }
+.btn.pericolo { background: var(--pericolo); border-bottom: 4px solid #B3261E; }
+.btn:disabled { opacity: .45; cursor: default; }
+
+.interruttore {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 14px;
+  border-radius: 14px; background: #FFFFFF10; cursor: pointer; pointer-events: auto;
+}
+.interruttore .testi { flex: 1; display: flex; flex-direction: column; }
+.interruttore .etichetta { font-weight: 900; font-size: 16px; }
+.interruttore .nota { color: var(--testo-dim); font-size: 12px; }
+.interruttore .stato-interruttore {
+  min-width: 72px; text-align: center; padding: 6px 10px; border-radius: 12px; font-weight: 900; background: var(--legno);
+}
+.interruttore[aria-checked='true'] .stato-interruttore { background: var(--ok); color: var(--inchiostro); }
+.interruttore:focus-visible { outline: 3px solid var(--info); }
+
+.diagnostica { display: flex; flex-direction: column; gap: 16px; }
+.diagnostica .nota { color: var(--testo-dim); margin: 6px 0 0; font-size: 12px; }
+.diagnostica .stato { margin: 6px 0 0; font-weight: 800; font-variant-numeric: tabular-nums; }
+.elenco-replay { margin: 6px 0 0; padding: 0; list-style: none; columns: 2; font-size: 13px; }
+
+/* ─── Battaglia (00 §3, design M1 §6). Pannelli abisso all'85%, MAI backdrop-filter sopra il canvas. ─── */
+.ui.in-battaglia { padding: 0; }
+.battaglia, .hud { position: absolute; inset: 0; pointer-events: none; }
+.hud button, .battaglia button { pointer-events: auto; }
+
+.hud-alto {
+  position: absolute; top: var(--sicura-a); left: var(--bordo-corto); right: var(--bordo-corto);
+  display: flex; align-items: center; gap: 12px; height: 56px;
+}
+.tasto-pausa {
+  width: 56px; height: 56px; flex: none; border-radius: 50%; border: 1px solid #FFFFFF22; color: var(--testo);
+  background: rgba(19, 41, 58, .85); font: 400 22px var(--font-titolo); cursor: pointer;
+}
+.caricamento .tasto-pausa { position: absolute; top: var(--sicura-a); left: var(--bordo-corto); }
+.caricamento p {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; padding: 8px 18px;
+  border-radius: 14px; background: rgba(19, 41, 58, .85); font: 400 20px var(--font-titolo);
+}
+
+.squadra { display: flex; align-items: center; gap: 4px; flex: none; }
+.squadra.lato-1 { flex-direction: row-reverse; }
+.emblema {
+  width: 24px; height: 24px; flex: none; display: inline-grid; place-items: center; border-radius: 50%;
+  border: 2px solid; color: #fff; font-size: 13px; line-height: 1; text-shadow: 0 1px 0 #0008;
+}
+.barra-pv {
+  position: relative; width: 140px; height: 14px; border-radius: 7px; overflow: hidden;
+  background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF33;
+}
+.barra-pv .riempi { position: absolute; inset: 0 auto 0 0; transition: width var(--lenta) var(--curva); }
+.squadra.lato-1 .barra-pv .riempi { inset: 0 0 0 auto; }
+.pv-numero {
+  min-width: 26px; text-align: center; font-weight: 900; font-size: 13px; font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px #000a;
+}
+
+.centro-alto { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.timer {
+  --f: 360deg;
+  width: 56px; height: 56px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--oro) var(--f), #FFFFFF22 0);
+}
+.timer span {
+  width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--abisso);
+  font: 400 24px var(--font-titolo); font-variant-numeric: tabular-nums;
+}
+.timer.fermo { background: conic-gradient(var(--testo-dim) var(--f), #FFFFFF22 0); }
+.timer.urgente { background: conic-gradient(var(--pericolo) var(--f), #FFFFFF22 0); }
+.timer.urgente span { color: var(--pericolo); }
+.vento {
+  width: 120px; height: 28px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 6px;
+  border-radius: 14px; background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22;
+}
+.vento .freccia { width: 16px; text-align: center; font-size: 14px; color: var(--info); }
+.vento .freccia.verso--1 { transform: scaleX(-1); }
+.barra-vento { position: relative; flex: 1; height: 8px; border-radius: 4px; background: #FFFFFF22; overflow: hidden; }
+.barra-vento .riempi { position: absolute; top: 0; bottom: 0; background: var(--info); }
+.barra-vento .centro { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--testo); }
+
+.banner {
+  position: absolute; left: 50%; top: calc(var(--sicura-a) + 68px); transform: translateX(-50%);
+  height: 44px; padding: 0 22px; display: grid; place-items: center; white-space: nowrap; border-radius: 22px;
+  background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22;
+  font: 400 28px var(--font-titolo); color: var(--oro); -webkit-text-stroke: 1px var(--inchiostro); paint-order: stroke fill;
+  animation: banner 1.2s var(--curva) both;
+}
+@keyframes banner { 0% { opacity: 0; transform: translate(-50%, -8px); } 12%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+.medita {
+  position: absolute; left: 50%; bottom: calc(var(--sicura-b) + 8px); transform: translateX(-50%);
+  padding: 8px 18px; border-radius: 16px; background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22;
+  font: 400 18px var(--font-titolo); animation: respira 1.6s ease-in-out infinite;
+}
+@keyframes respira { 50% { opacity: .55; } }
+.mira-info {
+  position: absolute; right: var(--bordo-corto); bottom: calc(var(--sicura-b) + 180px);
+  padding: 4px 10px; border-radius: 12px; background: rgba(19, 41, 58, .85); font-weight: 900; font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.hud.mancini .mira-info { right: auto; left: var(--bordo-corto); }
+
+/* tasti: tutti ≥ 64 px, FUOCO 80, 12 px tra loro, 56 px dal bordo corto, 16 dal basso */
+.gruppo { position: absolute; bottom: var(--sicura-b); display: flex; align-items: flex-end; gap: 12px; }
+.gruppo-muovi { left: var(--bordo-corto); }
+.gruppo-azione { right: var(--bordo-corto); }
+.gruppo .spazio { width: 12px; flex: none; }
+.gruppo .colonna { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.hud.mancini .gruppo-muovi { left: auto; right: var(--bordo-corto); }
+.hud.mancini .gruppo-azione { right: auto; left: var(--bordo-corto); flex-direction: row-reverse; }
+.tasto {
+  width: 64px; height: 64px; flex: none; padding: 0; border-radius: 16px; cursor: pointer; touch-action: none;
+  display: grid; place-items: center; color: var(--testo); font-size: 26px; line-height: 1;
+  background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF33; border-bottom: 4px solid #0008;
+  transition: transform var(--rapida) var(--curva);
+}
+.tasto.premuto { transform: translateY(3px); background: rgba(38, 70, 94, .9); }
+.tasto:disabled { opacity: .4; cursor: default; }
+.tasto.testo { font: 400 16px var(--font-titolo); letter-spacing: .5px; }
+.tasto.fuoco {
+  width: 80px; height: 80px; border-radius: 50%; font-size: 20px; color: var(--inchiostro);
+  background: var(--oro); border: 0; border-bottom: 5px solid var(--oro-ombra);
+}
+.tasto.chip { height: 48px; border-radius: 24px; font: 900 14px var(--font-testo); font-variant-numeric: tabular-nums; }
+.tasto.arma .icona-arma { font-size: 30px; }
+
+.scrim-griglia { position: absolute; inset: 0; pointer-events: auto; background: rgba(14, 27, 38, .4); display: grid; place-items: center; }
+.griglia-armi {
+  display: grid; grid-template-columns: repeat(4, 88px); grid-auto-rows: 64px; gap: 6px; padding: 10px;
+  border-radius: 16px; background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22; animation: entra var(--rapida) var(--curva);
+}
+.cella-arma {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 4px; border-radius: 12px; border: 2px solid transparent; background: #FFFFFF14; color: var(--testo); cursor: pointer;
+}
+.cella-arma .icona { font-size: 22px; line-height: 1; }
+.cella-arma .nome {
+  font: 800 12px/1.05 var(--font-testo); text-align: center; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.cella-arma .munizioni { position: absolute; top: 2px; right: 6px; font-weight: 900; font-size: 12px; color: var(--oro); }
+.cella-arma.scelta { border-color: var(--oro); background: #FFC83D22; }
+.cella-arma.bloccata { background: #FFFFFF08; color: var(--testo-dim); cursor: default; filter: grayscale(1); opacity: .6; }
+
+.scrim-battaglia {
+  position: absolute; inset: 0; pointer-events: auto; display: grid; place-items: center;
+  background: rgba(14, 27, 38, .6); padding: var(--sicura-a) var(--bordo-corto) var(--sicura-b); animation: entra var(--media) var(--curva);
+}
+.pannello-abisso {
+  width: min(60vw, 420px); padding: 16px 20px; border-radius: 16px; text-align: center;
+  background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22;
+}
+.pannello-abisso h2 { font-size: 28px; }
+.pannello-abisso .sotto { margin: 2px 0 12px; color: var(--testo-dim); font-weight: 800; }
+.pannello-abisso .voci .btn { width: 100%; }
+.pannello-abisso .nota { margin: -6px 0 0; color: var(--testo-dim); font-size: 12px; }
+
+.pergamena {
+  width: 60vw; height: 75vh; max-width: 640px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 14px 20px 16px; border-radius: 16px; text-align: center; overflow: auto;
+  background: var(--pergamena); color: var(--inchiostro);
+  box-shadow: inset 0 0 0 4px var(--pergamena-ombra), 0 6px 0 #0004;
+}
+.pergamena h2 { font-size: clamp(32px, 11vh, 52px); color: var(--oro); -webkit-text-stroke: 2px var(--inchiostro); paint-order: stroke fill; }
+.pergamena.perso h2 { color: var(--testo-dim); }
+.pergamena .motivo { margin: 0; font-weight: 800; }
+.pergamena .superstiti { display: flex; flex-direction: column; gap: 4px; width: 100%; max-width: 360px; margin: auto 0; }
+.pergamena .superstiti .etichetta { font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: .7; }
+.pergamena .riga { display: flex; align-items: center; gap: 8px; font-weight: 800; }
+.pergamena .riga .nome { flex: 1; text-align: left; }
+.pergamena .riga .numero { font-variant-numeric: tabular-nums; }
+.pergamena .turni { font-size: 12px; opacity: .7; }
+.pergamena .azioni { display: flex; gap: 12px; }

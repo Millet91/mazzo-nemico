@@ -8,6 +8,7 @@ import type { AnimazioneMondo } from '../../core/carriera';
 import { CALA_PAPPAGALLO, CAPITOLO_1, MONDO_H, MONDO_W } from '../../contenuti/capitolo-1';
 import { caricaTextureMondo } from './risorse';
 import { ScenaMondo } from './scena-mondo';
+import { animazioneParallela } from './logica';
 import { TocchiMondo } from './tocchi';
 
 const SCHERMATE_MONDO = new Set(['mondo', 'scena', 'paywall']);
@@ -25,7 +26,8 @@ export function montaScenaMondo(app: Application, mare: { radice: Container }): 
   let eraVisibile = false;
 
   const accoda = (a: AnimazioneMondo) => {
-    bus.mondoOccupato.value = true;
+    // 'pirati' e 'centra' sono solo grafica: non fermano i tocchi (logica.animazioneParallela)
+    if (!animazioneParallela(a)) bus.mondoOccupato.value = true;
     if (!scena) { inAttesa.push(a); carica(); return; }
     // la Campagna può cambiare schermata e chiedere l'animazione nello stesso istante
     scena.mostra(mondoVisibile());

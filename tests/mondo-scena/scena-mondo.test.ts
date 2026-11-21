@@ -2,11 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import { CameraMondo, MARGINE_TAVOLO, SCALA_MAX } from '../../src/mondo/scena/camera-mondo';
 import {
-  TOCCO_MIN_PX, capitoliAperti, capitoliBloccati, isolaInPunto, isoleBloccate, rotte, sbuffiNebbia, scalaSegni,
+  TOCCO_MIN_PX, animazioneParallela, capitoliAperti, capitoliBloccati, isolaInPunto, isoleBloccate, rotte, sbuffiNebbia, scalaSegni,
   viaggioInCoda, vistaDaStato, type Indici, type IsolaMappa,
 } from '../../src/mondo/scena/logica';
 import { CALA_PAPPAGALLO, CAPITOLO_1, MONDO_H, MONDO_W } from '../../src/contenuti/capitolo-1';
-import type { StatoCarriera } from '../../src/core/carriera';
+import type { AnimazioneMondo, StatoCarriera } from '../../src/core/carriera';
 
 const mappa: IsolaMappa[] = [
   ...CAPITOLO_1.isole.map((i) => ({ id: i.id, x: i.pos.x, y: i.pos.y, raggio: i.raggio, capitolo: 1 })),
@@ -99,6 +99,13 @@ describe('tocchi sulle isole', () => {
 });
 
 describe('cosa mostra la scena', () => {
+  it('pirati e centra vanno in parallelo e non occupano la mappa; le altre sono bloccanti', () => {
+    expect(animazioneParallela({ t: 'pirati', isola: '1A', da: 4, a: 5 })).toBe(true);
+    expect(animazioneParallela({ t: 'centra', isola: '1A' })).toBe(true);
+    for (const a of [{ t: 'viaggio', da: 'cala', a: '1A' }, { t: 'nebbia', capitolo: 1 }, { t: 'conquista', isola: '1C' },
+      { t: 'perdita', isola: '1C' }, { t: 'attacco', da: ['1A'], verso: '1C' }] as AnimazioneMondo[]) expect(animazioneParallela(a)).toBe(false);
+  });
+
   it('le animazioni in coda "tengono" le loro isole e la nebbia del loro capitolo', () => {
     const coda = [
       { t: 'conquista', isola: '1C' }, { t: 'pirati', isola: '1A', da: 4, a: 2 }, { t: 'centra', isola: '1D' },

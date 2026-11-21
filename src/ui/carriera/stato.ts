@@ -63,10 +63,13 @@ export const stato = computed(() => bus.carriera.value);
 // ─── Salvataggio ─────────────────────────────────────────────────────────────────────────────────
 
 /** Legge il salvataggio all'avvio (non cambia schermata). */
-export async function preparaCarriera(): Promise<void> {
-  const { principale, riserva } = await caricaCarriera();
-  bus.carriera.value = R.ripristina(CAP, principale) ?? R.ripristina(CAP, riserva);
-  carrieraCaricata.value = true;
+let lettura: Promise<void> | null = null;
+export function preparaCarriera(): Promise<void> {
+  lettura ??= caricaCarriera().then(({ principale, riserva }) => {
+    bus.carriera.value = R.ripristina(CAP, principale) ?? R.ripristina(CAP, riserva);
+    carrieraCaricata.value = true;
+  });
+  return lettura;
 }
 
 function imposta(s: StatoCarriera, eventi: EventoCampagna[] = []) {
@@ -80,8 +83,8 @@ function imposta(s: StatoCarriera, eventi: EventoCampagna[] = []) {
 
 /** Dal menu: continua la carriera salvata o ne comincia una nuova. */
 export function entraInCarriera(): void {
-  // finché il salvataggio non è letto non si parte (si rischierebbe di sovrascriverlo con una carriera nuova)
-  if (!carrieraCaricata.value) return;
+  // finché il salvataggio non è letto si aspetta (si rischierebbe di sovrascriverlo con una carriera nuova)
+  if (!carrieraCaricata.value) { void preparaCarriera().then(entraInCarriera); return; }
   let s = bus.carriera.value;
   const nuova = !s;
   if (!s) s = R.nuovaCarriera(CAP);

@@ -3,6 +3,7 @@
 // Contratto congelato dal Lead Tecnico all'inizio di ogni milestone (M1: battaglia).
 import { signal } from '@preact/signals-core';
 import type { Comando, ConfigBattaglia, EsitoBattaglia, EventoBattaglia, FaseTurno, IdArma, IdCiurma } from './tipi';
+import type { AnimazioneMondo, ConfigScontro, EvidenzaMondo, IdIsola, StatoCarriera } from './carriera';
 
 export interface StatFps { medio: number; minimo: number }
 
@@ -62,6 +63,21 @@ export type AzioneBattaglia =
   /** ×2 / ×4 sui turni dell'IA (M2) */
   | { t: 'velocita'; fattore: 1 | 2 | 4 };
 
+/**
+ * Schermata fuori dalla battaglia (P2). La battaglia resta decisa da `richiestaBattaglia`/`battaglia` e copre tutto.
+ * - menu: menu principale (Carriera/Continua, Schermaglia);
+ * - mondo: il Tavolo del Timone (scena Pixi del mondo + pannelli Preact sopra);
+ * - scena: scena di copione (pergamena con ritratti) sopra il mondo;
+ * - paywall: schermata unica di fine cap. 1.
+ */
+export type Schermata = 'menu' | 'mondo' | 'scena' | 'paywall';
+
+/** Battaglia chiesta dalla carriera: la Campagna la scrive, il ciclo di gioco la legge insieme a richiestaBattaglia. */
+export interface BattagliaCarriera {
+  isola: IdIsola;
+  scontro: ConfigScontro;
+}
+
 type Ascoltatore<T> = (x: T) => void;
 
 /** Canale semplice uno-a-molti (niente signal: i comandi sono eventi, non stato). */
@@ -101,4 +117,20 @@ export const bus = {
   comandi: creaCanale<Comando>(),
   /** azioni dell'HUD che non sono comandi della sim (pausa, esci, ricentra) */
   azioni: creaCanale<AzioneBattaglia>(),
+
+  // ─── Carriera e mappa del mondo (P2, contratto del Lead P2: core/carriera.ts) ───
+  /** schermata attiva quando non c'è una battaglia. La scrivono menu e Campagna; la scena del mondo si mostra con 'mondo'/'scena'/'paywall'. */
+  schermata: signal<Schermata>('menu'),
+  /** stato della carriera (lo scrive SOLO la Campagna; null finché il salvataggio non è caricato) */
+  carriera: signal<StatoCarriera | null>(null),
+  /** selezione e isole toccabili sulla mappa del mondo (lo scrive la Campagna, lo legge la scena del mondo) */
+  evidenzaMondo: signal<EvidenzaMondo>({ selezionata: null, toccabili: [] }),
+  /** la scena del mondo sta animando: la UI non accetta comandi della mappa */
+  mondoOccupato: signal(false),
+  /** animazioni chieste alla scena del mondo (in coda, una dopo l'altra) */
+  animaMondo: creaCanale<AnimazioneMondo>(),
+  /** tocco su un'isola della mappa del mondo (dalla scena Pixi alla Campagna) */
+  isolaToccata: creaCanale<IdIsola>(),
+  /** scontro della battaglia di carriera in corso (null in Schermaglia). Si scrive PRIMA di richiestaBattaglia. */
+  battagliaCarriera: signal<BattagliaCarriera | null>(null),
 };

@@ -1,13 +1,15 @@
 // HUD di battaglia (00 §3 e §9.16, design M1 §6, m1-ritmo §1-3), sopra il canvas. Progettato a 800×360 CSS.
 //
 // [II] [PV + emblema A]   ⏱ timer  ~vento~   [PV + emblema B]
+//                                                      [⌖] (solo col pirata fuori schermo)
 //                                       [miccia]   45° · 60%
 //                                        [ARMA]
 //  (movimento)                          [FUOCO]    ( mira )
 //
-// Doppio joystick fisso (scelta del proprietario 21/11): vedi Joystick.tsx. Con "Comandi classici":
-// [◀][▶] … [▲][▼] [SALTA][FUOCO] come prima. Mancini: i due lati si scambiano.
-// I tasti usano i pointer event (non click) così due pollici lavorano insieme (caso 22).
+// Doppio joystick fisso (scelta del proprietario 21/11): vedi Joystick.tsx e leve.ts. Nel turno del giocatore la
+// leva di movimento resta sempre a schermo: accesa in azione e in fuga, al 50% nelle altre fasi (così la fuga
+// parte senza rialzare il dito). Con "Comandi classici": [◀][▶] … [▲][▼] [SALTA][FUOCO] come prima.
+// Mancini: i due lati si scambiano. I tasti usano i pointer event (non click) così due pollici lavorano insieme.
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo } from 'preact/hooks';
 import { bus, type VistaBattaglia, type VistaSquadra } from '../../core/bus';
@@ -21,7 +23,7 @@ import {
 import { apriPausa, banner, cambiaVelocitaIa, grigliaAperta, invia, velocitaIa } from './stato';
 import { EMBLEMA, ICONA_ARMA } from './segnaposto';
 import { comandiClassici, mancini } from '../preferenze';
-import { JoystickMira, JoystickMovimento } from './Joystick';
+import { JoystickMira, JoystickMovimento, modoArrampicata, TastoFuoco } from './Joystick';
 import { suona } from '../../piattaforma/audio';
 import { GrigliaArmi } from './GrigliaArmi';
 
@@ -119,6 +121,8 @@ function ChipMiccia({ v, attivo }: { v: VistaBattaglia; attivo: boolean }) {
 export function Hud({ v }: { v: VistaBattaglia }) {
   const cfg = bus.richiestaBattaglia.value;
   const vedi = comandiVisibili(v);
+  // turno del giocatore, in qualunque fase: la leva di movimento resta a schermo
+  const mioTurno = v.tocca === 'umano' && !v.esito && v.fase !== 'fine';
   const mira = miraAttiva(v);
 
   // tasti a tempo: si creano una volta e si fermano quando il componente sparisce o il turno cambia
@@ -153,6 +157,16 @@ export function Hud({ v }: { v: VistaBattaglia }) {
         <BarraSquadra sq={v.squadre[1]} lato={1} />
       </div>
 
+      {v.pirataFuoriVista && !v.esito && (
+        <button type="button" id="ricentra" data-testid="ricentra" class="tasto-ricentra" aria-label={T.battaglia.ricentra}
+          onClick={() => { tocco(); bus.azioni.invia({ t: 'ricentra' }); }}>
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+            <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+          </svg>
+        </button>
+      )}
+
       {banner.value && <div class="banner" role="status" data-testid="banner" key={banner.value}>{banner.value}</div>}
 
       {v.iaPensa && !v.esito && (
@@ -161,16 +175,13 @@ export function Hud({ v }: { v: VistaBattaglia }) {
 
       {vedi && <div class={`mira-info ${comandiClassici.value ? '' : 'doppio'}`} data-testid="mira">{T.battaglia.mira(alzo(v.miraGradi), Math.round(v.potenza))}</div>}
 
-      {vedi && !comandiClassici.value && (
+      {mioTurno && !comandiClassici.value && (
         <>
-          <JoystickMovimento />
+          <JoystickMovimento accesa={vedi} modo={modoArrampicata(v)} />
           {mira && (
             <>
               <JoystickMira v={v} />
-              <div class="fuoco-doppio">
-                <Tasto id="tasto-fuoco" label={T.battaglia.fuoco} cls="fuoco testo"
-                  giu={() => t.fuoco.tocca(v.numeroTurno)}>{T.battaglia.fuoco}</Tasto>
-              </div>
+              <div class="fuoco-doppio"><TastoFuoco turno={v.numeroTurno} /></div>
               <div class="sopra-mira">{conMiccia && <ChipMiccia v={v} attivo={mira} />}</div>
               <div class="arma-doppio"><TastoArma v={v} attivo={mira} /></div>
             </>

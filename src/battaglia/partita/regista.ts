@@ -4,12 +4,17 @@
 // - bus.richiestaBattaglia: una config nuova avvia la battaglia, null la chiude;
 // - bus.comandi → Partita (timbrati col tick); bus.azioni → pausa, riprendi, esci, ricentra, velocità;
 // - a ogni frame: tick a passo fisso, eventi alla scena, VistaBattaglia e eventiBattaglia sul bus.
+//
+// Camera (agente Comandi, docs/tecnica/comandi-v2.md): segue il pirata di turno; mentre il giocatore mira si
+// allarga da sola quanto basta per mostrare pirata e punto d'impatto (bus.zoomAutomaticoMira); pinch e
+// trascinamento sono sempre del giocatore e lo zoom scelto col pinch è quello a cui la visuale torna.
 import { effect } from '@preact/signals-core';
 import type { Application, Ticker } from 'pixi.js';
 import { bus, type AzioneBattaglia } from '../../core/bus';
-import type { ConfigBattaglia, EventoBattaglia } from '../../core/tipi';
+import type { Comando, ConfigBattaglia, EventoBattaglia } from '../../core/tipi';
 import { BIL } from '../../contenuti/bilanciamento';
-import { Camera, SCOSSA_MAX_PX } from '../render/camera';
+import { Camera, CIELO_EXTRA, SCOSSA_MAX_PX } from '../render/camera';
+import { inquadra, INQUADRA, zoomPigro } from '../render/inquadra';
 import { InputBattaglia } from '../render/input';
 import { ScenaBattaglia } from '../render/scena-battaglia';
 import { Partita } from './partita';
@@ -49,7 +54,19 @@ export class Regista {
   readonly camera = new Camera();
   private config: ConfigBattaglia | null = null;
   private stacca: (() => void)[] = [];
-  private segui: 'pirata' | 'proiettile' | 'libera' = 'pirata';
+  /**
+   * Chi guida la camera: 'pirata' = segue il pirata di turno; 'mira' = inquadra pirata e punto d'impatto;
+   * 'proiettile' = segue il colpo in volo; 'libera' = l'ha presa il giocatore (trascinamento o pinch).
+   */
+  private segui: 'pirata' | 'proiettile' | 'libera' | 'mira' = 'pirata';
+  /** zoom scelto dal giocatore (pinch o rotella): la visuale ci torna da sola dopo la mira */
+  private zoomGiocatore: number = BIL.camera.zoomPredefinito;
+  /** lo zoom sta tornando a quello del giocatore */
+  private zoomTorna = false;
+  /** inquadratura della mira: zoom in uso, obiettivo e "ferma" (dopo lo sparo non si ricalcola più) */
+  private zoomMira: number = BIL.camera.zoomPredefinito;
+  private obiettivoMira: { x: number; y: number; zoom: number; impatto: boolean } | null = null;
+  private miraFerma = false;
   private eraInPausa = false;
   private prova: Prova | null = null;
   /** ms di fermo immagine rimasti */
@@ -65,7 +82,7 @@ export class Regista {
       if (cfg && cfg !== this.config) this.avvia(cfg);
       else if (!cfg && this.config) this.termina();
     }));
-    this.stacca.push(bus.comandi.ascolta((c) => this.partita?.comandoUmano(c)));
+    this.stacca.push(bus.comandi.ascolta((c) => { this.comandoCamera(c); this.partita?.comandoUmano(c); }));
     this.stacca.push(bus.azioni.ascolta((a) => this.azione(a)));
     app.ticker.add(this.frame);
   }
@@ -80,6 +97,8 @@ export class Regista {
     this.app.stage.addChild(scena.cielo, scena.mondo, scena.schermo);
     if (this.sfondo) this.sfondo.radice.visible = false;
     this.camera.zoom = BIL.camera.zoomPredefinito;
+    this.zoomGiocatore = BIL.camera.zoomPredefinito;
+    this.zoomTorna = false;
     this.fermoMs = 0;
     this.segui = 'pirata';
     const p = partita.s.pirati.find((x) => x.id === partita.s.turno.pirata);
@@ -87,7 +106,11 @@ export class Regista {
     this.input = new InputBattaglia(this.app.canvas, {
       camera: this.camera,
       ricentra: () => this.ricentra(),
-      cameraManuale: () => { this.segui = 'libera'; },
+      cameraManuale: (tipo) => {
+        this.segui = 'libera';
+        this.zoomTorna = false;
+        if (tipo === 'zoom') this.zoomGiocatore = this.camera.zoom;
+      },
     });
     bus.battagliaInPausa.value = false;
     bus.eventiBattaglia.value = [];
@@ -124,11 +147,60 @@ export class Regista {
     }
   }
 
+  /** Doppio tocco, tasto "torna sul pirata" o il pirata che si muove: la camera torna su di lui, col suo zoom. */
   private ricentra(): void {
     const s = this.partita?.s;
     if (!s) return;
     const p = s.pirati.find((x) => x.id === s.turno.pirata);
-    if (p) { this.segui = 'pirata'; this.camera.vola(p.x, p.y, 300); }
+    if (!p) return;
+    this.segui = 'pirata';
+    this.zoomTorna = !this.prova;
+    this.camera.vola(p.x, p.y, 300);
+  }
+
+  /**
+   * I comandi del giocatore guidano anche la camera: mirando (in azione, con lo zoom automatico acceso) si
+   * passa all'inquadratura della mira; muovendo il pirata la camera torna su di lui se era altrove.
+   * Regola semplice da spiegare: "miri = vedi dove cade il colpo; ti muovi = vedi il pirata".
+   */
+  private comandoCamera(c: Comando): void {
+    const pa = this.partita;
+    if (!pa || pa.toccaIa || pa.s.esito || this.prova) return;
+    const fase = pa.s.turno.fase;
+    if (c.t === 'mira') {
+      if (fase !== 'azione' || !bus.zoomAutomaticoMira.value || this.segui === 'mira') return;
+      this.segui = 'mira';
+      this.zoomMira = this.camera.zoom;
+      this.obiettivoMira = null;
+      this.miraFerma = false;
+      this.zoomTorna = false;
+    } else if ((c.t === 'muovi' && c.dir !== 0) || c.t === 'salta' || (c.t === 'arrampica' && c.dir !== 0)) {
+      if (fase !== 'azione' && fase !== 'fuga') return;
+      // chi si muove guarda il pirata: la camera torna su di lui (e al suo zoom) da qualunque altra inquadratura
+      if (this.segui !== 'pirata') this.ricentra();
+    }
+  }
+
+  /** Inquadratura della mira: pirata e punto d'impatto dentro la parte libera dello schermo, col minimo spostamento. */
+  private inquadraMira(delta: number): void {
+    const s = this.partita!.s, cam = this.camera;
+    const p = s.pirati.find((x) => x.id === s.turno.pirata && x.stato === 'vivo');
+    if (!p) { this.segui = 'pirata'; return; }
+    if (!this.miraFerma || !this.obiettivoMira) {
+      const fine = s.turno.fase === 'azione' ? this.scena!.fineMira : null;
+      const impatto = fine && {
+        x: Math.min(cam.mondoW, Math.max(0, fine.x)),
+        y: Math.min(cam.mondoH, Math.max(-CIELO_EXTRA, fine.y)),
+      };
+      const b = cam.scalaBase;
+      const centro = { x: cam.x, y: cam.y };
+      const ideale = inquadra(centro, p, impatto, cam.w, cam.h, b * this.zoomGiocatore, b * BIL.camera.zoomMin).scala / b;
+      this.zoomMira = zoomPigro(this.zoomMira, ideale);
+      const r = inquadra(centro, p, impatto, cam.w, cam.h, b * this.zoomMira, b * BIL.camera.zoomMin);
+      this.obiettivoMira = { x: r.x, y: r.y, zoom: this.zoomMira, impatto: !!impatto };
+    }
+    const o = this.obiettivoMira;
+    cam.avvicina(o.x, o.y, o.zoom, delta, INQUADRA.tau);
   }
 
   aggiorna(deltaGrezzo: number): void {
@@ -158,9 +230,20 @@ export class Regista {
     scena.aggiorna(delta, this.camera, this.opzioniDisegno());
 
     const vista = creaVista(pa.s, pa.iaPensa);
+    vista.pirataFuoriVista = this.pirataFuoriVista();
     if (!visteUguali(bus.battaglia.value, vista)) bus.battaglia.value = vista;
 
     if (this.prova) this.contaProva(deltaGrezzo);
+  }
+
+  /** Il pirata di turno non si vede (camera spostata a mano o rimasta sul colpo): l'HUD mostra "torna sul pirata". */
+  private pirataFuoriVista(): boolean {
+    const s = this.partita!.s, cam = this.camera;
+    if (s.esito || (s.turno.fase !== 'azione' && s.turno.fase !== 'fuga') || cam.inVolo) return false;
+    const p = s.pirati.find((x) => x.id === s.turno.pirata && x.stato === 'vivo');
+    if (!p) return false;
+    const q = cam.schermoDaMondo(p.x, p.y);
+    return q.x < -8 || q.x > cam.w + 8 || q.y < -8 || q.y > cam.h + 8;
   }
 
   private opzioniDisegno() {
@@ -193,13 +276,28 @@ export class Regista {
       if (e.t === 'turnoIniziato') {
         const p = s.pirati.find((x) => x.id === e.pirata);
         this.segui = 'pirata';
+        this.zoomTorna = !this.prova;
         if (p) this.camera.vola(p.x, p.y);
-      } else if (e.t === 'sparo' && this.segui !== 'libera') this.segui = 'proiettile';
+      } else if (e.t === 'sparo') {
+        // inquadratura della mira con l'impatto dentro: il colpo si guarda da lì, senza inseguirlo
+        if (this.segui === 'mira' && s.config.traiettoriaCompleta && this.obiettivoMira?.impatto) this.miraFerma = true;
+        else if (this.segui !== 'libera') this.segui = 'proiettile';
+      }
     }
   }
 
   private muoviCamera(delta: number): void {
-    const s = this.partita!.s;
+    const s = this.partita!.s, cam = this.camera;
+    if (this.segui === 'mira') {
+      this.inquadraMira(delta);
+      if (this.miraFerma) {
+        // il colpo esce dai lati o da sotto (rimbalzo, vento): allora lo si insegue. Sopra può uscire: ricade.
+        const pr = s.proiettili.find((x) => !x.fermo && x.tipo !== 'lapide');
+        const q = pr && cam.schermoDaMondo(pr.x, pr.y);
+        if (q && (q.x < -20 || q.x > cam.w + 20 || q.y > cam.h + 20)) this.segui = 'proiettile';
+      }
+    }
+    if (this.zoomTorna && this.segui !== 'mira' && cam.zoomVerso(this.zoomGiocatore, delta, INQUADRA.tau)) this.zoomTorna = false;
     if (this.segui === 'proiettile') {
       const pr = s.proiettili.find((x) => !x.fermo && x.tipo !== 'lapide');
       if (pr) this.camera.segui(pr.x, pr.y, delta);

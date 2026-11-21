@@ -310,7 +310,7 @@ test('doppio joystick: movimento a sinistra, mira a destra con FUOCO al centro; 
     expect(pom.x).toBeGreaterThan(mir.x);
     expect(pom.y).toBeLessThan(mir.y);
 
-    // movimento: destra, sinistra, centro (zona morta), su = salto avanti
+    // movimento: destra, sinistra, centro (zona morta), dritto in su = salto alto
     const { x: x0, y: y0 } = mov;
     await page.mouse.move(x0, y0);
     await page.mouse.down();
@@ -322,14 +322,21 @@ test('doppio joystick: movimento a sinistra, mira a destra con FUOCO al centro; 
     await page.mouse.move(x0, y0, { steps: 4 });
     await page.mouse.up();
     let c = (await registro(page)).comandi;
-    expect(c).toEqual([{ t: 'muovi', dir: 1 }, { t: 'muovi', dir: 0 }, { t: 'muovi', dir: -1 }, { t: 'muovi', dir: 0 }, { t: 'salta', indietro: false }]);
-    // ultimo passo a sinistra: in alto a destra = salto alto all'indietro
+    expect(c).toEqual([{ t: 'muovi', dir: 1 }, { t: 'muovi', dir: 0 }, { t: 'muovi', dir: -1 }, { t: 'muovi', dir: 0 }, { t: 'salta', indietro: true }]);
+    // il salto va dove spingi: in diagonale a destra salta a destra anche se l'ultimo passo era a sinistra
     await page.evaluate(() => { (window as any).registro.comandi = []; });
     await page.mouse.move(x0, y0);
     await page.mouse.down();
-    await page.mouse.move(x0 + 20, y0 - 50, { steps: 6 });
+    await page.mouse.move(x0 + 35, y0 - 40, { steps: 6 });
     await page.mouse.up();
-    expect((await registro(page)).comandi).toEqual([{ t: 'salta', indietro: true }]);
+    expect((await registro(page)).comandi).toEqual([{ t: 'muovi', dir: 1 }, { t: 'salta', indietro: false }, { t: 'muovi', dir: 0 }]);
+    // appoggiare il dito in cima alla leva non fa saltare: serve la spinta
+    await page.evaluate(() => { (window as any).registro.comandi = []; });
+    await page.mouse.move(x0, y0 - 44);
+    await page.mouse.down();
+    await page.mouse.move(x0 + 2, y0 - 46, { steps: 2 });
+    await page.mouse.up();
+    expect((await registro(page)).comandi).toEqual([]);
 
     // mira: trascinamento sulla corona, relativo al 50%; manda solo `mira`, mai `fuoco`
     await page.evaluate(() => { (window as any).registro.comandi = []; });
@@ -347,8 +354,16 @@ test('doppio joystick: movimento a sinistra, mira a destra con FUOCO al centro; 
     expect(ultima.mezziGradi).toBeGreaterThan(90); // da 45° il pomello sale: angolo più alto
     if (f.nome === '20x9') await page.screenshot({ path: 'test-results/screenshot/doppio-joystick-20x9.png' });
 
-    // FUOCO: un tocco che parte su FUOCO spara una volta e non muove la mira, anche con doppio tocco
+    // FUOCO spara al rilascio: premuto non ha ancora sparato, e scivolando fuori dal tasto lo sparo si annulla
     await page.evaluate(() => { (window as any).registro.comandi = []; });
+    await page.mouse.move(fuo.x, fuo.y);
+    await page.mouse.down();
+    await expect(page.locator('#tasto-fuoco')).toHaveClass(/premuto/);
+    expect((await registro(page)).comandi).toEqual([]);
+    await page.mouse.move(fuo.x - 30, fuo.y - 90, { steps: 4 });
+    await page.mouse.up();
+    expect((await registro(page)).comandi).toEqual([]);
+    // un tocco che parte e finisce su FUOCO spara una volta e non muove la mira, anche con doppio tocco
     await page.locator('#tasto-fuoco').dblclick();
     expect((await registro(page)).comandi).toEqual([{ t: 'fuoco' }]);
     await page.screenshot({ path: `test-results/screenshot/hud-joystick-${f.nome}.png` });
@@ -366,7 +381,11 @@ test('scale e liane: appeso compaiono ▲▼, su = arrampica, destra pura niente
   await page.mouse.move(x, y - 50, { steps: 4 });   // su (da destra passa dalla diagonale ma non salta)
   await page.mouse.move(x + 40, y - 40, { steps: 4 }); // dalla salita alla diagonale: salta via
   await page.mouse.up();
-  expect((await registro(page)).comandi).toEqual([{ t: 'arrampica', dir: -1 }, { t: 'arrampica', dir: 0 }, { t: 'salta', indietro: false }]);
+  // il salto va dal lato della spinta: prima gira il pirata a destra, poi salta
+  expect((await registro(page)).comandi).toEqual([
+    { t: 'arrampica', dir: -1 }, { t: 'arrampica', dir: 0 },
+    { t: 'muovi', dir: 1 }, { t: 'salta', indietro: false }, { t: 'muovi', dir: 0 },
+  ]);
   await page.screenshot({ path: 'test-results/screenshot/appeso-20x9.png' });
   // senza appigli niente frecce
   await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; }, vista());
@@ -380,6 +399,47 @@ test('doppio joystick: in fuga solo il movimento, nel turno dell\'IA nessuno', a
   await expect(page.getByTestId('joystick-mira')).toHaveCount(0);
   await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; }, vista({ tocca: 'ia', iaPensa: true }));
   await expect(page.getByTestId('joystick-movimento')).toHaveCount(0);
+});
+
+test('doppio joystick: durante il volo la leva di movimento resta spenta e alla fuga riparte senza rialzare il dito', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 360 });
+  await entraInBattaglia(page, vista(), false);
+  const { x, y } = await centro(page, 'joystick-movimento');
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 40, y, { steps: 4 });
+  expect((await registro(page)).comandi).toEqual([{ t: 'muovi', dir: -1 }]);
+  // sparo: in volo la leva resta a schermo (spenta), la mira e FUOCO spariscono, e il pollice non comanda
+  await aggiorna(page, { fase: 'volo' });
+  await expect(page.locator('.zona-movimento.spenta .base-joystick')).toBeVisible();
+  await expect(page.getByTestId('joystick-mira')).toHaveCount(0);
+  await expect(page.locator('#tasto-fuoco')).toHaveCount(0);
+  await page.mouse.move(x + 40, y, { steps: 4 });
+  expect((await registro(page)).comandi).toEqual([{ t: 'muovi', dir: -1 }, { t: 'muovi', dir: 0 }]);
+  // fuga: la leva si riaccende e manda subito la direzione che il pollice sta già tenendo
+  await aggiorna(page, { fase: 'fuga' });
+  await expect(page.locator('.zona-movimento.spenta')).toHaveCount(0);
+  await expect.poll(async () => (await registro(page)).comandi.at(-1)).toEqual({ t: 'muovi', dir: 1 });
+  await page.mouse.up();
+  expect((await registro(page)).comandi.at(-1)).toEqual({ t: 'muovi', dir: 0 });
+});
+
+test('tasto "torna sul pirata": compare solo col pirata di turno fuori vista', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 360 });
+  await entraInBattaglia(page, vista(), false);
+  await expect(page.locator('#ricentra')).toHaveCount(0);
+  await aggiorna(page, { pirataFuoriVista: true });
+  const [r] = await rettangoli(page, '#ricentra');
+  expect(r.w).toBeGreaterThanOrEqual(44);
+  expect(r.h).toBeGreaterThanOrEqual(44);
+  expect(r.x + r.w).toBeLessThanOrEqual(800 - 56);
+  const [pausa] = await rettangoli(page, '#pausa');
+  if (pausa) expect(r.y).toBeGreaterThanOrEqual(pausa.y + pausa.h);
+  await page.locator('#ricentra').click();
+  expect((await registro(page)).azioni.at(-1)).toEqual({ t: 'ricentra' });
+  await page.screenshot({ path: 'test-results/screenshot/ricentra-20x9.png' });
+  await aggiorna(page, { pirataFuoriVista: false });
+  await expect(page.locator('#ricentra')).toHaveCount(0);
 });
 
 test('Schermaglia: da 1 a 5 pirati per lato, scelta salvata', async ({ page }) => {
@@ -478,6 +538,11 @@ test('Impostazioni: mancini, comandi classici, volume e Diagnostica', async ({ p
   await page.goto('/?prova');
   await page.locator('#apri-impostazioni').click();
   await expect(page.locator('#comandi-classici')).toHaveAttribute('aria-checked', 'false');
+  // zoom automatico durante la mira: acceso dal primo avvio (scelta del proprietario), si può spegnere
+  await expect(page.locator('#zoom-mira')).toHaveAttribute('aria-checked', 'true');
+  await page.locator('#zoom-mira').click();
+  await expect(page.locator('#zoom-mira')).toHaveAttribute('aria-checked', 'false');
+  expect(await page.evaluate(() => (window as any).__kaboom.bus.zoomAutomaticoMira.value)).toBe(false);
   await expect(page.getByTestId('volume-valore')).toHaveText('80%');
   await page.locator('#volume').click();
   await expect(page.getByTestId('volume-valore')).toHaveText('100%');
@@ -496,6 +561,7 @@ test('Impostazioni: mancini, comandi classici, volume e Diagnostica', async ({ p
   // la preferenza resta dopo il riavvio e specchia l'HUD
   await page.reload();
   await expect(page.locator('#schermaglia')).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__kaboom.bus.zoomAutomaticoMira.value)).toBe(false);
   await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; }, vista());
   await expect(page.locator('.hud.mancini')).toBeVisible();
   // con i mancini i due joystick si scambiano (stessi data-testid)

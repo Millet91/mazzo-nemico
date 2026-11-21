@@ -75,4 +75,45 @@ describe('Camera della battaglia', () => {
     expect(dopo.x).toBeCloseTo(450);
     expect(dopo.y).toBeCloseTo(220);
   });
+
+  it('avvicina: centro e zoom arrivano insieme, morbidi, e fermano inerzia e volo', () => {
+    const c = new Camera();
+    c.impostaSchermo(914, 411);
+    c.vola(700, 600, 0);
+    c.lancia(1, 0);
+    c.avvicina(900, 500, 1.0, 16, 180);
+    expect(c.scivola).toBe(false);
+    expect(c.zoom).toBeLessThan(BIL.camera.zoomPredefinito);
+    expect(c.zoom).toBeGreaterThan(1.3); // un frame solo: appena partito
+    for (let i = 0; i < 80; i++) c.avvicina(900, 500, 1.0, 16, 180);
+    expect(c.zoom).toBeCloseTo(1.0, 2);
+    expect(c.x).toBeCloseTo(900, 0);
+    expect(c.y).toBeCloseTo(500, 0);
+  });
+
+  it('zoomVerso: torna allo zoom dato tenendo il centro e dice quando è arrivato', () => {
+    const c = new Camera();
+    c.impostaSchermo(914, 411);
+    c.vola(1000, 500, 0);
+    c.zoomA(0.9);
+    let arrivato = false;
+    for (let i = 0; i < 120 && !arrivato; i++) arrivato = c.zoomVerso(1.4, 16, 180);
+    expect(arrivato).toBe(true);
+    expect(c.zoom).toBe(1.4);
+    expect(c.x).toBeCloseTo(1000, 0);
+  });
+
+  it("inerzia: stesso spazio a 60 e a 120 fps, e si ferma contro il bordo del mondo", () => {
+    const a = new Camera(), b = new Camera();
+    for (const c of [a, b]) { c.impostaSchermo(914, 411); c.vola(1000, 500, 0); c.lancia(-1, 0); }
+    for (let i = 0; i < 30; i++) a.aggiorna(16);
+    for (let i = 0; i < 60; i++) b.aggiorna(8);
+    expect(a.x).toBeCloseTo(b.x, 1);
+    const c = new Camera();
+    c.impostaSchermo(914, 411);
+    c.vola(0, 500, 0); // già al bordo sinistro
+    c.lancia(3, 0);
+    c.aggiorna(16);
+    expect(c.scivola).toBe(false);
+  });
 });

@@ -37,6 +37,8 @@ export interface VistaBattaglia {
   puoArrendersi: boolean;
   /** pirata attivo rispetto a scale e liane: 'vicino' = può aggrapparsi, 'appeso' = è aggrappato */
   arrampicata?: 'libero' | 'vicino' | 'appeso';
+  /** il pirata attivo è fuori dallo schermo (camera spostata a mano): l'HUD mostra il tasto per ricentrare */
+  pirataFuoriVista?: boolean;
   esito: EsitoBattaglia | null;
 }
 
@@ -92,6 +94,9 @@ export const bus = {
   battagliaInPausa: signal(false),
   /** eventi della sim dell'ultimo frame (banner, numeri, vibrazioni, audio); si sostituisce a ogni frame che ne ha */
   eventiBattaglia: signal<EventoBattaglia[]>([]),
+  /** preferenza del giocatore (Impostazioni): mentre si mira la camera si allarga da sola fino a mostrare
+   *  pirata e punto d'impatto (scelta del proprietario 21/11/2026). La scrive la UI, la legge il regista. */
+  zoomAutomaticoMira: signal(true),
   /** comandi per il pirata attivo, dall'HUD (D) o dall'input sul canvas (B). Il ciclo di gioco li timbra col tick. */
   comandi: creaCanale<Comando>(),
   /** azioni dell'HUD che non sono comandi della sim (pausa, esci, ricentra) */

@@ -4,14 +4,17 @@ import { signal } from '@preact/signals';
 import { Preferences } from '@capacitor/preferences';
 import { impostaVolume } from '../piattaforma/audio';
 import { PIRATI_PREDEFINITI } from './battaglia/logica';
+import { bus } from '../core/bus';
 
 const CHIAVE = 'hud';
-interface PreferenzeHud { mancini: boolean; comandiClassici: boolean; volume: number; pirati: [number, number]; calaVista?: boolean }
+interface PreferenzeHud { mancini: boolean; comandiClassici: boolean; volume: number; pirati: [number, number]; calaVista?: boolean; zoomMira?: boolean }
 
 /** HUD specchiato per i mancini. */
 export const mancini = signal(false);
 /** tasti ◀ ▶ SALTA ▲ ▼ FUOCO di prima al posto del doppio joystick */
 export const comandiClassici = signal(false);
+/** mentre si mira la visuale si allarga da sola (scelta del proprietario 21/11/2026); il valore vive in bus.zoomAutomaticoMira */
+export const zoomMira = bus.zoomAutomaticoMira;
 /** volume dei suoni 0..1 */
 export const volume = signal(0.8);
 /** pirati per lato nella Schermaglia (giocatore, Marina) */
@@ -36,6 +39,7 @@ export async function caricaPreferenzeHud(): Promise<void> {
     const p = value ? (JSON.parse(value) as Partial<PreferenzeHud>) : {};
     mancini.value = !!p.mancini;
     comandiClassici.value = !!p.comandiClassici;
+    zoomMira.value = p.zoomMira !== false;
     if (typeof p.volume === 'number') volume.value = Math.max(0, Math.min(1, p.volume));
     calaVista = !!p.calaVista;
     if (calaVista) mappaSchermaglia.value = '';
@@ -46,7 +50,7 @@ export async function caricaPreferenzeHud(): Promise<void> {
 }
 
 async function salva(): Promise<void> {
-  const p: PreferenzeHud = { mancini: mancini.value, comandiClassici: comandiClassici.value, volume: volume.value, pirati: piratiSchermaglia.value, calaVista };
+  const p: PreferenzeHud = { mancini: mancini.value, comandiClassici: comandiClassici.value, volume: volume.value, pirati: piratiSchermaglia.value, calaVista, zoomMira: zoomMira.value };
   try { await Preferences.set({ key: CHIAVE, value: JSON.stringify(p) }); } catch { /* non bloccare */ }
 }
 
@@ -57,6 +61,8 @@ export async function impostaComandiClassici(v: boolean): Promise<void> {
   for (const f of ascoltatoriClassici) f(v);
   await salva();
 }
+
+export async function impostaZoomMira(v: boolean): Promise<void> { zoomMira.value = v; await salva(); }
 
 export async function impostaVolumeHud(v: number): Promise<void> {
   volume.value = Math.max(0, Math.min(1, v));

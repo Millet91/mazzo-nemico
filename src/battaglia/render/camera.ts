@@ -15,6 +15,11 @@ export const SCOSSA_MAX_PX = 10;
 export const IMPULSO_ZOOM = 0.08;
 export const IMPULSO_ZOOM_MS = 300;
 
+/** inerzia dopo un trascinamento: la vista scivola ancora un po' e si ferma in ~300 ms */
+export const INERZIA_TAU_MS = 110;
+export const INERZIA_MAX = 3; // px CSS per ms
+const INERZIA_FERMA = 0.02;
+
 export interface Volo { daX: number; daY: number; aX: number; aY: number; ms: number; durata: number }
 
 export class Camera {
@@ -29,6 +34,8 @@ export class Camera {
   /** scossa in corso: ampiezza in px CSS e ms passati */
   private scossa = { amp: 0, ms: SCOSSA_MS };
   private impulso = { ms: IMPULSO_ZOOM_MS };
+  /** velocità residua del trascinamento, px CSS per ms */
+  private inerzia: { vx: number; vy: number } | null = null;
   /** spostamento della scossa in px di mondo (solo grafico) */
   ox = 0;
   oy = 0;
@@ -75,9 +82,47 @@ export class Camera {
   /** Trascinamento: sposta la vista di (dx, dy) px CSS (il mondo segue il dito). */
   trascina(dx: number, dy: number): void {
     this.volo = null;
+    this.inerzia = null;
+    this.sposta(dx, dy);
+  }
+
+  private sposta(dx: number, dy: number): void {
     const k = this.scala;
     this.x -= dx / k; this.y -= dy / k;
     this.limita();
+  }
+
+  /** Dito alzato in corsa: la vista continua a scivolare con questa velocità (px CSS per ms) e rallenta da sola. */
+  lancia(vx: number, vy: number): void {
+    const v = Math.hypot(vx, vy);
+    if (v < INERZIA_FERMA * 5) { this.inerzia = null; return; }
+    const k = Math.min(1, INERZIA_MAX / v);
+    this.inerzia = { vx: vx * k, vy: vy * k };
+  }
+
+  /** Ferma inerzia e volo (qualcun altro prende la camera). */
+  ferma(): void { this.inerzia = null; this.volo = null; }
+
+  get scivola(): boolean { return this.inerzia !== null; }
+
+  /** Va verso centro e zoom dati con un assestamento morbido (inquadratura della mira, ritorno dello zoom). */
+  avvicina(x: number, y: number, zoom: number, deltaMS: number, tau: number): void {
+    this.volo = null; this.inerzia = null;
+    const k = 1 - Math.exp(-deltaMS / tau);
+    const z = Math.min(C.zoomMax, Math.max(C.zoomMin, zoom));
+    // lo zoom si muove in scala logaritmica: allargare e stringere hanno lo stesso passo
+    this.zoom = Math.abs(z - this.zoom) < 0.002 ? z : this.zoom * (z / this.zoom) ** k;
+    this.x += (x - this.x) * k; this.y += (y - this.y) * k;
+    this.limita();
+  }
+
+  /** Porta solo lo zoom verso `zoom`, tenendo fermo il centro. true quando è arrivato. */
+  zoomVerso(zoom: number, deltaMS: number, tau: number): boolean {
+    const z = Math.min(C.zoomMax, Math.max(C.zoomMin, zoom));
+    if (Math.abs(z - this.zoom) < 0.002) { this.zoom = z; this.limita(); return true; }
+    this.zoom *= (z / this.zoom) ** (1 - Math.exp(-deltaMS / tau));
+    this.limita();
+    return false;
   }
 
   /** Zoom tenendo fermo il punto dello schermo (px, py), es. il centro del pinch. */
@@ -91,6 +136,7 @@ export class Camera {
 
   /** Vola sul punto in `durataMs` (0,6 s di inquadratura, 00 §1.4). */
   vola(x: number, y: number, durataMs: number = (C.inquadraTick * 1000) / 60): void {
+    this.inerzia = null;
     const a = this.limitato(x, y);
     if (durataMs <= 0) { this.x = a.x; this.y = a.y; this.volo = null; return; }
     this.volo = { daX: this.x, daY: this.y, aX: a.x, aY: a.y, ms: 0, durata: durataMs };
@@ -98,6 +144,7 @@ export class Camera {
 
   /** Segue un punto in movimento (proiettile, pirata che cammina) con un inseguimento morbido. */
   segui(x: number, y: number, deltaMS: number): void {
+    this.inerzia = null;
     if (this.volo) { this.volo.aX = x; this.volo.aY = y; return; }
     const k = 1 - Math.exp(-deltaMS / 120);
     this.x += (x - this.x) * k; this.y += (y - this.y) * k;
@@ -120,6 +167,17 @@ export class Camera {
 
   aggiorna(deltaMS: number): void {
     this.aggiornaEffetti(deltaMS);
+    const i = this.inerzia;
+    if (i) {
+      // spazio percorso nel frame con velocità che cala in modo esponenziale (uguale a ogni frequenza di frame)
+      const cala = Math.exp(-deltaMS / INERZIA_TAU_MS);
+      const spazio = INERZIA_TAU_MS * (1 - cala);
+      const prima = { x: this.x, y: this.y };
+      this.sposta(i.vx * spazio, i.vy * spazio);
+      i.vx *= cala; i.vy *= cala;
+      // contro il bordo del mondo o quasi ferma: finita
+      if (Math.hypot(i.vx, i.vy) < INERZIA_FERMA || (this.x === prima.x && this.y === prima.y)) this.inerzia = null;
+    }
     const v = this.volo;
     if (!v) return;
     v.ms += deltaMS;

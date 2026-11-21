@@ -11,7 +11,6 @@ import { bannerDaEventi, configSchermaglia, DURATA_BANNER_MS, semeNuovo, squadra
 import { vibraPerEventi } from './vibrazioni';
 import { suona, type Suono } from '../../piattaforma/audio';
 import { mappaSchermaglia, piratiSchermaglia, segnaMappaGiocata } from '../preferenze';
-import { puntoSuiComandi } from './zone';
 
 /** schermata di scelta della Schermaglia (1-5 pirati per lato) aperta */
 export const sceltaSchermaglia = signal(false);
@@ -49,11 +48,6 @@ export function cambiaVelocitaIa(): void {
   velocitaIa.value = velocitaIa.value === 1 ? 2 : 1;
   bus.azioni.invia({ t: 'velocita', fattore: velocitaIa.value });
 }
-
-// Regola "ogni tocco appartiene al controllo dove comincia": il canvas di B ignora i tocchi che partono sui
-// controlli dell'HUD. Si carica con import.meta.glob così la UI non tira dentro Pixi.
-const MODULI_INPUT = import.meta.glob<{ impostaZoneControlli?: (f: ((x: number, y: number) => boolean) | null) => void }>('../../battaglia/render/input.ts');
-void Object.values(MODULI_INPUT)[0]?.().then((m) => m.impostaZoneControlli?.(puntoSuiComandi)).catch(() => {});
 
 export function apriPausa(): void {
   if (!inBattaglia() || bus.battagliaInPausa.value || bus.battaglia.value?.esito) return;

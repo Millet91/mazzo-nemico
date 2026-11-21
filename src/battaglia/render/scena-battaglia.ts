@@ -25,7 +25,11 @@ function mescola(a: string, b: string, t: number): number {
 const MEZZA_CAPSULA = BIL.pirata.capsulaAltezza / 2;
 /** durata della morte del segnaposto: 10 f a 12 fps (11 §5) */
 const MORTE_MS = 833;
-const PUNTI_TRAIETTORIA = 60;
+/**
+ * Punti chiesti alla sim per la traiettoria: il cannone ne dà uno ogni 3 tick, quindi 160 = 8 s di volo.
+ * Con 60 (3 s) i tiri alti venivano tagliati e il mirino rosso finiva a mezz'aria, lontano dall'impatto vero.
+ */
+const PUNTI_TRAIETTORIA = 160;
 /** traiettoria ben leggibile (Lead design, PR #37): puntini oro di 3,5 px di schermo a ogni zoom, uno ogni ~12 px */
 const PASSO_PUNTINI_PX = 12;
 const MAX_PUNTINI = 220;
@@ -493,6 +497,15 @@ export class ScenaBattaglia {
     });
   }
 
+  /**
+   * L'ultimo punto della traiettoria mostrata, in px di mondo: il punto d'impatto (dove sta il mirino rosso)
+   * quando la traiettoria è intera. null se non si sta mirando o l'arma non ha traiettoria.
+   */
+  get fineMira(): Punto | null {
+    if (!this.chiaveTraiettoria || this.puntiTraiettoria.length < 2) return null;
+    return this.puntiTraiettoria[this.puntiTraiettoria.length - 1];
+  }
+
   private aggiornaTraiettoria(mostra: boolean, aSchermo: (x: number, y: number) => Punto): void {
     if (!mostra) {
       if (this.chiaveTraiettoria) { for (const p of this.puntini) p.visible = false; this.fineTraiettoria.visible = false; this.frecciaBordo.visible = false; this.chiaveTraiettoria = ''; }
@@ -546,7 +559,7 @@ export class ScenaBattaglia {
     if (fine) {
       const f = aSchermo(fine.x, fine.y);
       this.fineTraiettoria.position.set(f.x, f.y);
-      // mirino fuori schermo: piccola freccia rossa sul bordo che punta verso di lui (niente zoom automatico)
+      // mirino fuori schermo (zoom automatico spento, o camera spostata a mano): freccia rossa sul bordo verso di lui
       const b = this.fineTraiettoria.visible ? frecciaBordo(f.x, f.y, this.cieloW, this.cieloH) : null;
       if (b) {
         this.frecciaBordo.visible = true;

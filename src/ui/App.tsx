@@ -12,7 +12,7 @@ import { avviaAscoltoBattaglia, avviaTicTac, indietroInBattaglia, inBattaglia, s
 import { SceltaSchermaglia } from './battaglia/SceltaSchermaglia';
 import { sbloccaAudio } from '../piattaforma/audio';
 import { Diagnostica, provaAttiva, statoFps } from './Diagnostica';
-import { caricaPreferenzeHud, comandiClassici, impostaComandiClassici, impostaMancini, impostaVolumeHud, mancini, piratiSchermaglia, volume } from './preferenze';
+import { caricaPreferenzeHud, comandiClassici, impostaComandiClassici, impostaMancini, impostaVolumeHud, impostaZoomMira, mancini, piratiSchermaglia, volume, zoomMira } from './preferenze';
 
 // avvio dell'HUD (main.tsx non è una cartella dell'HUD): preferenze salvate, banner e vibrazioni della battaglia
 void caricaPreferenzeHud();
@@ -132,6 +132,11 @@ function PannelloImpostazioni() {
               onClick={() => { tocco(); void impostaComandiClassici(!comandiClassici.value); }}>
               <span class="testi"><span class="etichetta">{T.impostazioni.comandiClassici}</span><span class="nota">{T.impostazioni.comandiClassiciNota}</span></span>
               <span class="stato-interruttore">{comandiClassici.value ? T.impostazioni.acceso : T.impostazioni.spento}</span>
+            </button>
+            <button type="button" id="zoom-mira" class="interruttore" role="switch" aria-checked={zoomMira.value}
+              onClick={() => { tocco(); void impostaZoomMira(!zoomMira.value); }}>
+              <span class="testi"><span class="etichetta">{T.impostazioni.zoomMira}</span><span class="nota">{T.impostazioni.zoomMiraNota}</span></span>
+              <span class="stato-interruttore">{zoomMira.value ? T.impostazioni.acceso : T.impostazioni.spento}</span>
             </button>
             <button type="button" id="volume" class="interruttore" aria-label={`${T.impostazioni.volume}: ${T.impostazioni.volumeValore(Math.round(volume.value * 100))}`}
               onClick={() => { tocco(); void impostaVolumeHud(volumeSuccessivo(volume.value)); }}>

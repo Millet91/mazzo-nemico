@@ -49,6 +49,7 @@ test('caso 22: joystick di movimento tenuto + mira trascinata + FUOCO → il col
   expect(tipi.filter((t) => t === 'fuoco')).toHaveLength(1);
   // la mira non è mai arrivata dopo FUOCO, e il movimento si ferma al rilascio
   expect(tipi.indexOf('fuoco')).toBeGreaterThan(tipi.lastIndexOf('mira'));
-  expect(comandi[comandi.length - 1]).toEqual({ t: 'muovi', dir: 0 });
+  // (comandi v2: FUOCO spara al rilascio del dito, quindi può arrivare dopo lo stop del movimento)
+  expect(comandi.filter((c) => c.t === 'muovi').at(-1)).toEqual({ t: 'muovi', dir: 0 });
   await expect.poll(() => page.evaluate(() => (window as any).__kaboom.bus.battaglia.value.fase)).not.toBe('azione');
 });

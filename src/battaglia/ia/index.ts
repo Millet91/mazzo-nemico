@@ -34,15 +34,9 @@ export interface RichiestaWorker { id: number; stato: StatoBattaglia; livello: L
 export type RispostaWorker = { id: number; piano: PianoIa } | { id: number; errore: string };
 
 export function creaIa(): ClientIa {
+  if (typeof Worker === 'undefined') return clientLocale();
   let worker: Worker | null = null;
-  if (typeof Worker !== 'undefined') {
-    try {
-      worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
-    } catch {
-      worker = null;
-    }
-  }
-  if (!worker) return clientLocale();
+  let chiuso = false;
 
   let prossimo = 1;
   const attese = new Map<number, { stato: StatoBattaglia; livello: LivelloIa; ok: (p: PianoIa) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -54,34 +48,51 @@ export function creaIa(): ClientIa {
     a.ok(piano ?? decidi(a.stato, a.livello));
   };
   const ripiega = () => {
-    // il worker non risponde più: si calcola sul posto (stesso risultato, solo sul thread principale)
+    // il worker non risponde più: si chiude, si calcola sul posto (stesso risultato) e al turno dopo se ne crea uno nuovo
     worker?.terminate();
     worker = null;
     for (const id of [...attese.keys()]) risolvi(id);
   };
-  worker.onmessage = (e: MessageEvent<RispostaWorker>) => risolvi(e.data.id, 'piano' in e.data ? e.data.piano : undefined);
-  worker.onerror = (e) => { e.preventDefault(); ripiega(); };
+  const avvia = (): Worker | null => {
+    const w = nuovoWorker();
+    if (!w) return null;
+    w.onmessage = (e: MessageEvent<RispostaWorker>) => risolvi(e.data.id, 'piano' in e.data ? e.data.piano : undefined);
+    w.onerror = (e) => { e.preventDefault(); if (worker === w) ripiega(); };
+    return w;
+  };
 
   return {
     pensa(s, livello) {
+      if (!chiuso && !worker) worker = avvia();
       if (!worker) return Promise.resolve(decidi(s, livello));
+      const w = worker;
       const id = prossimo++;
       return new Promise<PianoIa>((ok) => {
         // una sola copia completa: quella di postMessage. Per il ripiego basta una fotografia senza maschera:
         // mentre l'IA pensa (fase 'azione', prima dello sparo) la maschera non cambia, quindi si tiene il riferimento.
         const foto = fotografia(s);
-        const timer = setTimeout(ripiega, TEMPO_MASSIMO_MS);
+        const timer = setTimeout(() => { if (worker === w) ripiega(); else risolvi(id); }, TEMPO_MASSIMO_MS);
         attese.set(id, { stato: foto, livello, ok, timer });
-        worker!.postMessage({ id, stato: s, livello } satisfies RichiestaWorker);
+        w.postMessage({ id, stato: s, livello } satisfies RichiestaWorker);
       });
     },
     chiudi() {
+      chiuso = true;
       worker?.terminate();
       worker = null;
       for (const a of attese.values()) clearTimeout(a.timer);
       attese.clear();
     },
   };
+}
+
+function nuovoWorker(): Worker | null {
+  if (typeof Worker === 'undefined') return null;
+  try {
+    return new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+  } catch {
+    return null;
+  }
 }
 
 /** Dopo questo tempo senza risposta il worker si considera bloccato e si calcola sul posto. */

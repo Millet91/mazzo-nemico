@@ -110,6 +110,51 @@ export const BIL = {
   lapide: { danno: 10, raggio: 25 },
 
   /** scale e liane distruttibili (richiesta del proprietario, 21/11/2026) */
+  /**
+   * Studio v2, Fase 1 (PIANO §3, game-design §3.4 e 3.6, tecnica §3.4-3.6). CONGELATO dal Lead P1: la sim della
+   * Fase 1 legge da qui, e finché non lo fa questi numeri non cambiano niente. Le velocità sono in px/tick.
+   */
+  movimento: {
+    /** passo corto col tocco breve (come oggi) e corsa a falcate tenendo ◀ ▶ oltre corsaDopoTick */
+    passoVel: 60 / S,
+    corsaVel: 96 / S,
+    corsaDopoTick: Math.round(0.4 * S),
+    /** da ferma a corsaVel in 0,15 s; alla fine la frenata scivola per questi px */
+    corsaAccelTick: Math.round(0.15 * S),
+    frenataPx: 6,
+    /** in salita rallenta fino a −30% a 45°, in discesa accelera altrettanto */
+    pendenzaFrazione: 0.3,
+    /** un evento `passo` ogni tanti px percorsi */
+    passoPx: 14,
+    /** scavalco automatico: si issa da solo sui muretti fino a questa altezza (oltre il gradino di 8 px) */
+    scavalcoMax: 28,
+    scavalcoTick: Math.round(0.25 * S),
+    /** controllo in aria durante il salto: px/s² */
+    ariaAccel: 20,
+    /** scivolata sui pendii oltre questi gradi, fino a questa velocità; atterrando in scivolata niente danno da caduta */
+    scivolataGradi: 25,
+    scivolataVelMax: 220 / S,
+    /** salvataggio al bordo: Balzo entro questi tick dall'inizio della caduta, una volta per battaglia a pirata */
+    bordoTick: Math.round(0.5 * S),
+    bordoPerBattaglia: 1,
+    /** scale e liane in un tocco: sale e scende da solo a questa velocità fino in cima o in fondo */
+    scalaVel: 90 / S,
+  },
+  /** Studio v2, Fase 1: ritmo del turno (Bilanciamento, PIANO bozza 2). CONGELATO dal Lead P1, come `movimento`. */
+  ritmo: {
+    /** fuga dopo lo sparo: 1,5 s, si chiude prima col comando 'fatto' o se il pirata resta fermo per fermoFugaTick */
+    fugaTick: Math.round(1.5 * S),
+    fermoFugaTick: Math.round(0.5 * S),
+    /** timer PER SPARO in secondi: normale, con Mozzo e nel Prologo, Timer lungo */
+    timerSparo: 12,
+    timerSparoMozzo: 25,
+    timerSparoLungo: 45,
+    /** il turno dell'IA dura al più 4 s, con la mira ben visibile per 0,8 s prima dello sparo */
+    iaTurnoMaxTick: 4 * S,
+    iaMiraVisibileTick: Math.round(0.8 * S),
+    /** panoramica a inizio turno sul nemico più vicino (solo camera, saltabile con un tocco), in ms */
+    panoramicaMs: 1200,
+  },
   arrampicata: {
     /** px/tick: 40 px/s in su, 60 px/s in giù, uguale per scala e liana (design/comandi/scale-e-liane.md) */
     velocitaSu: 40 / S,

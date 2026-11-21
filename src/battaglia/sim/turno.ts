@@ -10,6 +10,7 @@ import { ARMA } from '../../contenuti/armi';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { aggiornaPirata, annega, fermo, inAcqua, inGioco } from './pirata';
 import { esplodi, tiroVicino } from './esplosione';
+import { regoleScontro } from './scontro';
 import { bersagliDi, colpoIstantaneo, durataColpi, fisicaDi, spara, tickColpo } from './armi';
 import { muoviProiettile } from './proiettili';
 import { MICCIA_LAPIDE_TICK, VITA_MAX_PROIETTILE } from './costanti';
@@ -296,6 +297,8 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
     default:
       break;
   }
+  // regole del tipo di scontro (P2: Bandiera), a battaglia non finita
+  if (!s.esito) regoleScontro(s, eventi, (vincitore, motivo) => concludi(s, vincitore, motivo, eventi));
 }
 
 /** Ritirata (resa) dell'attaccante, dal turno 4: vince il difensore. */

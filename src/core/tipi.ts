@@ -90,6 +90,29 @@ export type IdArma =
 export type LivelloIa = 'mozzo' | 'nostromo' | 'capitano';
 export type Ruolo = 'attaccante' | 'difensore';
 
+/**
+ * Tipi di scontro (studio v2, PIANO §4.6; chiesti dal Lead P2, che li reimporta in core/carriera.ts):
+ * - assalto: elimina tutti (la battaglia di sempre; vale anche quando `scontro` manca);
+ * - bandiera: sulla vetta c'è una bandiera, chi la strappa vince (regola in sim/bandiera.ts, del Pacchetto 2);
+ * - duello: 1 contro 1 col capo (nessuna regola nuova).
+ */
+export type TipoScontro = 'assalto' | 'bandiera' | 'duello';
+
+export interface ConfigScontro {
+  tipo: TipoScontro;
+  /** solo bandiera: dove sta l'asta (piedi), in px di mondo. Se manca la sim prende il punto più alto della mappa. */
+  bandiera?: Punto;
+  /** battaglia di notte: solo grafica e IA, nessuna regola */
+  notte?: boolean;
+  /** barili già piazzati in più: li aggiunge la mappa, qui solo il numero voluto */
+  bariliExtra?: number;
+  /** nome del capo nemico per duello e boss minori (testo, es. 'Rigidini') */
+  capo?: string;
+}
+
+/** Mosse premio della carriera (P2): in battaglia si accendono con ConfigSquadra.mosse. */
+export type IdMossa = 'saltoAppoggio' | 'dondolo' | 'scivolata' | 'tuffo';
+
 export interface ConfigSquadra {
   ciurma: IdCiurma;
   ruolo: Ruolo;
@@ -97,6 +120,10 @@ export interface ConfigSquadra {
   livelloIa?: LivelloIa;
   /** pirati in campo, 1-5 */
   pirati: number;
+  /** mosse premio accese per questa squadra; assente = tutte (Schermaglia, Prologo) */
+  mosse?: IdMossa[];
+  /** nomi dei pirati, in ordine (reclute della carriera); assente o corto = nomi della ciurma */
+  nomi?: string[];
 }
 
 export interface ConfigBattaglia {
@@ -106,12 +133,17 @@ export interface ConfigBattaglia {
   variante?: Variante;
   /** squadra 0 = attaccante, squadra 1 = difensore */
   squadre: [ConfigSquadra, ConfigSquadra];
-  /** durata del turno: 20, 30 (Mozzo, prime battaglie) o 45 (Timer lungo) */
+  /**
+   * secondi del timer. Fino alla Fase 0: durata del turno, 20, 30 (Mozzo) o 45 (Timer lungo).
+   * Dalla Fase 1 (BIL.ritmo): secondi PER SPARO, 12, 25 (Mozzo e Prologo) o 45 (Timer lungo).
+   */
   timerSecondi: number;
   /** traiettoria tratteggiata intera (tutorial, Mozzo) invece del primo 30% */
   traiettoriaCompleta: boolean;
   /** mappa fatta a mano (battaglia/mappe, 06 §6) al posto di quella generata dal seme; resta nel replay */
   mappaFissa?: string;
+  /** tipo di scontro (carriera, P2); assente = assalto */
+  scontro?: ConfigScontro;
 }
 
 // ─── Stato della battaglia ───────────────────────────────────────────────────────────────────────
@@ -164,7 +196,23 @@ export interface Pirata {
   dannoNelTurno: number;
   /** id dell'appiglio a cui è aggrappato (−1 = nessuno): niente gravità, può sparare */
   appeso: number;
+  /**
+   * Cosa sta facendo (studio v2, Fase 1): la scrive SOLO la sim; render (posa del pupazzo) e audio la leggono e
+   * non decidono mai la fisica. Finché la sim della Fase 1 non c'è il campo manca e vale 'fermo'.
+   */
+  mossa?: MossaPirata;
+  /** tick in cui è cominciata la mossa in corso (per far partire l'animazione dal primo fotogramma) */
+  mossaDa?: number;
 }
+
+/**
+ * Mosse del pirata (PIANO §3 Fase 1). 'passo' = cammino corto, 'corsa' = falcate dopo BIL.movimento.corsaDopoSec,
+ * 'frenata' = scivolata breve a fine corsa, 'salto' = sale, 'caduta' = scende, 'scavalco' = si issa su un muretto
+ * fino a BIL.movimento.scavalcoMax, 'scivolata' = giù per un pendio ripido, 'bordo' = appeso al ciglio dopo il
+ * salvataggio, 'scala' e 'liana' = aggrappato a un appiglio, 'aTerra' = steso dopo un colpo (si rialza da solo).
+ */
+export type MossaPirata =
+  | 'fermo' | 'passo' | 'corsa' | 'frenata' | 'salto' | 'caduta' | 'scavalco' | 'scivolata' | 'bordo' | 'scala' | 'liana' | 'aTerra';
 
 export type TipoProiettile = 'palla' | 'granata' | 'frammento' | 'barile' | 'mina' | 'lapide' | 'cassa';
 
@@ -192,7 +240,7 @@ export type FaseTurno =
   | 'inquadra'    // 0,6 s: la camera vola sul pirata attivo, niente comandi
   | 'azione'      // muovi/mira/fuoco; il timer scorre (parte al primo comando o dopo 2 s)
   | 'volo'        // proiettili in aria: timer fermo
-  | 'fuga'        // 3 s di movimento libero dopo lo sparo
+  | 'fuga'        // movimento libero dopo lo sparo: 3 s; dalla Fase 1 1,5 s, e si chiude prima col comando 'fatto'
   | 'risoluzione' // si aspetta che tutto sia fermo; lapidi, mare che sale, controllo fine
   | 'fine';       // battaglia finita (vedi esito)
 
@@ -224,7 +272,8 @@ export interface StatoTurno {
   fermoDa: number;
 }
 
-export type MotivoFine = 'eliminazione' | 'tempo' | 'ritirata';
+/** 'bandiera' = scontro Bandiera vinto strappandola (P2) */
+export type MotivoFine = 'eliminazione' | 'tempo' | 'ritirata' | 'bandiera';
 
 export interface EsitoBattaglia {
   /** squadra vincitrice */
@@ -268,7 +317,14 @@ export interface StatoBattaglia {
  */
 export type Comando =
   | { t: 'muovi'; dir: -1 | 0 | 1 }
+  /**
+   * Fino alla Fase 0: salto in avanti, o alto all'indietro. Dalla Fase 1 è il Balzo: la sim sceglie da sola tra
+   * salto (con la rincorsa se corre), scavalco e stacco dall'appiglio; `indietro: true` vale solo contro una
+   * parete (salto dal muro), altrove è un salto normale. Il salto alto all'indietro non esiste più.
+   */
   | { t: 'salta'; indietro: boolean }
+  /** Fase 1: in 'fuga' chiude subito il turno ("fatto"); fuori dalla fuga è ignorato */
+  | { t: 'fatto' }
   /** su (−1) / giù (1) / ferma (0) su un appiglio; ci si aggrappa se si è entro BIL.arrampicata.presa px */
   | { t: 'arrampica'; dir: -1 | 0 | 1 }
   /** imposta la mira (fionda o IA); mezziGradi 0..719 assoluti, potenza intera 0..100 */
@@ -302,7 +358,8 @@ export type EventoBattaglia =
   | { t: 'salto'; pirata: number }
   | { t: 'atterrato'; pirata: number; dannoCaduta: number }
   | { t: 'rimbalzo'; proiettile: number; x: number; y: number }
-  | { t: 'esplosione'; x: number; y: number; raggio: number; arma: IdArma | 'lapide' | 'cassa' }
+  /** materiale (Fase 1, per l'audio a strati): byte della maschera più presente nel cratere; assente = sabbia */
+  | { t: 'esplosione'; x: number; y: number; raggio: number; arma: IdArma | 'lapide' | 'cassa'; materiale?: number }
   /** la maschera è cambiata in questo rettangolo (il render ridisegna solo le tile toccate) */
   | { t: 'cratere'; x: number; y: number; raggio: number }
   | { t: 'colpoPistola'; da: Punto; a: Punto }
@@ -318,6 +375,21 @@ export type EventoBattaglia =
   | { t: 'staccato'; pirata: number }
   /** un'esplosione ha tolto il tratto yAlto-yBasso dell'appiglio (il resto può diventare uno o due appigli) */
   | { t: 'appiglioRotto'; appiglio: number; x: number; yAlto: number; yBasso: number }
+  // ── studio v2, Fase 1: movimento da pirata (per pupazzo, polvere e audio) ──
+  /** un piede tocca terra: uno ogni BIL.movimento.passoPx px percorsi; materiale = byte della maschera sotto il piede */
+  | { t: 'passo'; pirata: number; x: number; y: number; corsa: boolean; materiale: number }
+  /** comincia a issarsi su un muretto (dura BIL.movimento.scavalcoSec) */
+  | { t: 'scavalco'; pirata: number }
+  /** comincia (inizio: true) o finisce una scivolata su un pendio ripido */
+  | { t: 'scivola'; pirata: number; inizio: boolean; materiale: number }
+  /** salvataggio al bordo: si è aggrappato al ciglio invece di cadere */
+  | { t: 'bordo'; pirata: number }
+  /** salto dal muro (Balzo contro una parete) */
+  | { t: 'saltoMuro'; pirata: number }
+  /** la fuga è stata chiusa col comando 'fatto' */
+  | { t: 'fatto'; pirata: number }
+  // ── Pacchetto 2: scontro Bandiera ──
+  | { t: 'bandieraPresa'; pirata: number }
   | { t: 'fine'; esito: EsitoBattaglia };
 
 // ─── IA ───────────────────────────────────────────────────────────────────────────────────────────

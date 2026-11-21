@@ -13,6 +13,10 @@ export const it = {
     schermaglia: 'Schermaglia',
     schermagliaSotto: '3 contro 3 contro la Marina Reale',
     schermagliaSottoN: (a: number, b: number) => `${a} contro ${b} contro la Marina Reale`,
+    carriera: 'Carriera',
+    carrieraSottoNuova: 'Conquista le Isole Spezzate',
+    carrieraSottoContinua: (capitolo: number) => `Continua · Capitolo ${capitolo}`,
+    tornaMenu: 'Torna al menu',
   },
   impostazioni: {
     titolo: 'Impostazioni',

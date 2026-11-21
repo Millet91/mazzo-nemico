@@ -1,0 +1,71 @@
+/* Kit UI dipinto (P2, Arte UI): pannelli a 9 fette, pulsanti di legno, medaglione tondo, icone delle armi.
+   Le immagini arrivano da variabili CSS impostate da applicaKit() (risorse.ts). Fette a 3×: 72 px → 24 px CSS.
+   Regola dello stile (arte-ui.md §3): contorno marrone scuro caldo, luce dall'alto a sinistra, testo Lilita One
+   con contorno inchiostro. L'HUD di battaglia NON usa il kit: resta in vetro scuro. */
+
+/* ─── Pannelli ─── */
+.kit-pannello {
+  position: relative; border-style: solid; color: var(--inchiostro);
+  background: none; image-rendering: auto;
+}
+/* cornice di legno con dentro la pergamena: il pannello principale della mappa del mondo */
+.kit-pannello.cornice {
+  border-width: 24px; padding: 2px 6px;
+  border-image: var(--kit-pannello-cornice) 72 fill / 24px stretch;
+}
+/* tutto legno: cartelli, barre, fondo di gruppi di pulsanti */
+.kit-pannello.legno {
+  border-width: 22px; padding: 0 4px; color: var(--testo);
+  border-image: var(--kit-pannello-legno) 66 fill / 22px stretch;
+}
+/* foglio di pergamena: lettere, cartelli del Re, premi */
+.kit-pannello.pergamena {
+  border-width: 20px; padding: 0 4px;
+  border-image: var(--kit-pannello-pergamena) 60 fill / 20px stretch;
+}
+.kit-pannello h2, .kit-pannello .kit-titolo {
+  font: 400 24px/1.1 var(--font-titolo); margin: 0 0 6px; color: var(--inchiostro);
+}
+.kit-pannello.legno h2, .kit-pannello.legno .kit-titolo {
+  color: var(--oro); -webkit-text-stroke: 2px var(--inchiostro); paint-order: stroke fill;
+}
+
+/* ─── Pulsanti di legno (la tavola ha lo spessore sotto: premuto = scende di 4 px) ─── */
+.kit-pulsante {
+  all: unset; box-sizing: border-box; cursor: pointer; pointer-events: auto; position: relative;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  min-width: 48px; min-height: 56px; padding: 0 6px 2px;
+  border-style: solid; border-width: 16px 20px 22px;
+  font: 400 20px/1.05 var(--font-titolo); letter-spacing: .4px; text-align: center;
+  color: var(--testo); -webkit-text-stroke: 2px var(--inchiostro); paint-order: stroke fill;
+  transition: transform var(--rapida) var(--curva), filter var(--rapida) var(--curva);
+  -webkit-tap-highlight-color: transparent;
+}
+.kit-pulsante.legno { border-image: var(--kit-pulsante-legno) 48 60 66 60 fill / 16px 20px 22px stretch; }
+.kit-pulsante.oro { border-image: var(--kit-pulsante-oro) 48 60 66 60 fill / 16px 20px 22px stretch; color: #FFF7E8; }
+.kit-pulsante:active { transform: translateY(4px); filter: brightness(.94); }
+.kit-pulsante:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
+.kit-pulsante:disabled, .kit-pulsante[aria-disabled='true'] { filter: grayscale(.8) brightness(.8); cursor: default; }
+.kit-pulsante:disabled:active { transform: none; }
+.kit-pulsante .sotto {
+  font: 800 13px/1.2 var(--font-testo); -webkit-text-stroke: 0; letter-spacing: 0;
+  color: var(--testo); text-shadow: 0 1px 0 var(--inchiostro), 0 0 3px var(--inchiostro);
+}
+.kit-pulsante.oro .sotto { color: var(--inchiostro); text-shadow: 0 1px 0 #FFF3C080; }
+.kit-pulsante.grande { min-height: 84px; min-width: 300px; font-size: 34px; padding: 0 22px 4px; }
+
+/* ─── Medaglione tondo (pulsante a icona: ingranaggio, indietro) ─── */
+.kit-tondo {
+  all: unset; box-sizing: border-box; cursor: pointer; pointer-events: auto;
+  width: 52px; height: 52px; display: grid; place-items: center;
+  background: var(--kit-cornice-tonda) center / contain no-repeat;
+  font: 400 22px/1 var(--font-titolo); color: var(--oro);
+  -webkit-text-stroke: 1.5px var(--inchiostro); paint-order: stroke fill;
+  transition: transform var(--rapida) var(--curva);
+}
+.kit-tondo:active { transform: translateY(2px) scale(.96); }
+.kit-tondo:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; border-radius: 50%; }
+
+/* ─── Icone delle armi (128 px, mostrate tra 40 e 64 px CSS) ─── */
+.kit-icona-arma { display: inline-block; vertical-align: middle; object-fit: contain; pointer-events: none; }
+.kit-icona-arma.bloccata { filter: grayscale(1) brightness(.55); opacity: .7; }

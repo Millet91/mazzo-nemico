@@ -242,7 +242,7 @@ export function creaJoystick(invia: (c: { t: 'muovi'; dir: -1 | 0 | 1 } | { t: '
 export const DOPPIO = {
   /** joystick di movimento: base 120, centro a 100 dal bordo e 92 dal basso */
   movimento: { base: 120 },
-  /** joystick di mira: base 150 con FUOCO 64 al centro, centro a 110 dal bordo e 100 dal basso */
+  /** joystick di mira: base 150 (80 a riposo), centro a 110 dal bordo e 100 dal basso; `fuoco` è il cerchio interno a potenza 0 */
   mira: { base: 150, fuoco: 64, pomello: 36 },
   /** un tocco vale se parte entro la base più questo margine */
   margine: 16,

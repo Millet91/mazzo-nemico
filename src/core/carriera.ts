@@ -6,7 +6,10 @@
 // Come core/tipi.ts: solo dati serializzabili (numeri, stringhe, booleani, array, oggetti semplici), niente classi.
 // Il salvataggio è StatoCarriera passato a JSON.stringify.
 
-import type { Bioma, IdArma, Punto } from './tipi';
+import type { Bioma, ConfigScontro, IdArma, IdMossa, Punto } from './tipi';
+
+// Scontri e mosse vivono in core/tipi.ts (contratto P1, Fase 1): qui si riesportano per chi usa la carriera.
+export type { ConfigScontro, IdMossa, TipoScontro } from './tipi';
 
 // ─── Identità ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -20,29 +23,6 @@ export type IdCapitolo = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type Padrone = 'giocatore' | 'marina';
 
 // ─── Scontri e premi ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * Tipi di scontro (PIANO §4.6):
- * - assalto: elimina tutti (la battaglia di oggi);
- * - bandiera: sulla vetta c'è la bandiera della Marina, chi la strappa vince (regola nuova in sim/);
- * - duello: 1 contro 1 col capo (nessuna regola nuova: piratiPerLato 1/1).
- */
-export type TipoScontro = 'assalto' | 'bandiera' | 'duello';
-
-export interface ConfigScontro {
-  tipo: TipoScontro;
-  /** solo bandiera: dove sta l'asta (piedi), in px di mondo. Se manca la prende dalla mappa (punto più alto). */
-  bandiera?: Punto;
-  /** battaglia di notte (1F): solo grafica e IA, nessuna regola */
-  notte?: boolean;
-  /** barili già piazzati in più (1G): li aggiunge la mappa, qui solo il numero voluto */
-  bariliExtra?: number;
-  /** nome del capo nemico per duello e boss minori (testo, es. 'Rigidini') */
-  capo?: string;
-}
-
-/** Mosse da pirata che si sbloccano in carriera (PIANO §4.7). Le costruisce P1; la carriera le accende. */
-export type IdMossa = 'saltoAppoggio' | 'dondolo' | 'scivolata' | 'tuffo';
 
 export type Premio =
   | { t: 'arma'; arma: IdArma }

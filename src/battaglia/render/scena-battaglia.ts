@@ -38,6 +38,8 @@ const MAX_PUNTINI = 220;
 const ALFA_MIN_PUNTINI = 0.7;
 /** sotto questa scala (px CSS per px di mondo) i nomi dei pirati non si scrivono */
 const SCALA_MIN_NOMI = 0.9;
+/** il nome si vede solo sul pirata di turno e sul bersaglio: chi sta entro questi px dal punto d'impatto mostrato */
+const RAGGIO_BERSAGLIO = 80;
 
 interface VisPirata {
   id: number;
@@ -369,6 +371,7 @@ export class ScenaBattaglia {
 
     const t = s.turno;
     const attivo = s.pirati.find((p) => p.id === t.pirata && p.stato === 'vivo');
+    this.bersaglio = this.trovaBersaglio(attivo);
     for (const p of s.pirati) this.aggiornaPirata(p, deltaMS, aSchermo, p === attivo && t.fase === 'azione', attivo);
 
     // pirata attivo: anello a terra e freccia che rimbalza (00 §2.1)
@@ -511,7 +514,8 @@ export class ScenaBattaglia {
     }
 
     // etichetta (nome, barra e PV) sopra la testa, in px CSS; da lontano il nome si nasconde (si sovrapporrebbe)
-    v.nome.visible = this.scala >= SCALA_MIN_NOMI;
+    // e si vede solo su chi è di turno e sul bersaglio: gli altri tengono barra e PV (studio v2, UX §3.5)
+    v.nome.visible = this.scala >= SCALA_MIN_NOMI && (p === attivo || p.id === this.bersaglio);
     const e = aSchermo(p.x, piedi - BIL.pirata.altezzaSprite - 4);
     v.etichetta.position.set(Math.round(e.x), Math.round(e.y));
   }
@@ -553,6 +557,20 @@ export class ScenaBattaglia {
     this.decorazioni.forEach((d, i) => {
       d.rotation = verso + Math.sin(this.tempo / 700 + i * 1.7) * forza;
     });
+  }
+
+  /** id del pirata vivo più vicino al punto d'impatto mostrato (mirino rosso), o −1 se non si mira su nessuno */
+  private bersaglio = -1;
+  private trovaBersaglio(attivo: Pirata | undefined): number {
+    const s = this.s, fine = this.fineMira;
+    if (!attivo || !fine || !s.config.traiettoriaCompleta || s.turno.fase !== 'azione') return -1;
+    let id = -1, meglio = RAGGIO_BERSAGLIO * RAGGIO_BERSAGLIO;
+    for (const p of s.pirati) {
+      if (p === attivo || p.stato !== 'vivo') continue;
+      const d = (p.x - fine.x) ** 2 + (p.y - fine.y) ** 2;
+      if (d <= meglio) { meglio = d; id = p.id; }
+    }
+    return id;
   }
 
   /**

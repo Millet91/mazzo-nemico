@@ -59,7 +59,7 @@ export function spara(s: StatoBattaglia, p: Pirata, eventi: EventoBattaglia[]): 
     case 'lancio': {
       const b = bocca(s.terreno, p.x, p.y, t.mira.mezziGradi);
       const ciurma = s.squadre[p.squadra].ciurma;
-      if (b.bloccato && a.tipo === 'balistica') { esplodi(s, b.x, b.y, a.id, ciurma, eventi); return; }
+      if (b.bloccato && a.tipo === 'balistica') { esplodi(s, b.x, b.y, a.id, ciurma, eventi, undefined, p.id); return; } // bocca contro il muro: tiro vicino
       const v = velocitaIniziale(t.mira.mezziGradi, a.usaPotenza ? t.mira.potenza : 100);
       const pr: Proiettile = {
         id: s.prossimoId++, tipo: tipoProiettile(a), arma: a.id, x: b.x, y: b.y, vx: v.vx, vy: v.vy,

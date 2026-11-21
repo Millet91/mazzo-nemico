@@ -38,7 +38,7 @@
 | Pirata | Hitbox a capsula **12×22**. Sprite disegnato a 40 px di mondo, cioè circa 37 px CSS. Cella dello sheet 128×128. **Leggibilità verificata a 36 px CSS** |
 | Movimento | Camminata 60 px/s, gradino massimo 8 px. Salto in avanti: vx 90, vy −230. Doppio tocco: vx −40, vy −330 |
 | Fisica | Passo fisso a 60 Hz. **g = 600 px/s²**, cioè 0,1667 px/tick². Velocità massima dei proiettili 950 px/s. Vento: intero da −10 a +10, con il massimo che dipende dal bioma; vale 15 px/s² per punto (0,0042 px/tick²). Rimbalzo del pirata 0,3, il pirata si ferma sotto i 5 px/s. Al massimo 5 tick per frame |
-| Esplosione | danno `D × (1 − d/r)`, minimo 1 dentro il raggio. Spinta `D × 7 px/s` con la stessa attenuazione. Chi spara si fa male |
+| Esplosione | danno `D × (1 − d/r)`, minimo 1 dentro il raggio. Spinta `D × 7 px/s` con la stessa attenuazione. Chi spara si fa male (studio v2, Fase 0: tranne il colpo sprecato sul pendio a meno di 60 px che non raggiunge nessun altro; prima di sparare il tasto FUOCO avvisa) |
 | Determinismo | PRNG con seme nello stato, niente `Math.random`, `Date.now`, `Math.sin` o `Math.cos` nella simulazione (si usa una tabella a 0,5°) |
 
 **Materiali del terreno** (1 byte per pixel nella maschera):

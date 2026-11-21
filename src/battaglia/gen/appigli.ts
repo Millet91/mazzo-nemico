@@ -55,8 +55,12 @@ function piediVicino(m: Uint8Array, c: number, y: number, tolleranza: number): n
   return -1;
 }
 
-/** Problemi di un appiglio sul terreno dato (vuoto = va bene). Lo usano il generatore e il validatore. */
-export function controllaAppiglio(m: Uint8Array, mare: number, a: AppiglioMappa): string[] {
+/**
+ * Problemi di un appiglio sul terreno dato (vuoto = va bene). Lo usano il generatore e il validatore.
+ * `entro` = distanza massima dall'asse a cui comincia il piano in cima: il generatore resta severo (la presa, 8 px),
+ * il validatore accetta fino a REGOLE.appiglioPianoEntro (la sim fa passare il pirata fino a BIL.arrampicata.passaggioCima).
+ */
+export function controllaAppiglio(m: Uint8Array, mare: number, a: AppiglioMappa, entro: number = BIL.arrampicata.presa): string[] {
   const R = REGOLE, err: string[] = [];
   const nome = `${a.tipo} in x ${a.x} (${a.yAlto}-${a.yBasso})`;
   const lungo = a.yBasso - a.yAlto;
@@ -70,7 +74,7 @@ export function controllaAppiglio(m: Uint8Array, mare: number, a: AppiglioMappa)
   // in cima: un piano largo almeno appiglioPiano, che comincia entro la presa e sta entro appiglioCima px dalla cima
   let cima = false;
   for (const verso of [-1, 1]) {
-    for (let k = 0; k <= BIL.arrampicata.presa && !cima; k++) {
+    for (let k = 0; k <= entro && !cima; k++) {
       const s0 = piediVicino(m, a.x + verso * k, a.yAlto, R.appiglioCima);
       if (s0 < 0) continue;
       let largo = 0;

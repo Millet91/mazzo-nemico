@@ -9,7 +9,8 @@ import { daGradi } from '../../core/trig';
 import { ARMA } from '../../contenuti/armi';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { aggiornaPirata, annega, fermo, inAcqua, inGioco } from './pirata';
-import { esplodi } from './esplosione';
+import { esplodi, tiroVicino } from './esplosione';
+import { regoleScontro } from './scontro';
 import { bersagliDi, colpoIstantaneo, durataColpi, fisicaDi, spara, tickColpo } from './armi';
 import { muoviProiettile } from './proiettili';
 import { MICCIA_LAPIDE_TICK, VITA_MAX_PROIETTILE } from './costanti';
@@ -161,8 +162,8 @@ function ciurmaDi(s: StatoBattaglia, pr: Proiettile) {
   return p ? s.squadre[p.squadra].ciurma : null;
 }
 
-/** Fa scoppiare un proiettile (arma, lapide, barile o cassa). */
-function scoppia(s: StatoBattaglia, pr: Proiettile, x: number, y: number, eventi: EventoBattaglia[]): void {
+/** Fa scoppiare un proiettile (arma, lapide, barile o cassa). `suTerreno` = è scoppiato urtando il terreno. */
+function scoppia(s: StatoBattaglia, pr: Proiettile, x: number, y: number, eventi: EventoBattaglia[], suTerreno = false): void {
   if (pr.tipo === 'cassa') {
     const c = centroOggetto(pr);
     esplodi(s, c.x, c.y, 'cassa', null, eventi, BIL.casse.esplosione);
@@ -170,7 +171,10 @@ function scoppia(s: StatoBattaglia, pr: Proiettile, x: number, y: number, eventi
     const c = centroOggetto(pr);
     esplodi(s, c.x, c.y, 'barile', null, eventi);
   } else {
-    esplodi(s, x, y, pr.arma, ciurmaDi(s, pr), eventi);
+    // tiro vicino: chi spara contro il pendio accanto non si fa male, se il colpo non raggiunge nessun altro
+    const chi = suTerreno && pr.lanciatore >= 0 ? s.pirati.find((q) => q.id === pr.lanciatore && q.stato === 'vivo') : undefined;
+    const risparmia = chi && tiroVicino(pr.arma, chi.x, chi.y, x, y) ? chi.id : -1;
+    esplodi(s, x, y, pr.arma, ciurmaDi(s, pr), eventi, undefined, risparmia);
   }
   dopoEsplosione(s);
 }
@@ -196,7 +200,7 @@ function aggiornaProiettili(s: StatoBattaglia, eventi: EventoBattaglia[]): void 
       if (urto) {
         if (urto.tipo === 'mare') { eventi.push({ t: 'splash', x: urto.x, y: urto.y, grande: false }); tolti.add(pr.id); continue; }
         if (urto.tipo === 'rimbalzo') eventi.push({ t: 'rimbalzo', proiettile: pr.id, x: urto.x, y: urto.y });
-        else { tolti.add(pr.id); scoppia(s, pr, urto.x, urto.y, eventi); continue; }
+        else { tolti.add(pr.id); scoppia(s, pr, urto.x, urto.y, eventi, urto.tipo === 'terreno'); continue; }
       }
     }
     if (pr.tickEsplosione >= 0 && s.tick >= pr.tickEsplosione) { tolti.add(pr.id); scoppia(s, pr, pr.x, pr.y, eventi); continue; }
@@ -293,6 +297,8 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
     default:
       break;
   }
+  // regole del tipo di scontro (P2: Bandiera), a battaglia non finita
+  if (!s.esito) regoleScontro(s, eventi, (vincitore, motivo) => concludi(s, vincitore, motivo, eventi));
 }
 
 /** Ritirata (resa) dell'attaccante, dal turno 4: vince il difensore. */

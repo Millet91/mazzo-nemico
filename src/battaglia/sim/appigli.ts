@@ -49,6 +49,36 @@ function aggrappa(s: StatoBattaglia, p: Pirata, a: Appiglio, eventi: EventoBatta
   eventi.push({ t: 'aggrappato', pirata: p.id, appiglio: a.id });
 }
 
+/** In piedi sul piano in cima all'appiglio (piedi vicini alla cima, asse entro il passaggio)? Da qui "scendi" aggrappa. */
+export function sulPianoInCima(a: Appiglio, p: Pick<Pirata, 'x' | 'y' | 'aTerra'>): boolean {
+  if (!p.aTerra) return false;
+  const piedi = p.y + MEZZA_ALTEZZA_PIRATA;
+  return Math.abs(a.x - p.x) <= A.passaggioCima && Math.abs(piedi - a.yAlto) <= A.piediCima;
+}
+
+/** Appiglio da prendere con "scendi" stando sul piano in cima (il più vicino; a parità, id più basso), o undefined. */
+export function appiglioSotto(s: Pick<StatoBattaglia, 'appigli'>, p: Pick<Pirata, 'x' | 'y' | 'aTerra'>): Appiglio | undefined {
+  let migliore: Appiglio | undefined;
+  for (const a of s.appigli) {
+    if (!sulPianoInCima(a, p)) continue;
+    if (!migliore || Math.abs(a.x - p.x) < Math.abs(migliore.x - p.x)) migliore = a;
+  }
+  return migliore;
+}
+
+/**
+ * Un passo verso l'asse dell'appiglio (al più `passo` px), se la capsula ci sta; in cima può anche alzarsi di un
+ * gradino per staccarsi dal labbro del piano. Restituisce false se il terreno lo ferma.
+ */
+function versoAsse(t: Terreno, p: Pirata, a: Appiglio, passo: number, alza: boolean): boolean {
+  const d = a.x - p.x;
+  if (d === 0) return true;
+  const nx = Math.abs(d) <= passo ? a.x : p.x + (d > 0 ? passo : -passo);
+  if (!capsulaUrta(t, nx, p.y)) { p.x = nx; return true; }
+  if (alza) for (let k = 1; k <= BIL.pirata.gradinoMax; k++) if (!capsulaUrta(t, nx, p.y - k)) { p.x = nx; p.y -= k; return true; }
+  return false;
+}
+
 /** Lascia l'appiglio: a terra se ha il suolo sotto i piedi, altrimenti comincia a cadere da qui. */
 export function lascia(t: Terreno, p: Pirata, eventi: EventoBattaglia[]): void {
   if (p.appeso < 0) return;
@@ -69,7 +99,7 @@ function appoggiaSeSuolo(t: Terreno, p: Pirata): boolean {
 
 /** In cima: da che lato c'è il piano (entro presa + mezza larghezza) e a quanti px. null = nessun piano. */
 function pianoAccanto(t: Terreno, p: Pirata): { lato: -1 | 1; px: number } | null {
-  const max = A.presa + Math.ceil(BIL.pirata.capsulaLarghezza / 2);
+  const max = A.passaggioCima;
   for (const lato of [p.verso, (-p.verso) as -1 | 1]) {
     for (let k = 1; k <= max; k++) {
       const nx = p.x + lato * k;
@@ -80,21 +110,24 @@ function pianoAccanto(t: Terreno, p: Pirata): { lato: -1 | 1; px: number } | nul
   return null;
 }
 
+
 /**
  * Un tick per il pirata appeso (design/comandi/scale-e-liane.md). `su` = arrampicata: −1 su, 1 giù, 0 ferma.
- * In cima, se accanto c'è un piano, ci passa da solo a passo di camminata; in fondo, se tocca terra, ci appoggia
- * i piedi; in fondo sopra il vuoto, scendendo ancora, si lascia andare. Restituisce false se non è più appeso.
+ * Lungo l'appiglio il pirata si porta sull'asse (1 px a tick) appena il terreno lo permette. In cima, se accanto
+ * c'è un piano, ci passa da solo a passo di camminata; preso dall'alto con "scendi", torna prima sull'asse e poi
+ * scende. In fondo, se tocca terra, ci appoggia i piedi; in fondo sopra il vuoto, scendendo ancora, si lascia
+ * andare. Restituisce false se non è più appeso.
  */
 export function aggiornaAppeso(s: StatoBattaglia, p: Pirata, su: -1 | 0 | 1, eventi: EventoBattaglia[]): boolean {
   const t = s.terreno;
   const a = s.appigli.find((x) => x.id === p.appeso);
-  // già appeso, in cima la presa si allarga di mezza capsula: serve per passare sul piano accanto
-  const inCima = a !== undefined && p.y + MEZZA_ALTEZZA_PIRATA <= a.yAlto;
-  const presa = inCima ? A.presa + Math.ceil(BIL.pirata.capsulaLarghezza / 2) : A.presa;
-  if (!a || !aPortata(a, p.x, p.y, presa)) { lascia(t, p, eventi); return false; }
+  const cima = a ? a.yAlto - MEZZA_ALTEZZA_PIRATA : 0; // centro del pirata con i piedi alla cima
+  // in cima (piedi alla cima, o sul piano accanto) la presa si allarga: serve per passare dal piano all'asse e viceversa
+  const inCima = a !== undefined && p.y <= cima + A.piediCima;
+  if (!a || !aPortata(a, p.x, p.y, inCima ? A.passaggioCima : A.presa)) { lascia(t, p, eventi); return false; }
   p.vx = 0; p.vy = 0;
   if (su === -1) {
-    const cima = a.yAlto - MEZZA_ALTEZZA_PIRATA; // piedi alla cima
+    if (p.y > cima) versoAsse(t, p, a, 1, false);
     const ny = Math.max(cima, p.y - A.velocitaSu);
     if (ny < p.y && !capsulaUrta(t, p.x, ny)) p.y = ny;
     if (p.y <= cima) {
@@ -106,6 +139,13 @@ export function aggiornaAppeso(s: StatoBattaglia, p: Pirata, su: -1 | 0 | 1, eve
       }
     }
   } else if (su === 1) {
+    if (p.x !== a.x && inCima) {
+      // preso dal piano in cima: prima torna sull'asse a passo di camminata, senza scendere
+      if (!versoAsse(t, p, a, BIL.pirata.camminata, true)) { lascia(t, p, eventi); return false; }
+      p.yInizioCaduta = p.y;
+      return true;
+    }
+    versoAsse(t, p, a, 1, false);
     const fondo = a.yBasso - MEZZA_ALTEZZA_PIRATA;
     if (p.y >= fondo) { lascia(t, p, eventi); return false; } // in fondo: si lascia (o è già a terra)
     const ny = Math.min(fondo, p.y + A.velocitaGiu);
@@ -119,8 +159,22 @@ export function aggiornaAppeso(s: StatoBattaglia, p: Pirata, su: -1 | 0 | 1, eve
 /**
  * Comando arrampica per il pirata attivo non appeso: si aggrappa all'appiglio a portata, se c'è e se nella
  * direzione chiesta c'è ancora appiglio (in cima non si riaggrappa salendo, in fondo non si riaggrappa scendendo).
+ * Con "scendi" dal piano in cima prende l'appiglio che comincia lì accanto (entro `passaggioCima` px dall'asse).
  */
 export function provaAggrappo(s: StatoBattaglia, p: Pirata, su: -1 | 1, eventi: EventoBattaglia[]): boolean {
+  if (su === 1) {
+    const sotto = appiglioSotto(s, p);
+    if (sotto) {
+      // resta dov'è, appeso: aggiornaAppeso lo porta sull'asse e poi giù
+      p.appeso = sotto.id;
+      p.aTerra = false;
+      p.vx = 0; p.vy = 0;
+      p.yInizioCaduta = p.y;
+      p.verso = sotto.x >= p.x ? 1 : -1;
+      eventi.push({ t: 'aggrappato', pirata: p.id, appiglio: sotto.id });
+      return true;
+    }
+  }
   const a = appiglioVicino(s, p.x, p.y);
   if (!a) return false;
   if (su === -1 && p.y - MEZZA_ALTEZZA_PIRATA <= a.yAlto) return false;

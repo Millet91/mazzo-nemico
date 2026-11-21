@@ -10,13 +10,13 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { MATERIALE, type Decorazione, type MappaGenerata, type Punto } from '../../src/core/tipi';
 import { superficie } from '../../src/battaglia/gen/analisi';
-import { piazzaBarili } from '../../src/battaglia/gen/barili';
+import { spianaBarile } from '../../src/battaglia/gen/barili';
 import { controllaInsieme, postiValidi, type Posto } from '../../src/battaglia/gen/spawn';
 import { validaMappa, riempimento } from '../../src/battaglia/gen/valida';
 import { REGOLE } from '../../src/battaglia/gen/parametri';
 import { mescola, semeIniziale, type ConRng } from '../../src/core/rng';
 import { codificaMaschera } from '../../src/battaglia/mappe/rle';
-import { costruisciMaschera, W, H, MARE, FONDALE, APPIGLI } from './cala-pappagallo-forma';
+import { costruisciMaschera, W, H, MARE, FONDALE, APPIGLI, appigliDi, BARILI_X } from './cala-pappagallo-forma';
 import { leggiPng, scriviPng } from './png';
 
 const ID = 'cala-pappagallo';
@@ -65,13 +65,8 @@ for (let k = 0; k < 400 && !scelti; k++) {
 if (!scelti) throw new Error(`nessuna scelta di spawn valida (posti: ${tutti[0].length} / ${tutti[1].length}) ${JSON.stringify(motivi)}`);
 const centro = (a: Punto, b: Punto) => Math.abs(a.x - W / 2) - Math.abs(b.x - W / 2);
 const spawn: [Punto[], Punto[]] = [scelti[0].map((p) => ({ x: p.x, y: p.y })).sort(centro), scelti[1].map((p) => ({ x: p.x, y: p.y })).sort(centro)];
-// i barili hanno pochi posti buoni (balconi, Rocca, ponti): si riprova con altri semi finché sono almeno 3
-let barili: Punto[] = [];
-for (let k = 0; k < 200; k++) {
-  const m2 = m.slice(), sup2 = sup.slice();
-  const b = piazzaBarili({ rng: semeIniziale(7000 + k) }, m2, sup2, MARE, [...spawn[0], ...spawn[1]]);
-  if (b.length >= 3) { barili = b; m.set(m2); sup.set(sup2); break; }
-}
+// barili messi a mano (forma): ognuno spiana la sua base
+const barili: Punto[] = BARILI_X.map((x) => spianaBarile(m, sup, x));
 
 // decorazioni scelte a mano (x), appoggiate al suolo
 const decorazioni: Decorazione[] = ([
@@ -82,9 +77,12 @@ const decorazioni: Decorazione[] = ([
   .filter(([, x]) => [...spawn[0], ...spawn[1]].every((p) => Math.abs(p.x - x) >= REGOLE.decorazioniLontanoDaSpawn))
   .map(([tipo, x, scala, specchio]) => ({ tipo, x, y: Math.max(...Array.from({ length: 21 }, (_, k) => sup[x - 10 + k])) + 2, scala, specchio }));   // piedi nel punto più basso della base
 
+// il piede di scale e liane sta sul suolo vero (dopo i barili, che spianano la loro base)
+const appigli = appigliDi(m);
+
 const mappa: MappaGenerata = {
   terreno: { w: W, h: H, maschera: m, mare: MARE },
-  spawn, bioma: 'isola', semeUsato: 0, tentativi: 1, specchiata: false, decorazioni, barili, appigli: APPIGLI,
+  spawn, bioma: 'isola', semeUsato: 0, tentativi: 1, specchiata: false, decorazioni, barili, appigli,
   ...(arteFile ? { arte: ID } : {}),
 };
 const err = validaMappa(mappa);
@@ -98,7 +96,7 @@ import type { DatiMappaFatta } from './tipi';
 
 export const DATI: DatiMappaFatta = ${JSON.stringify({
   id: ID, nome: 'Cala Pappagallo', bioma: 'isola', mare: MARE, w: W, h: H, arte: arteFile ? ID : undefined,
-  spawn, barili, appigli: APPIGLI, decorazioni, maschera: codificaMaschera(m),
+  spawn, barili, appigli, decorazioni, maschera: codificaMaschera(m),
 }, null, 1)};
 `);
 // anteprima della maschera per controllo

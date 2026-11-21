@@ -37,8 +37,9 @@ for (const f of FORMATI) {
     await page.screenshot({ path: `test-results/screenshot/info-${f.nome}.png` });
     await controllaPulsanti(page, f.width);
 
-    // 5 tocchi sulla versione accendono il contatore FPS
-    for (let i = 0; i < 5; i++) await page.getByTestId('versione').click();
+    // 5 tocchi sulla versione accendono il contatore FPS. I tocchi partono tutti insieme dalla pagina: con
+    // swiftshader sotto carico 5 click di Playwright possono superare gli 800 ms tra un tocco e l'altro.
+    await page.getByTestId('versione').evaluate((el) => { for (let i = 0; i < 5; i++) (el as HTMLElement).click(); });
     await expect(page.getByTestId('fps')).toBeVisible();
   });
 }

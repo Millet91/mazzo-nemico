@@ -10,7 +10,8 @@ import { bocca, colpitiMischia, fisicaDi, spintaMischia, velocitaIniziale } from
 import { dannoArma, direzioneSpinta, effettoEsplosione } from './esplosione';
 import { inAcqua, vola, type Corpo } from './pirata';
 import { muoviProiettile, raggio, type Bersaglio, type CorpoProiettile } from './proiettili';
-import { ASSESTAMENTO_TICK } from './costanti';
+import { ASSESTAMENTO_TICK, OGGETTO_RAGGIO } from './costanti';
+import { bersagliOggetti, centroOggetto, eOggetto, idProiettileDaBersaglio } from './oggetti';
 
 interface Copia extends Corpo { id: number; vita: number; mosso: boolean }
 
@@ -38,17 +39,41 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
   let tick = 0;
   const maxTick = piano.maxTick ?? Infinity;
 
-  const esplosione = (x: number, y: number) => {
-    impatto = { x, y };
-    const danno = dannoArma(a.id, ciurma);
-    const spinta = a.danno * BIL.fisica.spintaPerDanno;
+  // barili e casse: scoppiano (anche a catena) se un'esplosione li raggiunge o se li colpisce un colpo diretto
+  const oggetti = s.proiettili
+    .filter((pr) => eOggetto(pr) && pr.tickEsplosione < 0)
+    .map((pr) => ({ id: pr.id, c: centroOggetto(pr), tipo: pr.tipo, esploso: false }));
+  const coda: typeof oggetti = [];
+  const area = (x: number, y: number, raggio: number, dannoPieno: number, spinta: number) => {
     for (const c of copie) {
-      const e = effettoEsplosione(x, y, a.raggio, danno, spinta, c.x, c.y);
+      const e = effettoEsplosione(x, y, raggio, dannoPieno, spinta, c.x, c.y);
       if (!e) continue;
       spingi(c, e.vx, e.vy);
       aggiungiDanno(c.id, e.danno);
     }
+    for (const o of oggetti) {
+      if (o.esploso) continue;
+      const dx = o.c.x - x, dy = o.c.y - y, lim = raggio + OGGETTO_RAGGIO;
+      if (dx * dx + dy * dy < lim * lim) { o.esploso = true; coda.push(o); }
+    }
   };
+  const catena = () => {
+    while (coda.length) {
+      const o = coda.shift()!;
+      const p = o.tipo === 'barile' ? BIL.barili : BIL.casse.esplosione;
+      area(o.c.x, o.c.y, p.raggio, p.danno, p.danno * BIL.fisica.spintaPerDanno);
+    }
+  };
+  const colpisciOggetto = (idBersaglio: number) => {
+    const o = oggetti.find((x) => x.id === idProiettileDaBersaglio(idBersaglio));
+    if (o && !o.esploso) { o.esploso = true; coda.push(o); catena(); }
+  };
+  const esplosione = (x: number, y: number) => {
+    impatto = { x, y };
+    area(x, y, a.raggio, dannoArma(a.id, ciurma), a.danno * BIL.fisica.spintaPerDanno);
+    catena();
+  };
+  const bersagliOgg = bersagliOggetti(s.proiettili);
 
   switch (a.tipo) {
     case 'balistica':
@@ -60,7 +85,7 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
       const f = fisicaDi(a.id);
       const miccia = a.miccia ? (piano.miccia ?? s.turno.miccia) * TICK_AL_SECONDO : -1;
       const limite = Math.min(maxTick, miccia >= 0 ? miccia : 20 * TICK_AL_SECONDO);
-      const bersagli: Bersaglio[] = copie;
+      const bersagli: Bersaglio[] = [...copie, ...bersagliOgg];
       while (tick < limite) {
         tick++;
         const u = muoviProiettile(t, t.mare, s.vento, pr, f, bersagli);
@@ -74,8 +99,9 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
       const dx = coseno(mg), dy = -seno(mg);
       const spinta = (a.spintaFissa ?? 0) / TICK_AL_SECONDO;
       for (let k = 0; k < (a.colpi ?? 1); k++) {
-        const r = raggio(t, io.x, io.y, dx, dy, a.portata ?? 500, copie, io.id);
+        const r = raggio(t, io.x, io.y, dx, dy, a.portata ?? 500, [...copie, ...bersagliOgg.filter((b) => !oggetti.find((o) => o.id === idProiettileDaBersaglio(b.id))?.esploso)], io.id);
         if (k === 0) impatto = { x: r.x, y: r.y };
+        if (r.pirata < -1) { colpisciOggetto(r.pirata); continue; }
         if (r.pirata < 0) continue;
         const c = copie.find((x) => x.id === r.pirata)!;
         const dir = direzioneSpinta(io.x, io.y, c.x, c.y);
@@ -128,9 +154,10 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
 /**
  * Punti della traiettoria prevista dell'arma del turno, con vento e terreno veri. Cannone: un punto ogni 3 tick fino
  * al primo urto (compreso). Granata: rimbalzi compresi fino allo scadere della miccia, l'ultimo punto è
- * l'esplosione. Al massimo `maxPunti` punti. Pistola: linea dritta fino alla portata. Sciabola: nessun punto.
+ * l'esplosione; con `maxRimbalzi` (es. 2 a Mozzo) la linea si ferma su quel rimbalzo e l'esplosione non c'è.
+ * Al massimo `maxPunti` punti. Pistola: linea dritta fino alla portata. Sciabola: nessun punto.
  */
-export function traiettoria(s: StatoBattaglia, maxPunti = 60): Punto[] {
+export function traiettoria(s: StatoBattaglia, maxPunti = 60, maxRimbalzi = Infinity): Punto[] {
   const p = s.pirati.find((x) => x.id === s.turno.pirata);
   if (!p || p.stato !== 'vivo' || maxPunti <= 0) return [];
   const arma: IdArma = s.turno.arma;
@@ -140,7 +167,7 @@ export function traiettoria(s: StatoBattaglia, maxPunti = 60): Punto[] {
   const out: Punto[] = [];
   if (a.tipo === 'istantanea') {
     const dx = coseno(mg), dy = -seno(mg);
-    const r = raggio(t, p.x, p.y, dx, dy, a.portata ?? 500, s.pirati.filter((q) => q.stato === 'vivo'), p.id);
+    const r = raggio(t, p.x, p.y, dx, dy, a.portata ?? 500, [...s.pirati.filter((q) => q.stato === 'vivo'), ...bersagliOggetti(s.proiettili)], p.id);
     const passi = Math.min(maxPunti, 20);
     for (let i = 1; i <= passi; i++) out.push({ x: p.x + ((r.x - p.x) * i) / passi, y: p.y + ((r.y - p.y) * i) / passi });
     return out;
@@ -150,17 +177,19 @@ export function traiettoria(s: StatoBattaglia, maxPunti = 60): Punto[] {
   if (b.bloccato) return [{ x: b.x, y: b.y }];
   const v = velocitaIniziale(mg, a.usaPotenza ? s.turno.mira.potenza : 100);
   const pr: CorpoProiettile = { x: b.x, y: b.y, vx: v.vx, vy: v.vy, fermo: false };
-  const bersagli = s.pirati.filter((q) => q.stato === 'vivo' && q.id !== p.id);
+  const bersagli: Bersaglio[] = [...s.pirati.filter((q) => q.stato === 'vivo' && q.id !== p.id), ...bersagliOggetti(s.proiettili)];
   const f = fisicaDi(arma);
   if (a.miccia && f.rimbalzo !== null) {
     // granata: rimbalzi veri sulla maschera (solo letta) fino allo scadere della miccia; l'ultimo punto è
     // dove esplode. I punti sono distribuiti su tutta la miccia, più un punto a ogni rimbalzo.
     const durata = s.turno.miccia * TICK_AL_SECONDO;
     const passo = Math.max(3, Math.ceil(durata / Math.max(1, maxPunti - 1)));
+    let rimbalzi = 0;
     for (let i = 1; i <= durata; i++) {
       const u = muoviProiettile(t, t.mare, s.vento, pr, f, bersagli);
       if (u && u.tipo === 'mare') { out.push({ x: u.x, y: u.y }); return out; }
       const rimbalzo = u !== null && u.tipo === 'rimbalzo';
+      if (rimbalzo && ++rimbalzi >= maxRimbalzi) { out.push({ x: pr.x, y: pr.y }); return out; }
       if (i === durata) break;
       if ((rimbalzo || i % passo === 0) && out.length < maxPunti - 1) out.push({ x: pr.x, y: pr.y });
     }

@@ -298,7 +298,8 @@ describe('Morte, lapidi e fine battaglia', () => {
     const s = battagliaPiatta([800], [1200]);
     const mare0 = s.terreno.mare;
     const livelli: number[] = [];
-    const ev = avanzaFinche(s, (x) => x.esito !== null, 200000);
+    // senza casse: qui conta solo il mare (un Rum cambierebbe i PV)
+    const ev = avanzaFinche(s, (x) => { x.proiettili = x.proiettili.filter((p) => p.tipo !== 'cassa'); return x.esito !== null; }, 200000);
     for (const e of eventiDi(ev, 'mareSale')) livelli.push(e.livello);
     const volte = BIL.battaglia.turnoLimite - BIL.battaglia.mareSaleDalTurno + 1;
     expect(livelli).toHaveLength(volte);
@@ -309,7 +310,7 @@ describe('Morte, lapidi e fine battaglia', () => {
   it('al turno 18 vince chi ha più PV', () => {
     const s = battagliaPiatta([800], [1200]);
     pirata(s, 1).vita = 30;
-    avanzaFinche(s, (x) => x.esito !== null, 200000);
+    avanzaFinche(s, (x) => { x.proiettili = x.proiettili.filter((p) => p.tipo !== 'cassa'); return x.esito !== null; }, 200000);
     expect(s.esito).toMatchObject({ vincitore: 0, motivo: 'tempo' });
   });
 

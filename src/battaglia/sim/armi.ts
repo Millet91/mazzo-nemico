@@ -10,10 +10,12 @@ import { danneggia, stacca } from './pirata';
 import { dannoArma, direzioneSpinta, esplodi } from './esplosione';
 import { raggio, type Bersaglio, type FisicaProiettile } from './proiettili';
 import { BOCCA_PX } from './costanti';
+import { accendiOggetto, bersagliOggetti, idProiettileDaBersaglio } from './oggetti';
 
 /** Fisica del proiettile di un'arma (o della lapide). */
 export function fisicaDi(arma: IdArma | 'lapide'): FisicaProiettile {
-  if (arma === 'lapide') return { vento: false, rimbalzo: BIL.pirata.rimbalzo, colpiscePirati: false };
+  // lapide e barile (quando il terreno sotto sparisce) cadono e rimbalzano come un pirata
+  if (arma === 'lapide' || arma === 'barile') return { vento: false, rimbalzo: BIL.pirata.rimbalzo, colpiscePirati: false };
   const a = ARMA[arma];
   return { vento: a.vento, rimbalzo: a.rimbalzo ?? null, colpiscePirati: a.tipo === 'balistica' };
 }
@@ -83,9 +85,11 @@ export function colpoIstantaneo(s: StatoBattaglia, p: Pirata, eventi: EventoBatt
   const a = ARMA[s.turno.arma];
   const mg = s.turno.mira.mezziGradi;
   const dx = coseno(mg), dy = -seno(mg);
-  const r = raggio(s.terreno, p.x, p.y, dx, dy, a.portata ?? 500, bersagliDi(s), p.id);
+  const r = raggio(s.terreno, p.x, p.y, dx, dy, a.portata ?? 500, [...bersagliDi(s), ...bersagliOggetti(s.proiettili)], p.id);
   eventi.push({ t: 'colpoPistola', da: { x: p.x, y: p.y }, a: { x: r.x, y: r.y } });
-  if (r.terreno) {
+  if (r.pirata < -1) {
+    accendiOggetto(s, idProiettileDaBersaglio(r.pirata)); // barile o cassa colpiti: scoppiano
+  } else if (r.terreno) {
     scavaCratere(s.terreno, r.x + dx, r.y + dy, a.buca ?? 0, eventi);
   } else if (r.pirata >= 0) {
     const q = s.pirati.find((x) => x.id === r.pirata)!;

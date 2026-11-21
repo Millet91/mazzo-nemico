@@ -12,6 +12,7 @@
 | `simula.ts` | `simulaColpo` (anteprima per l'IA, senza crateri) e `traiettoria` (linea tratteggiata) |
 | `hash.ts` | hash di tutto lo stato, maschera compresa, a piena precisione |
 | `replay.ts` | `rigiocaReplay`, `creaReplay`, `giocaComandi` |
+| `oggetti.ts` | barili di polvere (dalla mappa) e casse col paracadute (Rum, Trappola): scoppio, catena, apertura |
 | `costanti.ts` | piccoli numeri tecnici non di gioco (bocca del cannone, miccia della lapide…) |
 
 ## Regole utili a chi usa la sim (B, D, E, QA)
@@ -23,3 +24,6 @@
 - **Verso**: il comando `mira` gira il pirata verso l'angolo; `muovi` lo gira e tiene l'elevazione della mira; la sciabola colpisce nel verso.
 - **simulaColpo** non scava crateri (non copia la maschera): un pirata che cadrebbe nel buco appena aperto resta sul bordo. Danni, spinte, annegamenti e cadute sono quelli veri.
 - Il tetto di 5 tick per frame (caso 6) è del ciclo di gioco di B, non della sim.
+- **Barili e casse** sono `Proiettile` con `tipo: 'barile'` o `'cassa'` (punto alla base, appoggiati al suolo). Fermi e senza miccia non fanno aspettare volo e risoluzione; raggiunti da un'esplosione o colpiti da cannone o pistola scoppiano dopo `MICCIA_REAZIONE_TICK` (catena). Barile 75/85 (`esplosione` con `arma: 'barile'`), cassa colpita 25/45 e Trappola 30/50 (`esplosione` con `arma: 'lapide'`, il raggio le distingue). La cassa scende a 60 px/s spostata dal vento e la apre il primo pirata in campo che la tocca (`cassaAperta`).
+- **Risoluzione**: passa quando tutto è fermo da `BIL.turno.risoluzioneFermoTick` (`turno.fermoDa`), tetto di 10 s da `inizioFase`.
+- **traiettoria(s, maxPunti, maxRimbalzi?)**: granata con i rimbalzi fino all'esplosione; con `maxRimbalzi` si ferma su quel rimbalzo.

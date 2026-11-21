@@ -1,0 +1,271 @@
+// Regista della battaglia: collega il bus (UI) al ciclo di gioco (Partita), alla scena Pixi, alla camera e
+// all'input. Lo crea render/grafica.ts quando Pixi è pronto; vive per tutta la durata dell'app.
+//
+// - bus.richiestaBattaglia: una config nuova avvia la battaglia, null la chiude;
+// - bus.comandi → Partita (timbrati col tick); bus.azioni → pausa, riprendi, esci, ricentra, velocità;
+// - a ogni frame: tick a passo fisso, eventi alla scena, VistaBattaglia e eventiBattaglia sul bus.
+import { effect } from '@preact/signals-core';
+import type { Application, Ticker } from 'pixi.js';
+import { bus, type AzioneBattaglia } from '../../core/bus';
+import type { ConfigBattaglia, EventoBattaglia } from '../../core/tipi';
+import { BIL } from '../../contenuti/bilanciamento';
+import { Camera } from '../render/camera';
+import { InputBattaglia } from '../render/input';
+import { ScenaBattaglia } from '../render/scena-battaglia';
+import { Partita } from './partita';
+import { creaVista, visteUguali } from './vista';
+
+/** un frame lento non deve far saltare le animazioni */
+const DELTA_MASSIMO_MS = 100;
+
+export interface RisultatoProvaFps {
+  /** fps medio sull'intera prova */
+  fpsMedio: number;
+  /** fps del secondo peggiore */
+  fpsMinimo: number;
+  /** frame più lunghi di 20 ms */
+  frameLenti: number;
+  /** frame totali */
+  frame: number;
+  /** ms medi della simulazione per tick */
+  msSimPerTick: number;
+  /** durata reale della prova in secondi */
+  secondi: number;
+}
+
+interface Prova {
+  fine: number;
+  inizio: number;
+  frame: number;
+  lenti: number;
+  /** frame per ogni secondo intero */
+  perSecondo: number[];
+  msSim: number;
+  tick: number;
+  risolvi: (r: RisultatoProvaFps) => void;
+  seme: number;
+}
+
+/** Il regista attivo (uno solo per app): serve a provaFps della Diagnostica. */
+let attivo: Regista | null = null;
+export function registaAttivo(): Regista | null { return attivo; }
+
+export class Regista {
+  partita: Partita | null = null;
+  private scena: ScenaBattaglia | null = null;
+  private input: InputBattaglia | null = null;
+  readonly camera = new Camera();
+  private config: ConfigBattaglia | null = null;
+  private stacca: (() => void)[] = [];
+  private segui: 'pirata' | 'proiettile' | 'libera' = 'pirata';
+  private fiondaAttiva = false;
+  private eraInPausa = false;
+  private prova: Prova | null = null;
+  private readonly frame = (tk: Ticker) => this.aggiorna(tk.deltaMS);
+
+  constructor(private readonly app: Application, private readonly sfondo?: { radice: { visible: boolean } }) {
+    attivo = this;
+    this.camera.impostaSchermo(app.screen.width, app.screen.height);
+    app.renderer.on('resize', (w: number, h: number) => this.camera.impostaSchermo(w, h));
+    this.stacca.push(effect(() => {
+      const cfg = bus.richiestaBattaglia.value;
+      if (cfg && cfg !== this.config) this.avvia(cfg);
+      else if (!cfg && this.config) this.termina();
+    }));
+    this.stacca.push(bus.comandi.ascolta((c) => this.partita?.comandoUmano(c)));
+    this.stacca.push(bus.azioni.ascolta((a) => this.azione(a)));
+    app.ticker.add(this.frame);
+  }
+
+  private avvia(cfg: ConfigBattaglia): void {
+    this.chiudiPartita();
+    this.config = cfg;
+    const partita = new Partita(cfg);
+    this.partita = partita;
+    const scena = new ScenaBattaglia(this.app.renderer, partita.s, partita.mappa);
+    this.scena = scena;
+    this.app.stage.addChild(scena.mondo, scena.schermo);
+    this.camera.zoom = BIL.camera.zoomPredefinito;
+    this.segui = 'pirata';
+    const p = partita.s.pirati.find((x) => x.id === partita.s.turno.pirata);
+    if (p) this.camera.vola(p.x, p.y, 0);
+    this.input = new InputBattaglia(this.app.canvas, {
+      camera: this.camera,
+      pirataMirabile: () => this.pirataMirabile(),
+      mira: (m) => partita.comandoUmano({ t: 'mira', ...m }),
+      fionda: (a) => { this.fiondaAttiva = a; },
+      ricentra: () => this.ricentra(),
+      cameraManuale: () => { this.segui = 'libera'; },
+    });
+    bus.battagliaInPausa.value = false;
+    bus.eventiBattaglia.value = [];
+    bus.battaglia.value = creaVista(partita.s, partita.iaPensa);
+  }
+
+  /** Chiude la battaglia e torna al menu. */
+  private termina(): void {
+    this.chiudiPartita();
+    this.config = null;
+    bus.battaglia.value = null;
+    bus.battagliaInPausa.value = false;
+    bus.eventiBattaglia.value = [];
+    if (bus.richiestaBattaglia.value) bus.richiestaBattaglia.value = null;
+  }
+
+  private chiudiPartita(): void {
+    this.input?.distruggi();
+    this.input = null;
+    if (this.scena) { this.app.stage.removeChild(this.scena.mondo, this.scena.schermo); this.scena.distruggi(); }
+    this.scena = null;
+    this.partita?.chiudi();
+    this.partita = null;
+    this.fiondaAttiva = false;
+    if (this.sfondo) this.sfondo.radice.visible = true;
+  }
+
+  private azione(a: AzioneBattaglia): void {
+    switch (a.t) {
+      case 'pausa': bus.battagliaInPausa.value = true; break;
+      case 'riprendi': bus.battagliaInPausa.value = false; break;
+      case 'esci': this.termina(); break;
+      case 'ricentra': this.ricentra(); break;
+      case 'velocita': if (this.partita) this.partita.velocita = a.fattore; break;
+    }
+  }
+
+  private ricentra(): void {
+    const s = this.partita?.s;
+    if (!s) return;
+    const p = s.pirati.find((x) => x.id === s.turno.pirata);
+    if (p) { this.segui = 'pirata'; this.camera.vola(p.x, p.y, 300); }
+  }
+
+  private pirataMirabile(): { x: number; y: number } | null {
+    const pa = this.partita;
+    if (!pa || pa.toccaIa || pa.s.esito || pa.s.turno.fase !== 'azione') return null;
+    const p = pa.s.pirati.find((x) => x.id === pa.s.turno.pirata && x.stato === 'vivo');
+    return p ? this.camera.schermoDaMondo(p.x, p.y) : null;
+  }
+
+  aggiorna(deltaGrezzo: number): void {
+    const pa = this.partita, scena = this.scena;
+    if (!pa || !scena) return;
+    const delta = Math.min(deltaGrezzo, DELTA_MASSIMO_MS);
+    const inPausa = bus.inPausa.value || bus.battagliaInPausa.value;
+    if (inPausa) {
+      if (!this.eraInPausa) pa.sospendi();
+      this.eraInPausa = true;
+      scena.aggiorna(0, this.camera, this.opzioniDisegno());
+      return;
+    }
+    if (this.eraInPausa) { pa.sospendi(); this.eraInPausa = false; }
+
+    const eventi = pa.aggiorna(delta);
+    if (eventi.length) {
+      scena.eventi(eventi);
+      this.eventiCamera(eventi);
+      bus.eventiBattaglia.value = eventi;
+    }
+    this.muoviCamera(delta);
+    scena.aggiorna(delta, this.camera, this.opzioniDisegno());
+
+    const vista = creaVista(pa.s, pa.iaPensa);
+    if (!visteUguali(bus.battaglia.value, vista)) bus.battaglia.value = vista;
+
+    if (this.prova) this.contaProva(deltaGrezzo);
+  }
+
+  private opzioniDisegno() {
+    const pa = this.partita!;
+    return { mira: !pa.toccaIa && pa.s.turno.fase === 'azione' && !pa.s.esito, fiondaAttiva: this.fiondaAttiva };
+  }
+
+  private eventiCamera(eventi: readonly EventoBattaglia[]): void {
+    const s = this.partita!.s;
+    for (const e of eventi) {
+      if (e.t === 'turnoIniziato') {
+        const p = s.pirati.find((x) => x.id === e.pirata);
+        this.segui = 'pirata';
+        if (p) this.camera.vola(p.x, p.y);
+      } else if (e.t === 'sparo' && this.segui !== 'libera') this.segui = 'proiettile';
+    }
+  }
+
+  private muoviCamera(delta: number): void {
+    const s = this.partita!.s;
+    if (this.segui === 'proiettile') {
+      const pr = s.proiettili.find((x) => !x.fermo && x.tipo !== 'lapide');
+      if (pr) this.camera.segui(pr.x, pr.y, delta);
+    } else if (this.segui === 'pirata' && !this.camera.inVolo) {
+      const p = s.pirati.find((x) => x.id === s.turno.pirata && x.stato === 'vivo');
+      // segue il pirata quando si muove (camminata, salto, spinta) senza scatti
+      if (p) this.camera.segui(p.x, p.y, delta);
+    }
+    this.camera.aggiorna(delta);
+  }
+
+  // ─── Diagnostica: "Prova 60 fps" (piano QA §4) ───
+
+  /** Battaglia dimostrativa 5 contro 5, IA contro IA, con zoom che va dal minimo al massimo. */
+  avviaProva(durataMs: number): Promise<RisultatoProvaFps> {
+    if (this.prova) return Promise.reject(new Error('prova già in corso'));
+    return new Promise((risolvi) => {
+      const seme = 20261121;
+      const ora = performance.now();
+      this.prova = { inizio: ora, fine: ora + durataMs, frame: 0, lenti: 0, perSecondo: [], msSim: 0, tick: 0, risolvi, seme };
+      bus.richiestaBattaglia.value = configProva(seme);
+    });
+  }
+
+  private contaProva(deltaMS: number): void {
+    const pr = this.prova!;
+    const pa = this.partita!;
+    const ora = performance.now();
+    pr.frame++;
+    if (deltaMS > 20) pr.lenti++;
+    const sec = Math.floor((ora - pr.inizio) / 1000);
+    pr.perSecondo[sec] = (pr.perSecondo[sec] ?? 0) + 1;
+    // zoom dal minimo al massimo e ritorno, ogni 12 s: la camera si muove sempre (piano QA §4)
+    const t = (ora - pr.inizio) / 12000;
+    this.camera.zoomA(BIL.camera.zoomMin + (BIL.camera.zoomMax - BIL.camera.zoomMin) * (0.5 - 0.5 * Math.cos(t * Math.PI * 2)));
+    if (pa.s.esito) {
+      // battaglia finita prima del tempo: se ne avvia un'altra e si continua a misurare
+      pr.msSim += pa.msSim; pr.tick += pa.tickSimulati;
+      pr.seme++;
+      bus.richiestaBattaglia.value = configProva(pr.seme);
+      return;
+    }
+    if (ora < pr.fine) return;
+    const msSim = pr.msSim + pa.msSim, tick = pr.tick + pa.tickSimulati;
+    const secondi = (ora - pr.inizio) / 1000;
+    const completi = pr.perSecondo.slice(0, Math.floor(secondi));
+    const r: RisultatoProvaFps = {
+      fpsMedio: Math.round((pr.frame / secondi) * 10) / 10,
+      fpsMinimo: completi.length ? Math.min(...completi) : pr.frame,
+      frameLenti: pr.lenti,
+      frame: pr.frame,
+      msSimPerTick: tick ? Math.round((msSim / tick) * 1000) / 1000 : 0,
+      secondi: Math.round(secondi * 10) / 10,
+    };
+    this.prova = null;
+    this.termina();
+    pr.risolvi(r);
+  }
+
+  distruggi(): void {
+    this.termina();
+    this.app.ticker.remove(this.frame);
+    for (const f of this.stacca) f();
+    if (attivo === this) attivo = null;
+  }
+}
+
+export function configProva(seme: number): ConfigBattaglia {
+  return {
+    versioneRegole: 1, seme, bioma: 'isola', timerSecondi: 20, traiettoriaCompleta: false,
+    squadre: [
+      { ciurma: 'teschio', ruolo: 'attaccante', controllo: 'ia', livelloIa: 'mozzo', pirati: 5 },
+      { ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: 5 },
+    ],
+  };
+}

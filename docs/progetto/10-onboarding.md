@@ -1,6 +1,6 @@
 # 10 — Onboarding e UX di flusso
 
-*UX & Onboarding Designer. Solo design. Non esiste ancora 05-revisione.md. Per i comandi di battaglia seguo **01** (mira a fionda, FUOCO a tocco singolo, griglia armi), per i nomi delle ciurme **02** e per la ripresa delle partite **04** (replay dei comandi). In fondo elenco i conflitti tra documenti da riconciliare.*
+*UX & Onboarding Designer. Solo design. Non esiste ancora 05-revisione.md. Per i comandi di battaglia vale **00 §9.19** (comandi v3: mirino oro da trascinare, ◀ ▶ e salto, FUOCO al rilascio, griglia armi), per i nomi delle ciurme **02** e per la ripresa delle partite **04** (replay dei comandi). In fondo elenco i conflitti tra documenti da riconciliare.*
 
 ## 1. Principi
 
@@ -20,22 +20,22 @@ Si gioca sulla mappa dipinta **Cala Pappagallo** (00 §9.18), l'isola da cui poi
 | Tempo | Cosa vede il giocatore | Cosa tocca | Cosa impara |
 |---|---|---|---|
 | 0:00 | splash da 2 s, poi una scialuppa che sbarca (4 s, si salta con un tocco) | — | tono e tema |
-| 0:10 | il proprio pirata e una cassa a 150 px; visibile solo il **joystick di sinistra**, con una mano fantasma che lo spinge | spinge il joystick a destra | **camminare** |
-| 0:25 | un gradino di 20 px blocca il passaggio; la mano fantasma spinge il joystick in diagonale in alto | joystick in diagonale | **saltare** |
+| 0:10 | il proprio pirata e una cassa a 150 px; visibili solo i tasti **◀ ▶** in basso a sinistra, con una mano fantasma che tiene premuto ▶ | tiene premuto ▶ | **camminare** |
+| 0:25 | un gradino di 20 px blocca il passaggio; compare il **tasto salto** e la mano fantasma lo tocca | tocco sul salto (tenuto 260 ms = salto alto all'indietro, si insegna dopo coi suggerimenti) | **saltare** |
 | 0:35 | raccoglie la cassa ("Rum: +PV"), poi la camera mostra il primo marinaio | — | casse, PV |
-| 0:45 | appare il **joystick di mira** a destra con la traiettoria oro completa; la mano fantasma ne sposta il pomello | sposta il pomello: direzione = angolo, distanza = potenza | **mira**; lasciato il dito, la mira resta |
-| 1:05 | **FUOCO** al centro del joystick di mira pulsa | FUOCO | **sparare**; il terreno esplode (**distruttibile**) |
-| 1:10 | fumetto "Scappa! Hai 3 secondi" con un contatore grande | joystick di sinistra | **fuga** |
+| 0:45 | compare il **mirino oro** attaccato al pirata, con la traiettoria oro completa e il mirino rosso dove arriva; la mano fantasma lo trascina lontano e poi lo gira | trascina il mirino oro: direzione = angolo, più lontano = più forte; accanto si legge "45° · 60%"; la visuale si allarga da sola | **mira**; lasciato il dito la mira resta e **non spara** |
+| 1:05 | **FUOCO** in basso a destra pulsa | tocca e lascia FUOCO (spara al rilascio; scivolando fuori si annulla) | **sparare**; il terreno esplode (**distruttibile**) |
+| 1:10 | fumetto "Scappa! Hai 3 secondi" con un contatore grande, ◀ ▶ pulsano | ◀ ▶ e salto | **fuga** |
 | 1:20 | turno nemico, il colpo cade vicino e toglie 15 PV | — | **turni alternati**, danno, barra PV |
-| 1:40 | turno 2: appare il **vento** (+4), la freccia si illumina e la traiettoria ora si piega | pomello di mira, FUOCO | **vento**, mira fine |
-| 1:55 | fumetto "Due dita per lo zoom" con la mano fantasma che pizzica lo schermo | pinch | **zoom** e camera |
-| 2:30 | il secondo marinaio sta sul bordo della scogliera; appare **ARMA**, che pulsa | ARMA → Sciabola | **griglia armi**, armi diverse |
-| 2:50 | cammina fino al marinaio e usa FUOCO | — | **spinta**: il marinaio vola in mare, «Vai dai pesci!» |
+| 1:40 | turno 2: appare il **vento** (+4), la freccia si illumina e la traiettoria ora si piega | mirino oro (vicino al pirata il trascinamento rallenta per la precisione), FUOCO | **vento**, mira fine |
+| 1:55 | fumetto "Due dita per lo zoom" con la mano fantasma che pizzica lo schermo | pinch; un dito sul mare o sul cielo sposta la camera | **zoom** e camera |
+| 2:30 | il secondo marinaio sta sul bordo della scogliera; appare **ARMA**, che pulsa | ARMA (sopra FUOCO) → Sciabola | **griglia armi**, armi diverse |
+| 2:50 | cammina fino al marinaio con ◀ ▶, gira il mirino verso di lui e usa FUOCO | ◀ ▶, mirino, FUOCO | **spinta**: il marinaio vola in mare, «Vai dai pesci!» |
 | 3:10 | fumetto "Il mare è il tuo cannone migliore" | — | **mare = morte immediata** |
-| 3:30 | l'ultimo marinaio si nasconde in una buca; il giocatore riceve 1 Granata | ARMA → Granata, tocca il chip miccia, FUOCO | **miccia e rimbalzi** |
+| 3:30 | l'ultimo marinaio si nasconde in una buca; il giocatore riceve 1 Granata | ARMA → Granata, tocca il chip miccia (a sinistra di ARMA), mirino, FUOCO | **miccia e rimbalzi** |
 | 4:00 | vittoria e scheda di fine battaglia semplificata (superstiti, "Cala Pappagallo è tua"), poi la scena c0.partenza: si salpa da Cala Pappagallo verso il cap. 1 (00 §9.18) | Continua | esito di una battaglia |
 
-Pan, zoom e doppio tocco per ricentrare **non** si insegnano qui: li coprono i suggerimenti (§3).
+Comandi v3 (00 §9.19, `docs/tecnica/comandi-v3.md`). Il salto alto, le frecce ⇧⇩ di scale e liane, il doppio tocco per ricentrare e lo zoom automatico **non** si insegnano qui: li coprono i suggerimenti (§3).
 
 ### Primo turno di campagna "protetto" (~6 min)
 | Tempo | Schermata | Tocchi | Regola Risiko insegnata |
@@ -166,7 +166,7 @@ Test con 5-8 persone a turno (metà non gamer, almeno 1 mancino), con osservazio
 Telemetria locale (opzionale, anonima): tempo per ogni passo del tutorial, punto di abbandono, suggerimenti mostrati e azione che segue entro 10 s.
 
 ## 9. Conflitti tra documenti (per il Revisore)
-1. **Mira e fuoco**: in 01 si mira a fionda e FUOCO è un tocco; in 03 si tiene premuto FUOCO per la potenza. L'onboarding usa 01, che è più semplice da insegnare.
+1. **Mira e fuoco**: in 01 si mira a fionda e FUOCO è un tocco; in 03 si tiene premuto FUOCO per la potenza. L'onboarding usa 01, che è più semplice da insegnare. *Superato da 00 §9.19 (comandi v3).*
 2. **Selettore armi**: 01 usa una griglia 4×4, 03 una radiale da 8 spicchi; le armi sono 16. La griglia è più facile da insegnare.
 3. **Timer e morte improvvisa**: 20 s e 4:00 in 01; 30 s e 12 turni in 02; turno 20 in 04. Propongo 30 s nelle prime 3 battaglie, poi il valore scelto.
 4. **Nomi delle ciurme** diversi tra 02 e 03.

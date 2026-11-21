@@ -225,3 +225,34 @@ describe('IA · client', () => {
     expect(f.pirati[0].x).toBe(s.pirati[0].x - 50);
   });
 });
+
+describe('IA · barili di polvere (sim vera)', () => {
+  function esito(s: StatoBattaglia, p: PianoIa) {
+    const io = s.pirati.find((x) => x.id === s.turno.pirata)!;
+    return simulaColpo(s, { pirata: io.id, arma: p.arma, mezziGradi: p.mezziGradi, potenza: p.potenza, miccia: p.miccia });
+  }
+
+  it('non fa scoppiare un barile accanto a sé', () => {
+    for (let seme = 1; seme <= 30; seme++) {
+      const s = duello(800, 1200, { seme, vento: (seme % 13) - 6, barili: [1225] });
+      expect(s.proiettili.some((p) => p.tipo === 'barile')).toBe(true);
+      const io = s.pirati.find((x) => x.id === s.turno.pirata)!;
+      const e = esito(s, decidi(s, 'mozzo'));
+      expect(e.danni[io.id] ?? 0).toBe(0);
+    }
+  });
+
+  it('usa un barile vicino al nemico: colpisce più spesso che senza barile', () => {
+    let con = 0, senza = 0;
+    for (let seme = 1; seme <= 30; seme++) {
+      const opz = { seme, vento: (seme % 13) - 6 };
+      const a = duello(600, 1250, { ...opz, barili: [640] });
+      const b = duello(600, 1250, opz);
+      const nem = (s: StatoBattaglia) => s.pirati.find((x) => x.squadra === 0)!.id;
+      if ((esito(a, decidi(a, 'mozzo')).danni[nem(a)] ?? 0) > 0) con++;
+      if ((esito(b, decidi(b, 'mozzo')).danni[nem(b)] ?? 0) > 0) senza++;
+    }
+    console.log(`bersaglio a 650 px: ${con}/30 a segno col barile vicino, ${senza}/30 senza`);
+    expect(con).toBeGreaterThan(senza);
+  });
+});

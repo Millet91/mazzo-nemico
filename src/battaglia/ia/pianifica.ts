@@ -13,7 +13,7 @@
 // Il vento è considerato al `vento` del livello (Mozzo 50%): le simulazioni girano su una vista dello stato
 // con il vento ridotto. La vista è una copia superficiale: la maschera non si copia e lo stato non si tocca.
 
-import type { EsitoColpo, IdArma, LivelloIa, PianoColpo, PianoIa, Pirata, StatoBattaglia } from '../../core/tipi';
+import type { EsitoColpo, IdArma, LivelloIa, PianoColpo, PianoIa, Pirata, Punto, StatoBattaglia } from '../../core/tipi';
 import { BIL } from '../../contenuti/bilanciamento';
 import { ARMA } from '../../contenuti/armi';
 import { casuale } from '../../core/rng';
@@ -34,7 +34,8 @@ interface Prova {
 /** Una linea di tiro balistica (cannone o granata) verso un bersaglio, con un angolo fisso. */
 interface Linea {
   arma: IdArma;
-  bersaglio: Pirata;
+  /** punto da colpire: un nemico o un barile di polvere vicino ai nemici */
+  bersaglio: Punto;
   /** angolo assoluto in mezzi gradi */
   mezziGradi: number;
   dir: -1 | 1;
@@ -100,8 +101,10 @@ export function decidiCon(s: StatoBattaglia, livello: LivelloIa, simula: Simulat
   const maxLinee = Math.max(1, Math.floor(rimasti / 2));
   const balistiche = armi.filter((a) => ALZI[a]);
   const giri = Math.max(0, ...balistiche.map((a) => ALZI[a]!.length));
+  // prima i barili di polvere che scoppierebbero sui nemici (e non sui nostri), poi i nemici
+  const mire: Punto[] = [...bariliUtili(s, io, nemici), ...bersagli];
   for (let i = 0; i < giri && linee.length < maxLinee; i++)
-    for (const b of bersagli) for (const arma of balistiche) {
+    for (const b of mire) for (const arma of balistiche) {
       const alzo = ALZI[arma]![i];
       if (alzo === undefined || linee.length >= maxLinee) continue;
       const l = nuovaLinea(s, io, b, arma, alzo);
@@ -212,6 +215,25 @@ export function armiUsabili(s: StatoBattaglia, squadra: 0 | 1, par: ParLivello):
   return ammesse.length ? ammesse : disponibili;
 }
 
+/**
+ * Barili di polvere già piazzati che conviene far scoppiare: almeno un nemico nel raggio, nessun compagno
+ * (né il pirata dell'IA) entro il raggio + 20 px. Al massimo 2, quelli con più nemici vicini per primi.
+ * I barili vicini ai nostri non diventano mai bersagli; se un tiro li fa scoppiare lo stesso, il punteggio
+ * (che legge i danni di simulaColpo, barili compresi) lo scarta.
+ */
+export function bariliUtili(s: StatoBattaglia, io: Pirata, nemici: Pirata[]): Punto[] {
+  const r = BIL.barili.raggio;
+  const vicino = (p: Pirata, b: Punto, d: number) => (p.x - b.x) ** 2 + (p.y - b.y) ** 2 < d * d;
+  const amici = s.pirati.filter((p) => p.squadra === io.squadra && p.stato === 'vivo');
+  return s.proiettili
+    .filter((pr) => pr.tipo === 'barile' && pr.fermo)
+    .map((pr) => ({ b: { x: pr.x, y: pr.y }, n: nemici.filter((n) => vicino(n, pr, r)).length }))
+    .filter(({ b, n }) => n > 0 && !amici.some((a) => vicino(a, b, r + 20)))
+    .sort((a, b) => b.n - a.n || a.b.x - b.b.x)
+    .slice(0, 2)
+    .map(({ b }) => b);
+}
+
 /** Nemici in ordine di priorità: pochi PV, vicini e vicini al mare prima. */
 function ordinaBersagli(s: StatoBattaglia, io: Pirata, nemici: Pirata[]): Pirata[] {
   const voto = (p: Pirata) => {
@@ -238,7 +260,7 @@ export function potenzaPer(dx: number, h: number, alzoMezziGradi: number): numbe
   return (v / BIL.fisica.velocitaMaxProiettile) * 100;
 }
 
-function nuovaLinea(s: StatoBattaglia, io: Pirata, b: Pirata, arma: IdArma, alzoGradi: number): Linea | null {
+function nuovaLinea(s: StatoBattaglia, io: Pirata, b: Punto, arma: IdArma, alzoGradi: number): Linea | null {
   void s;
   const dir: -1 | 1 = b.x >= io.x ? 1 : -1;
   const dx = Math.abs(b.x - io.x);

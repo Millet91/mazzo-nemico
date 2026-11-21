@@ -4,6 +4,7 @@ import { bus } from '../core/bus';
 import { PALETTE, hex } from '../core/palette';
 import { MisuraFps } from './misura-fps';
 import { ScenaMare } from './scena-mare';
+import { T } from '../testi/it';
 
 /** Un frame lento non deve far saltare l'animazione (in battaglia: max 5 tick per frame, 13 caso 6). */
 const DELTA_MASSIMO_MS = 100;
@@ -35,6 +36,11 @@ export async function avviaGrafica(contenitore: HTMLElement): Promise<Grafica> {
     scena.aggiorna(d);
     if (fps.frameFatto(tk.deltaMS)) bus.fps.value = { medio: fps.medio, minimo: fps.minimo };
   });
+
+  // battaglia: il regista (ciclo di gioco, scena, camera, input) in un pezzo separato, caricato subito dopo
+  void import('../battaglia/partita/regista')
+    .then(({ Regista }) => new Regista(app, scena))
+    .catch((e) => { console.error(e); bus.erroreGrafica.value = T.errori.avvioGrafica; });
 
   return {
     pausa() { app.ticker.stop(); },

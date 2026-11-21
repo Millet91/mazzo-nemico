@@ -4,11 +4,13 @@ import type { MappaGenerata, RichiestaMappa } from '../../core/tipi';
 import { decodificaMaschera } from './rle';
 import type { DatiMappaFatta } from './tipi';
 import { DATI as CALA_PAPPAGALLO } from './cala-pappagallo.dati';
+import { DATI as CALA_PAPPAGALLO_PROLOGO } from './cala-pappagallo-prologo.dati';
 
 export type { DatiMappaFatta };
 
 export const MAPPE_FATTE: Record<string, DatiMappaFatta> = {
   [CALA_PAPPAGALLO.id]: CALA_PAPPAGALLO,
+  [CALA_PAPPAGALLO_PROLOGO.id]: CALA_PAPPAGALLO_PROLOGO,
 };
 
 /** La maschera decodificata si tiene in cache: ogni battaglia ne riceve una copia (i crateri la scavano). */

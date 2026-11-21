@@ -15,6 +15,15 @@ describe('mappe fatte a mano', () => {
   for (const id of Object.keys(MAPPE_FATTE)) {
     it(`${id} è valida (06 §4 e §7)`, () => {
       const mappa = mappaFatta(id)!;
+      if (MAPPE_FATTE[id].copione) {
+        // mappa da copione (Prologo): spawn fissi, si controlla solo che ognuno stia sul suolo
+        const { w, maschera: m } = mappa.terreno;
+        for (const p of [...mappa.spawn[0], ...mappa.spawn[1]]) {
+          expect(m[p.y * w + p.x], `spawn ${p.x},${p.y}`).not.toBe(0);
+          expect(m[(p.y - 1) * w + p.x], `spawn ${p.x},${p.y}`).toBe(0);
+        }
+        return;
+      }
       expect(validaMappa(mappa)).toEqual([]);
       expect(mappa.spawn[0]).toHaveLength(5);
       expect(mappa.spawn[1]).toHaveLength(5);
@@ -25,7 +34,7 @@ describe('mappe fatte a mano', () => {
       const ap = mappa.appigli ?? [];
       const { w, maschera: m } = mappa.terreno;
       const pieno = (x: number, y: number) => m[y * w + x] !== 0;
-      expect(ap.filter((a) => a.x < w / 2).length).toBe(ap.filter((a) => a.x >= w / 2).length);
+      if (!MAPPE_FATTE[id].copione) expect(ap.filter((a) => a.x < w / 2).length).toBe(ap.filter((a) => a.x >= w / 2).length);
       for (const a of ap) {
         const lungo = a.yBasso - a.yAlto;
         expect(lungo, `${a.tipo} ${a.x}`).toBeGreaterThanOrEqual(60);

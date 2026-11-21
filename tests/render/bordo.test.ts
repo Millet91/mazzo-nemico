@@ -16,4 +16,11 @@ describe('freccia sul bordo verso il mirino fuori schermo', () => {
     expect(f.y).toBeGreaterThanOrEqual(MARGINI_BORDO.su - 1e-9);
     expect(f.angolo).toBeLessThan(0);
   });
+  it('mirino sotto la barra in alto: vale come fuori schermo, la freccia sta sotto la barra e punta in su', () => {
+    expect(frecciaBordo(700, 60, 900, 400)).toBeNull(); // appena sotto la barra si vede
+    const f = frecciaBordo(700, 30, 900, 400)!;
+    expect(f.y).toBeCloseTo(MARGINI_BORDO.su);
+    expect(f.angolo).toBeLessThan(0);
+    expect(f.x).toBeGreaterThan(450);
+  });
 });

@@ -32,6 +32,7 @@ const MORTE_MS = 833;
 const PUNTI_TRAIETTORIA = 160;
 /** traiettoria ben leggibile (Lead design, PR #37): puntini oro di 3,5 px di schermo a ogni zoom, uno ogni ~12 px */
 const PASSO_PUNTINI_PX = 12;
+const PRIMO_PUNTINO_PX = 36;
 const MAX_PUNTINI = 220;
 const ALFA_MIN_PUNTINI = 0.7;
 /** sotto questa scala (px CSS per px di mondo) i nomi dei pirati non si scrivono */
@@ -192,7 +193,9 @@ export class ScenaBattaglia {
       .moveTo(22, 0).lineTo(46, 0).stroke({ width: 4, color: hex(PALETTE.oro), cap: 'round' })
       .poly([44, -8, 58, 0, 44, 8]).fill(hex(PALETTE.oro)).stroke({ width: 1.5, color: hex(PALETTE.oroOmbra) });
     this.frecciaMira.visible = false;
-    this.schermo.addChild(this.manoAperta, this.manoChiusa, this.contenitoreTraiettoria, this.frecciaMira, this.freccia, this.effetti.schermo);
+    this.schermo.addChild(this.manoAperta, this.manoChiusa, this.contenitoreTraiettoria, this.freccia, this.effetti.schermo);
+    // la freccia di mira sta sotto a nomi e PV: il numero dei PV del pirata che tira si deve leggere sempre
+    this.schermo.addChildAt(this.frecciaMira, 0);
   }
 
   private creaPirata(p: Pirata): void {
@@ -526,7 +529,8 @@ export class ScenaBattaglia {
     let usati = 0;
     if (punti.length) {
       let prima = aSchermo(punti[0].x, punti[0].y);
-      let resto = 0;
+      // i primi px li copre già la freccia di mira: i puntini partono dopo, così non coprono nome e PV
+      let resto = PRIMO_PUNTINO_PX;
       let totale = 0;
       for (let i = 1; i < punti.length; i++) {
         const q = aSchermo(punti[i].x, punti[i].y);

@@ -133,6 +133,7 @@ export function dipingiRettangolo(
   maschera: Uint8Array, originale: Uint8Array, w: number, h: number,
   buf: Uint8ClampedArray, tx: number, ty: number,
   x0: number, y0: number, x1: number, y1: number,
+  arte: Uint8ClampedArray | null = null,
 ): void {
   x0 = Math.max(x0, tx, 0); y0 = Math.max(y0, ty, 0);
   x1 = Math.min(x1, tx + LATO_TILE, w); y1 = Math.min(y1, ty + LATO_TILE, h);
@@ -158,12 +159,24 @@ export function dipingiRettangolo(
       if (mat === MATERIALE.aria) {
         // cavità chiusa: coperta da terreno sopra e con terreno (iniziale) sotto → fondo di terra scura
         if (y > cimaRiga[x - x0] && y < fondo[x]) {
-          buf[k] = PROFONDA_RGB[0]; buf[k + 1] = PROFONDA_RGB[1]; buf[k + 2] = PROFONDA_RGB[2]; buf[k + 3] = FONDO_CAVITA_ALFA;
+          if (arte && arte[i * 4 + 3]) {
+            // mappa dipinta: in fondo al buco si vede il terreno stesso, scuro e freddo (03 §1: ombre blu-viola)
+            const a = i * 4;
+            buf[k] = arte[a] * 0.3 + 14; buf[k + 1] = arte[a + 1] * 0.3 + 12; buf[k + 2] = arte[a + 2] * 0.36 + 26; buf[k + 3] = 235;
+          } else {
+            buf[k] = PROFONDA_RGB[0]; buf[k + 1] = PROFONDA_RGB[1]; buf[k + 2] = PROFONDA_RGB[2]; buf[k + 3] = FONDO_CAVITA_ALFA;
+          }
         } else buf[k + 3] = 0;
         continue;
       }
       let c = COLORI_MATERIALE[mat];
       let r = c[0], g = c[1], b = c[2];
+      if (arte && arte[i * 4 + 3] && !(scavi && mat !== MATERIALE.ferro && vicinoScavo[rigaScavi + x])) {
+        // mappa dipinta (battaglia/mappe): il colore è quello del quadro, erba e strati sono già disegnati
+        const a = i * 4;
+        buf[k] = arte[a]; buf[k + 1] = arte[a + 1]; buf[k + 2] = arte[a + 2]; buf[k + 3] = 255;
+        continue;
+      }
       if (mat === MATERIALE.terra) {
         // la terra scurisce in profondità verso terraProfonda
         const t = Math.min(1, Math.max(0, (y - 420) / 500));

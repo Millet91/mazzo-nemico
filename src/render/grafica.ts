@@ -7,6 +7,7 @@ import { Application } from 'pixi.js';
 // Se si usa un'altra famiglia (Mesh, TilingSprite, NineSliceSprite, ParticleContainer, BitmapText…) va aggiunta
 // qui: lo controlla tests/render/pipe-pixi.test.ts.
 import 'pixi.js/text';
+import 'pixi.js/sprite-tiling';
 import { bus } from '../core/bus';
 import { PALETTE, hex } from '../core/palette';
 import { MisuraFps } from './misura-fps';

@@ -58,6 +58,8 @@ export interface MappaGenerata {
   specchiata: boolean;
   /** decorazioni solo grafiche (palme, massi disegnati): non toccano la fisica */
   decorazioni: Decorazione[];
+  /** mappa fatta a mano con grafica dipinta: cartella in public/assets/mappe/ (terreno, cielo, sfondi). Solo grafica. */
+  arte?: string;
   /** barili di polvere già piazzati (centro della base, appoggiati al suolo); la sim li crea come proiettili 'barile' fermi senza miccia, che esplodono se colpiti */
   barili?: Punto[];
 }
@@ -106,6 +108,8 @@ export interface ConfigBattaglia {
   timerSecondi: number;
   /** traiettoria tratteggiata intera (tutorial, Mozzo) invece del primo 30% */
   traiettoriaCompleta: boolean;
+  /** mappa fatta a mano (battaglia/mappe, 06 §6) al posto di quella generata dal seme; resta nel replay */
+  mappaFissa?: string;
 }
 
 // ─── Stato della battaglia ───────────────────────────────────────────────────────────────────────

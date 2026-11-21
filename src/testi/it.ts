@@ -37,6 +37,9 @@ export const it = {
     meno: 'Uno in meno',
     piu: 'Uno in più',
     salpa: 'Salpa!',
+    mappa: 'Mappa',
+    mappaCasuale: 'Isola a caso',
+    mappaCala: 'Cala Pappagallo',
     indietro: 'Indietro',
   },
   diagnostica: {

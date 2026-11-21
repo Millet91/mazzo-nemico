@@ -4,7 +4,7 @@ import { tocco } from '../../piattaforma/haptics';
 import { COLORI_CIURMA } from '../../core/palette';
 import type { IdCiurma } from '../../core/tipi';
 import { PIRATI_MAX, PIRATI_MIN } from './logica';
-import { avviaSchermaglia, sceltaSchermaglia } from './stato';
+import { avviaSchermaglia, mappaSchermaglia, sceltaSchermaglia } from './stato';
 import { impostaPiratiSchermaglia, piratiSchermaglia } from '../preferenze';
 import { EMBLEMA } from './segnaposto';
 
@@ -39,6 +39,14 @@ export function SceltaSchermaglia() {
         </header>
         <Contatore lato={0} ciurma="teschio" etichetta={T.schermaglia.tuoi} />
         <Contatore lato={1} ciurma="marina" etichetta={T.schermaglia.nemici} />
+        <div class="contatore scelta-mappa" role="radiogroup" aria-label={T.schermaglia.mappa}>
+          <span class="etichetta">{T.schermaglia.mappa}</span>
+          {([['cala-pappagallo', T.schermaglia.mappaCala], ['', T.schermaglia.mappaCasuale]] as const).map(([id, nome]) => (
+            <button type="button" id={`mappa-${id || 'casuale'}`} role="radio" aria-checked={mappaSchermaglia.value === id}
+              class={`btn ${mappaSchermaglia.value === id ? 'primario' : 'secondario'}`}
+              onClick={() => { tocco(); mappaSchermaglia.value = id; }}>{nome}</button>
+          ))}
+        </div>
         <button type="button" id="salpa" class="btn primario" onClick={() => { tocco(); avviaSchermaglia(); }}>{T.schermaglia.salpa}</button>
       </section>
     </div>

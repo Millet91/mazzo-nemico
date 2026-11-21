@@ -26,6 +26,8 @@ export class TerrenoRender {
   private readonly originale: Uint8Array;
   /** tile in attesa di caricamento, in ordine di arrivo */
   private coda: number[] = [];
+  /** grafica dipinta della mappa fatta a mano (RGBA w×h), o null: terreno coi colori dei materiali */
+  private arte: Uint8ClampedArray | null = null;
 
   constructor(private readonly terreno: Terreno) {
     this.colonne = Math.ceil(terreno.w / LATO_TILE);
@@ -74,13 +76,23 @@ export class TerrenoRender {
       const x0 = Math.max(s[0], t.tx), y0 = Math.max(s[1], t.ty);
       const x1 = Math.min(s[2], t.tx + LATO_TILE), y1 = Math.min(s[3], t.ty + LATO_TILE);
       if (x1 <= x0 || y1 <= y0) continue;
-      dipingiRettangolo(this.terreno.maschera, this.originale, this.terreno.w, this.terreno.h, t.img.data, t.tx, t.ty, x0, y0, x1, y1);
+      dipingiRettangolo(this.terreno.maschera, this.originale, this.terreno.w, this.terreno.h, t.img.data, t.tx, t.ty, x0, y0, x1, y1, this.arte);
       t.ctx.putImageData(t.img, 0, 0, x0 - t.tx, y0 - t.ty, x1 - x0, y1 - y0);
       t.texture.source.update();
       t.sprite.visible = true;
       n++;
     }
     return n;
+  }
+
+  /** Arriva la grafica dipinta (caricata in modo asincrono): si ridipingono tutte le tile, poche per frame. */
+  impostaArte(rgba: Uint8ClampedArray): void {
+    if (rgba.length !== this.terreno.w * this.terreno.h * 4) return;
+    this.arte = rgba;
+    this.tiles.forEach((t, i) => {
+      if (!t.sporco) this.coda.push(i);
+      t.sporco = [t.tx, t.ty, t.tx + LATO_TILE, t.ty + LATO_TILE];
+    });
   }
 
   get inAttesa(): number { return this.coda.length; }
@@ -92,6 +104,8 @@ export class TerrenoRender {
       const px = Math.round(x + dx * raggio), py = Math.round(y + dy * raggio);
       if (px < 0 || py < 0 || px >= w || py >= h) continue;
       const m = this.originale[py * w + px];
+      const a = (py * w + px) * 4;
+      if (this.arte && m !== 0 && this.arte[a + 3]) return (this.arte[a] << 16) | (this.arte[a + 1] << 8) | this.arte[a + 2];
       if (m !== 0 && m !== 6) { const c = COLORI_MATERIALE[m]; return (c[0] << 16) | (c[1] << 8) | c[2]; }
     }
     const c = COLORI_MATERIALE[2];

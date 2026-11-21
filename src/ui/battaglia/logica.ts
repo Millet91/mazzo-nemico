@@ -16,8 +16,9 @@ export const PIRATI_MAX = 5;
 export const PIRATI_PREDEFINITI = 3;
 const limitaPirati = (n: number) => Math.max(PIRATI_MIN, Math.min(PIRATI_MAX, Math.round(n) || PIRATI_PREDEFINITI));
 
-export function configSchermaglia(seme: number, pirati: [number, number] = [PIRATI_PREDEFINITI, PIRATI_PREDEFINITI]): ConfigBattaglia {
+export function configSchermaglia(seme: number, pirati: [number, number] = [PIRATI_PREDEFINITI, PIRATI_PREDEFINITI], mappaFissa?: string): ConfigBattaglia {
   return {
+    ...(mappaFissa ? { mappaFissa } : {}),
     versioneRegole: VERSIONE_REGOLE,
     seme: seme >>> 0,
     bioma: 'isola',

@@ -13,6 +13,7 @@ import { frecciaBordo } from './bordo';
 import { Effetti } from './effetti';
 import { Forme, sprite, type IdForma } from './forme';
 import { TerrenoRender } from './terreno';
+import { ALTEZZA_OGGETTO, SfondiMappa } from './sfondi-mappa';
 
 function mescola(a: string, b: string, t: number): number {
   const ca = hex(a), cb = hex(b);
@@ -105,6 +106,8 @@ export class ScenaBattaglia {
   private readonly freccia: Sprite;
   /** corta freccia oro sopra il pirata nella direzione di mira (00 §9.16) */
   private readonly frecciaMira = new Graphics();
+  /** grafica dipinta della mappa fatta a mano (null = mappa generata) */
+  private readonly sfondi: SfondiMappa | null = null;
   private tempo = 0;
   private scala = 1;
   private chiaveTraiettoria = '';
@@ -129,6 +132,24 @@ export class ScenaBattaglia {
       sp.scale.set(d.specchio ? -d.scala : d.scala, d.scala);
       this.strato.decorazioni.addChild(sp);
       this.decorazioni.push(sp);
+    }
+    if (mappa.arte) {
+      const sfondi = new SfondiMappa(mappa.arte, s.terreno.w, s.terreno.h);
+      this.sfondi = sfondi;
+      this.cielo.addChild(sfondi.radice);
+      void sfondi.carica().then((a) => {
+        if (!a) return;
+        if (a.terreno) this.terreno.impostaArte(a.terreno);
+        if (a.cielo) { this.gradiente.visible = false; for (const n of this.nuvole) n.visible = false; }
+        mappa.decorazioni.forEach((d, i) => {
+          const t = a.oggetti[d.tipo], sp = this.decorazioni[i];
+          if (!t || !sp || sp.destroyed) return;
+          sp.texture = t;
+          sp.anchor.set(0.5, 0.97);
+          const k = (ALTEZZA_OGGETTO[d.tipo] * d.scala) / t.height;
+          sp.scale.set(d.specchio ? -k : k, k);
+        });
+      });
     }
 
     this.anelloTerra = sprite(this.forme.get('anello'));
@@ -286,6 +307,7 @@ export class ScenaBattaglia {
 
     this.terreno.aggiorna();
     this.disegnaCielo(camera, deltaMS);
+    this.sfondi?.aggiorna(camera, this.s.terreno.mare);
     this.disegnaAcqua(camera);
     this.effetti.impostaMare(s.terreno.mare);
     this.animaDecorazioni();
@@ -564,6 +586,7 @@ export class ScenaBattaglia {
   }
 
   distruggi(): void {
+    this.sfondi?.distruggi();
     this.terreno.distruggi();
     this.effetti.distruggi();
     this.cielo.destroy({ children: true });

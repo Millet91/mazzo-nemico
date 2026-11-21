@@ -15,6 +15,8 @@ import { puntoSuiComandi } from './zone';
 
 /** schermata di scelta della Schermaglia (1-5 pirati per lato) aperta */
 export const sceltaSchermaglia = signal(false);
+/** mappa della Schermaglia: '' = generata dal seme, altrimenti l'id di una mappa fatta a mano (battaglia/mappe) */
+export const mappaSchermaglia = signal<string>('cala-pappagallo');
 /** ×2 sui turni dell'IA (bus.azioni 'velocita'); B lo rimette a 1 a ogni battaglia nuova */
 export const velocitaIa = signal<1 | 2>(1);
 
@@ -37,7 +39,7 @@ export function avviaSchermaglia(): void {
   azzeraHud();
   sceltaSchermaglia.value = false;
   velocitaIa.value = 1;
-  bus.richiestaBattaglia.value = configSchermaglia(semeNuovo(), piratiSchermaglia.value);
+  bus.richiestaBattaglia.value = configSchermaglia(semeNuovo(), piratiSchermaglia.value, mappaSchermaglia.value || undefined);
 }
 
 export function cambiaVelocitaIa(): void {

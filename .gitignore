@@ -1,0 +1,17 @@
+node_modules
+dist
+sim-out
+*.log
+android/app/build
+android/build
+android/.gradle
+android/local.properties
+*.apk
+# sorgenti pesanti degli asset (11 §4): solo i manifesti vanno in git
+arte/**/*
+!arte/**/
+!arte/**/manifest.json
+# Playwright
+test-results
+playwright-report
+tests/e2e/screenshot

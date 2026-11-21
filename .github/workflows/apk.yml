@@ -1,0 +1,59 @@
+# APK Android di prova (debug, Capacitor). Gira a ogni push su main e sui rami claude/**, e a mano.
+# Tutti i rami caricano l'APK come artifact del workflow. Solo main, i rami claude/*-integrazione e claude/m0-*
+# aggiornano la pre-release "apk-prova" scaricabile dal telefono (14: un solo APK di prova, i rami paralleli non si pestano).
+name: APK Android
+on:
+  push:
+    branches: [main, 'claude/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      # i runner ubuntu-latest hanno già l'Android SDK (ANDROID_HOME); Gradle scarica le piattaforme mancanti
+      - run: echo "SDK in $ANDROID_HOME" && yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+      - run: npm ci
+      - run: npm test
+      # la build legge GITHUB_SHA e GITHUB_RUN_NUMBER (Impostazioni → Info)
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Build APK di debug
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Rinomina
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk kaboom-ahoy-prova.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kaboom-ahoy-prova-apk
+          path: kaboom-ahoy-prova.apk
+      - name: Pre-release "apk-prova"
+        if: >-
+          github.ref_name == 'main' ||
+          (startsWith(github.ref_name, 'claude/') && endsWith(github.ref_name, '-integrazione')) ||
+          startsWith(github.ref_name, 'claude/m0-')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Kaboom Ahoy! · build di prova interna (debug, non firmata per lo store). Commit ${GITHUB_SHA::7}, ramo ${GITHUB_REF_NAME}, build ${GITHUB_RUN_NUMBER}. Si installa accanto al vecchio Baro (appId it.millet91.kaboomahoy)."
+          if gh release view apk-prova >/dev/null 2>&1; then
+            gh release upload apk-prova kaboom-ahoy-prova.apk --clobber
+            gh release edit apk-prova --title "Kaboom Ahoy! · APK di prova" --notes "$NOTES" --target "$GITHUB_SHA" --prerelease
+            # il vecchio file di Baro non serve più nella pre-release
+            gh release delete-asset apk-prova baro-prova.apk -y 2>/dev/null || true
+          else
+            gh release create apk-prova kaboom-ahoy-prova.apk --prerelease --title "Kaboom Ahoy! · APK di prova" --notes "$NOTES" --target "$GITHUB_SHA"
+          fi

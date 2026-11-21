@@ -1,0 +1,115 @@
+/* Stile di 03: variabili della palette (§2), font Lilita One + Nunito (§3), componenti (§4), area sicura (§6). */
+:root {
+  --notte: #0E1B26; --abisso: #13293A; --legno-scuro: #3B2416; --legno: #6B4226;
+  --pergamena: #F5E6C4; --pergamena-ombra: #D9C39A; --inchiostro: #2B1B10;
+  --testo: #FFF7E8; --testo-dim: #B8C4CC; --oro: #FFC83D; --oro-ombra: #C78A12;
+  --pericolo: #FF4D4D; --ok: #4ADE80; --info: #4CC9F0;
+  --mare-fondo: #0B3D5C; --mare-medio: #116A8C; --mare-basso: #2FB3C4; --schiuma: #E6FBFF;
+
+  --font-titolo: 'Lilita One', 'Nunito Variable', system-ui, sans-serif;
+  --font-testo: 'Nunito Variable', system-ui, sans-serif;
+  --rapida: 120ms; --media: 220ms; --lenta: 400ms; --curva: cubic-bezier(.2, .8, .2, 1);
+
+  /* area sicura: notch fino a 48 px a sinistra o a destra, nessun comando entro 56 px dal bordo corto */
+  --sicura-s: max(env(safe-area-inset-left), 12px);
+  --sicura-d: max(env(safe-area-inset-right), 12px);
+  --sicura-a: max(env(safe-area-inset-top), 12px);
+  --sicura-b: max(env(safe-area-inset-bottom), 16px);
+  --bordo-corto: max(env(safe-area-inset-left), env(safe-area-inset-right), 56px);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body, #app { margin: 0; height: 100%; overflow: hidden; background: var(--notte); }
+body {
+  color: var(--testo); font-family: var(--font-testo); font-size: 14px;
+  user-select: none; -webkit-user-select: none; touch-action: none; overscroll-behavior: none;
+}
+
+#palco { position: fixed; inset: 0; }
+#palco canvas { display: block; }
+
+.ui { position: fixed; inset: 0; pointer-events: none; padding: var(--sicura-a) var(--bordo-corto) var(--sicura-b); }
+.ui button, .ui [role='alert'] { pointer-events: auto; }
+
+.titolo {
+  position: absolute; left: 50%; top: 18%; transform: translateX(-50%);
+  width: min(900px, calc(100% - 2 * var(--bordo-corto))); text-align: center;
+}
+h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-spacing: .5px; }
+.titolo h1 {
+  font-size: clamp(44px, 12vh, 64px); line-height: 1.05; color: var(--oro);
+  -webkit-text-stroke: 3px var(--inchiostro); paint-order: stroke fill; text-shadow: 0 4px 0 #0006;
+}
+.sottotitolo {
+  margin: 4px 0 0; font-family: var(--font-titolo); font-size: 20px; color: var(--testo);
+  -webkit-text-stroke: 2px var(--inchiostro); paint-order: stroke fill;
+}
+.cantiere {
+  display: inline-block; margin: 12px 0 0; padding: 6px 14px; border-radius: 14px; font-weight: 700;
+  background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22;
+}
+
+.angolo { position: absolute; top: var(--sicura-a); right: var(--bordo-corto); }
+
+.fps {
+  position: absolute; top: var(--sicura-a); left: var(--bordo-corto); padding: 4px 10px; border-radius: 14px;
+  background: rgba(19, 41, 58, .85); font-weight: 800; font-variant-numeric: tabular-nums; font-size: 13px;
+}
+
+/* Pulsanti (03 §4) */
+.btn {
+  font: 900 16px var(--font-testo); border: 0; cursor: pointer; color: var(--testo);
+  min-height: 48px; min-width: 48px; padding: 0 20px; border-radius: 14px;
+  transition: transform var(--rapida) var(--curva);
+}
+.btn:active { transform: translateY(3px); }
+.btn.primario { background: var(--oro); color: var(--inchiostro); height: 56px; border-bottom: 4px solid var(--oro-ombra); }
+.btn.secondario { background: var(--legno); border-bottom: 4px solid var(--legno-scuro); }
+.btn.icona {
+  width: 48px; height: 48px; padding: 0; border-radius: 50%; font-size: 24px; line-height: 1;
+  background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22;
+}
+.btn:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
+
+/* Modale Impostazioni (03 §5.10: qui il blur è permesso, la schermata è statica) */
+.scrim {
+  position: fixed; inset: 0; background: rgba(14, 27, 38, .55); display: grid; place-items: center;
+  padding: var(--sicura-a) var(--bordo-corto) var(--sicura-b); animation: entra var(--media) var(--curva);
+}
+.modale {
+  width: min(70vw, 620px); max-height: 100%; overflow: auto; padding: 12px 16px 16px; border-radius: 16px;
+  background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22; backdrop-filter: blur(10px);
+}
+.modale header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.modale header h2 { flex: 1; font-size: 28px; }
+.voci { display: flex; flex-direction: column; gap: 12px; }
+.info dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 14px; }
+.info dt { color: var(--testo-dim); }
+.info dd { margin: 0; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.info .versione { all: unset; cursor: pointer; font-weight: 900; min-height: 24px; }
+.info .nota { color: var(--testo-dim); margin: 12px 0 0; }
+
+.errore {
+  position: absolute; left: 50%; bottom: var(--sicura-b); transform: translateX(-50%);
+  width: min(560px, calc(100% - 2 * var(--bordo-corto))); padding: 16px; border-radius: 16px;
+  background: var(--pergamena); color: var(--inchiostro); box-shadow: 0 6px 0 #0004;
+}
+.errore h2 { font-size: 20px; color: #B3261E; margin-bottom: 4px; }
+.errore p { margin: 0; }
+
+.avviso {
+  position: fixed; left: 50%; bottom: calc(var(--sicura-b) + 8px); transform: translateX(-50%);
+  padding: 8px 16px; border-radius: 14px; background: var(--abisso); border: 1px solid #FFFFFF22; font-weight: 800;
+}
+
+/* Componente Art (assets/Art.tsx) */
+.art { display: inline-block; vertical-align: middle; }
+.art.glyph { position: relative; display: inline-grid; place-items: center; line-height: 1; }
+.art.glyph.segnaposto::after {
+  content: ''; position: absolute; top: 0; right: 0; width: 6px; height: 6px; border-radius: 50%; background: #FF00FF;
+}
+.art.anim { background-repeat: no-repeat; background-position: 0 0; }
+@keyframes art-sheet { to { background-position: var(--art-fine) 0; } }
+
+@keyframes entra { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { * { animation-duration: 1ms !important; transition-duration: 1ms !important; } }

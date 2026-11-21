@@ -7,7 +7,6 @@
 import { MATERIALE, type MappaGenerata, type Punto, type TipoAppiglio } from '../../core/tipi';
 import { BIL } from '../../contenuti/bilanciamento';
 import { intero, probabilita, type ConRng } from '../../core/rng';
-import { superficie } from './analisi';
 import { MONDO, REGOLE } from './parametri';
 
 export type AppiglioMappa = NonNullable<MappaGenerata['appigli']>[number];
@@ -148,25 +147,29 @@ function progetta(m: Uint8Array, sup: Int32Array, mare: number, xc: number, fuor
   return { appiglio: { tipo, x, yAlto: ya, yBasso: yb }, da: Math.min(...cols), a: Math.max(...cols), tagli };
 }
 
-function scava(m: Uint8Array, g: Gradone): void {
+/** Scava il gradone e aggiorna la superficie delle colonne toccate (senza ricalcolarla tutta). */
+function scava(m: Uint8Array, sup: Int32Array, g: Gradone): void {
   for (const t of g.tagli) {
     for (let y = 0; y < t.sopra; y++) m[y * W + t.c] = ARIA;
     if (t.labbro) for (let y = t.labbro[0]; y < t.labbro[1]; y++) m[y * W + t.c] = MATERIALE.terra;
+    let y = t.labbro ? t.labbro[0] : t.sopra;
+    while (y < H && m[y * W + t.c] === ARIA) y++;
+    sup[t.c] = y;
   }
 }
 
 /**
- * Piazza 1-2 appigli per lato (stessi tipi, altezze e posizioni specchiate) scavando i gradoni nella maschera `m`.
+ * Piazza 1-2 appigli per lato (stessi tipi, altezze e posizioni specchiate) scavando i gradoni nella maschera `m`
+ * (aggiorna anche la superficie `sup`).
  * Va chiamato prima di scegliere gli spawn. Restituisce gli appigli in ordine di x, oppure null se non ce n'è
  * almeno uno per lato.
  */
-export function piazzaAppigli(s: ConRng, m: Uint8Array, mare: number): AppiglioMappa[] | null {
+export function piazzaAppigli(s: ConRng, m: Uint8Array, sup: Int32Array, mare: number): AppiglioMappa[] | null {
   const R = REGOLE;
   const perLato = intero(s, Math.ceil(R.appigliMin / 2), Math.floor(R.appigliMax / 2));
   // metà sinistra, lontano dalla costa (il gradone basso non deve mai essere la scogliera sul mare)
   const lo = Math.round(W * 0.22), hi = Math.round(W / 2) - 10;
   const fatti: Gradone[] = [];
-  let sup = superficie(m);
   // solo le colonne in pendenza: lì un gradone serve
   const pendio = (x: number) => sup[x + PENDIO] - sup[x - PENDIO];
   const candidati: number[] = [];
@@ -184,10 +187,9 @@ export function piazzaAppigli(s: ConRng, m: Uint8Array, mare: number): AppiglioM
     const dx = progetta(m, sup, mare, W - 1 - xc, -fuori, alto, tipo, W - 1 - hi, W - 1 - lo);
     if (!dx) continue;
     if (fatti.some((g) => sx.da - DISTANZA_GRADONI <= g.a && g.da <= sx.a + DISTANZA_GRADONI)) continue;
-    scava(m, sx);
-    scava(m, dx);
+    scava(m, sup, sx);
+    scava(m, sup, dx);
     fatti.push(sx, dx);
-    sup = superficie(m);
   }
   if (fatti.length < R.appigliMin) return null;
   const out = fatti.map((g) => g.appiglio);

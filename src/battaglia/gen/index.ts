@@ -84,11 +84,11 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
   const { maschera } = terrenoIsola(s);
   if (validaMassa(maschera, mare).length) return null;
   // scale e liane: i gradoni si scavano prima di scegliere gli spawn, così gli spawn li vedono già
-  let appigli = piazzaAppigli(s, maschera, mare);
+  const sup = superficie(maschera);
+  let appigli = piazzaAppigli(s, maschera, sup, mare);
   if (!appigli) return null;
   if (validaMassa(maschera, mare).length) return null;
   const lontanoDaAppigli = (x: number) => appigli!.every((a) => Math.abs(a.x - x) >= REGOLE.appiglioLontanoDaSpawn);
-  const sup = superficie(maschera);
   const n = REGOLE.spawnPerLato;
   const candidati: [Posto[], Posto[]] = [[], []];
   for (const lato of [0, 1] as const) {

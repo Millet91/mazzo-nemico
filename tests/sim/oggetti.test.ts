@@ -174,6 +174,7 @@ describe('Casse', () => {
     eseguiComando(s, { t: 'muovi', dir: 1 });
     const ev = avanzaFinche(s, () => casse(s).length === 0, 120);
     expect(eventiDi(ev, 'esplosione')[0].raggio).toBe(BIL.casse.trappola.raggio);
+    expect(eventiDi(ev, 'esplosione')[0].arma).toBe('cassa');
     expect(BIL.pirata.pv - p.vita).toBeGreaterThan(10);
     expect(BIL.pirata.pv - p.vita).toBeLessThanOrEqual(BIL.casse.trappola.danno);
   });
@@ -184,7 +185,7 @@ describe('Casse', () => {
     const ev = [] as Parameters<typeof avanzaTick>[1];
     esplodi(s, 980, SUOLO - 10, 'cannone', 'marina', ev);
     for (let i = 0; i < 2 * MICCIA_REAZIONE_TICK; i++) avanzaTick(s, ev);
-    expect(eventiDi(ev, 'esplosione').some((e) => e.raggio === BIL.casse.esplosione.raggio)).toBe(true);
+    expect(eventiDi(ev, 'esplosione').some((e) => e.arma === 'cassa' && e.raggio === BIL.casse.esplosione.raggio)).toBe(true);
     expect(casse(s)).toHaveLength(0);
   });
 

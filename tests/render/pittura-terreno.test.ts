@@ -57,3 +57,18 @@ describe('Pittura del terreno', () => {
     expect(tileToccate(-100, -100, -10, -10, 8, 4)).toEqual([]);
   });
 });
+
+describe('Erba solo all\'aperto', () => {
+  it('il pavimento di una grotta non ha erba, la superficie sì', () => {
+    const m = mondo();
+    // grotta: buco 40×20 a y 380-400, chiuso sopra dalla terra
+    for (let y = 380; y < 400; y++) for (let x = 100; x < 140; x++) m[y * W + x] = MATERIALE.aria;
+    const o = m.slice();
+    const buf = new Uint8ClampedArray(LATO_TILE * LATO_TILE * 4);
+    dipingiRettangolo(m, o, W, H, buf, 0, 256, 0, 256, 256, 512);
+    expect(vicino(pixel(buf, 120, 256, 0, 256), PALETTE.erbaLuce)).toBe(true);
+    const pavimento = pixel(buf, 120, 400, 0, 256);
+    expect(vicino(pavimento, PALETTE.erbaLuce) || vicino(pavimento, PALETTE.erba)).toBe(false);
+    expect(vicino(pixel(buf, 120, 401, 0, 256), COLORI_MATERIALE[MATERIALE.terra], 30)).toBe(true);
+  });
+});

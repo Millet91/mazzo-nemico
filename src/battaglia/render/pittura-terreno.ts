@@ -95,6 +95,19 @@ function segnaScavi(m: Uint8Array, o: Uint8Array, w: number, h: number, x0: numb
   return true;
 }
 
+/** Per ogni colonna, la quota del primo pixel solido della maschera INIZIALE (h se la colonna è tutta aria). */
+const superfici = new WeakMap<Uint8Array, Int32Array>();
+export function superficieOriginale(originale: Uint8Array, w: number, h: number): Int32Array {
+  let sup = superfici.get(originale);
+  if (sup) return sup;
+  sup = new Int32Array(w).fill(h);
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) if (originale[y * w + x] !== MATERIALE.aria) { sup[x] = y; break; }
+  }
+  superfici.set(originale, sup);
+  return sup;
+}
+
 /**
  * Dipinge il rettangolo [x0, x1) × [y0, y1) (coordinate di mondo, dentro la tile) nel buffer RGBA della tile
  * che ha l'angolo in (tx, ty). `originale` è la maschera all'inizio della battaglia.
@@ -109,6 +122,7 @@ export function dipingiRettangolo(
   if (x1 <= x0 || y1 <= y0) return;
   const rw = x1 - x0;
   const scavi = segnaScavi(maschera, originale, w, h, x0, y0, rw, y1 - y0);
+  const sup = superficieOriginale(originale, w, h);
   for (let y = y0; y < y1; y++) {
     let k = ((y - ty) * LATO_TILE + (x0 - tx)) * 4;
     const riga = y * w;
@@ -127,12 +141,12 @@ export function dipingiRettangolo(
       if (scavi && mat !== MATERIALE.ferro && vicinoScavo[rigaScavi + x]) {
         c = BRUCIATO_RGB; r = c[0]; g = c[1]; b = c[2];
       } else if (mat === MATERIALE.sabbia || mat === MATERIALE.terra) {
-        // erba: la superficie ORIGINALE è entro ERBA px sopra
-        for (let d = 1; d <= ERBA; d++) {
+        // erba: la superficie ORIGINALE esposta al cielo è entro ERBA px sopra (dentro le grotte niente erba)
+        if (y - ERBA <= sup[x]) for (let d = 1; d <= ERBA; d++) {
           if (y - d < 0) break;
           const j = i - d * w;
           if (originale[j] === MATERIALE.aria) {
-            if (maschera[j] !== MATERIALE.aria) break;
+            if (maschera[j] !== MATERIALE.aria || y - d >= sup[x]) break;
             c = d <= 2 ? ERBA_LUCE_RGB : ERBA_RGB; r = c[0]; g = c[1]; b = c[2];
             break;
           }

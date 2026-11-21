@@ -3,7 +3,7 @@
 // parte dei casi, niente tiri suicidi.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { decidi, creaIa } from '../../src/battaglia/ia';
+import { decidi, creaIa, fotografia } from '../../src/battaglia/ia';
 import { decidiCon, potenzaPer, angoloVerso, punteggio, armiUsabili } from '../../src/battaglia/ia/pianifica';
 import { passiSicuri } from '../../src/battaglia/ia/terreno';
 import { hashStato, simulaColpo, creaBattaglia, avanzaTick, eseguiComando } from '../../src/battaglia/sim';
@@ -211,5 +211,17 @@ describe.skipIf(simSegnaposto)('IA · con la sim vera', () => {
     }
     expect(s.esito).not.toBeNull();
     expect(s.esito!.turni).toBeLessThanOrEqual(BIL.battaglia.turnoLimite);
+  });
+});
+
+describe('IA · client', () => {
+  it('la fotografia per il ripiego dà lo stesso piano e non ricopia la maschera', () => {
+    const s = duello(800, 1200, { vento: 2 });
+    const f = fotografia(s);
+    expect(f.terreno.maschera).toBe(s.terreno.maschera);
+    expect(f.pirati).not.toBe(s.pirati);
+    expect(decidi(f, 'mozzo')).toEqual(decidi(s, 'mozzo'));
+    s.pirati[0].x += 50; // la battaglia va avanti: la fotografia no
+    expect(f.pirati[0].x).toBe(s.pirati[0].x - 50);
   });
 });

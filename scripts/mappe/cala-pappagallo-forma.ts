@@ -118,14 +118,14 @@ export const APPIGLI: { tipo: 'scala' | 'liana'; x: number; yAlto: number; yBass
   { tipo: 'scala', x: 1846, yAlto: 726, yBasso: 848 },
 ];
 /** Etichette per il pittore (canale verde della PNG dei materiali). */
-export const TAG = { foglie: 1, edificio: 2, rovina: 3, ponte: 4 } as const;
+export const TAG = { foglie: 1, edificio: 2, rovina: 3, ponte: 4, molo: 5 } as const;
 
 /**
  * Variante "prologo" (Lead design, 10 §2 e 16 §3): molo di legno al posto del relitto, gradino di 20 px sulla
  * Terrazza bassa sinistra tra la partenza e la cassa di Rum. Il resto della forma è uguale.
  */
 export type Variante = 'base' | 'prologo';
-export const MOLO = { x0: 72, x1: 236, piano: 880, spessore: 10 };
+export const MOLO = { x0: 72, x1: 236, piano: 880, spessore: 14 };
 export const GRADINO = { x0: 338, x1: 424, alto: 20 };
 
 export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array; sup: Float64Array; tag: Uint8Array } {
@@ -213,7 +213,7 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
   }
   // Nido: cengia piana nella Rocca, con la parete dietro (lato sinistro e il suo specchio)
   for (const [a0, a1] of [[NIDO.x0, NIDO.x1], [W - NIDO.x1, W - NIDO.x0]]) for (let x = a0; x <= a1; x++) {
-    for (let y = NIDO.y - 52 + Math.round(((x - a0) / (a1 - a0) - 0.5) ** 2 * 40); y < NIDO.y; y++) if (m[y * W + x] === MATERIALE.roccia) m[y * W + x] = MATERIALE.aria;
+    for (let y = NIDO.y - 52 + Math.round(((x - a0) / (a1 - a0) - 0.5) ** 2 * 40); y < NIDO.y; y++) m[y * W + x] = MATERIALE.aria;
     for (let y = NIDO.y; y < NIDO.y + 24; y++) if (!m[y * W + x]) metti(x, y, MATERIALE.roccia);
   }
   const legno = (x: number, y: number) => { metti(x, y, MATERIALE.legno); tag[y * W + x] = TAG.edificio; };
@@ -228,10 +228,17 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
     for (let y = t.piano - 64; y < t.piano - 28; y++) { const l = ((y - (t.piano - 64)) / 36) * 34; for (let x = Math.round(cx - l); x <= cx + l; x++) if (y > t.piano - 60 + Math.abs(x - cx) * 36 / 34 - 4 || y > t.piano - 40) legno(x, y); }
   }
   if (variante === 'prologo') {
+    // sotto il molo la spiaggia scende sott'acqua: il fondo del molo sta sopra il mare
+    const sx = 196, sy = Math.round(sup[sx]);
+    for (let x = 64; x < sx; x++) {
+      const linea = Math.round(FONDALE - 6 - (FONDALE - 6 - sy) * ((x - 64) / (sx - 64)) ** 0.7);
+      for (let y = 160; y < linea; y++) if (m[y * W + x] === MATERIALE.sabbia || m[y * W + x] === MATERIALE.terra) m[y * W + x] = MATERIALE.aria;
+    }
     // molo: tavolato sopra il mare, pali fino al fondale ogni 32 px, attaccato alla spiaggia
     for (let x = MOLO.x0; x <= MOLO.x1; x++) {
-      for (let y = MOLO.piano; y < MOLO.piano + MOLO.spessore; y++) if (!m[y * W + x]) legno(x, y);
-      if ((x - MOLO.x0) % 32 < 7) for (let y = MOLO.piano + MOLO.spessore; y < FONDALE; y++) if (!m[y * W + x]) legno(x, y);
+      const asse = (x: number, y: number) => { metti(x, y, MATERIALE.legno); tag[y * W + x] = TAG.molo; };
+      for (let y = MOLO.piano; y < MOLO.piano + MOLO.spessore; y++) if (!m[y * W + x]) asse(x, y);
+      if ((x - MOLO.x0) % 32 < 8) for (let y = MOLO.piano + MOLO.spessore; y < FONDALE; y++) if (!m[y * W + x]) asse(x, y);
     }
     // gradino: terra in più sulla Terrazza bassa, con i bordi un po' smussati
     // gradino: ripiano piano 20 px sopra l'inizio della terrazza, con lo spigolo un po' smussato

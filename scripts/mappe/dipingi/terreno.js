@@ -115,6 +115,20 @@
         c = mix(C.legno1, C.legno2, (Math.floor(asse) % 2) * 0.3 + (nn - 0.5) * 0.4);
         if ((asse % 1) < 0.15) c = mix(c, C.legno2, 0.75);
         if (n2(x * 3, y * 0.3, 6) > 0.72) c = mix(c, C.legno2, 0.25);
+      } else if (m === LEGNO && tag[i] === 5) {
+        // molo: tavolato chiaro con le fughe scure (si cammina sopra) e pali scuri che scendono in acqua
+        const tavolato = tag[i - 9] === 5 && tag[i + 9] === 5 && (tag[i - 3 * W] === 5 || tag[i - 3 * W] === 0 && y < 900);
+        if (tavolato) {
+          let su = 0; while (tag[i - (su + 1) * W] === 5) su++;
+          c = mix(hx('#E9C48A'), hx('#C9965E'), Math.min(1, su / 12) + (nn - 0.5) * 0.3);
+          if (x % 16 < 2) c = mix(c, hx('#4A2E1A'), 0.85);          // fuga tra un'asse e l'altra
+          if (su < 2) c = mix(c, hx('#FFF0C8'), 0.6);              // bordo di luce in cima
+          if (su === 6) c = mix(c, hx('#8A5A34'), 0.5);            // linea della trave
+        } else {
+          c = mix(hx('#7A4A2A'), hx('#4A2E1A'), (x % 8) / 10 + (nn - 0.5) * 0.3);
+          if (y % 22 < 2) c = mix(c, hx('#3A2414'), 0.6);          // anelli del palo
+          if (y > 946) c = mix(c, hx('#2F4A3A'), Math.min(0.7, (y - 946) / 30));   // bagnato e alghe sotto il pelo dell'acqua
+        }
       } else if (m === LEGNO && tag[i] === 4) {
         // ponte di corda: assi corte affiancate
         const asse = x / 6;

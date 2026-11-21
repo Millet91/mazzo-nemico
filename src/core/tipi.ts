@@ -58,6 +58,8 @@ export interface MappaGenerata {
   specchiata: boolean;
   /** decorazioni solo grafiche (palme, massi disegnati): non toccano la fisica */
   decorazioni: Decorazione[];
+  /** barili di polvere già piazzati (centro della base, appoggiati al suolo); la sim li crea come proiettili 'barile' fermi senza miccia, che esplodono se colpiti */
+  barili?: Punto[];
 }
 
 export interface Decorazione { tipo: 'palma' | 'masso' | 'rovina' | 'cespuglio'; x: number; y: number; scala: number; specchio: boolean }
@@ -145,7 +147,9 @@ export interface Pirata {
   dannoNelTurno: number;
 }
 
-export type TipoProiettile = 'palla' | 'granata' | 'frammento' | 'barile' | 'mina' | 'lapide';
+export type TipoProiettile = 'palla' | 'granata' | 'frammento' | 'barile' | 'mina' | 'lapide' | 'cassa';
+
+export type ContenutoCassa = 'rum' | 'trappola';
 
 export interface Proiettile {
   id: number;
@@ -159,8 +163,10 @@ export interface Proiettile {
   tickEsplosione: number;
   /** id del pirata che l'ha lanciato (−1 = nessuno, es. lapide) */
   lanciatore: number;
-  /** a terra e fermo (granata, barile, lapide) */
+  /** a terra e fermo (granata, barile, lapide, cassa) */
   fermo: boolean;
+  /** solo per tipo 'cassa' */
+  contenuto?: ContenutoCassa;
 }
 
 export type FaseTurno =
@@ -279,6 +285,8 @@ export type EventoBattaglia =
   | { t: 'splash'; x: number; y: number; grande: boolean }
   | { t: 'lapide'; pirata: number; proiettile: number }
   | { t: 'mareSale'; livello: number }
+  | { t: 'cassaCaduta'; proiettile: number; x: number }
+  | { t: 'cassaAperta'; proiettile: number; pirata: number; contenuto: ContenutoCassa }
   | { t: 'fine'; esito: EsitoBattaglia };
 
 // ─── IA ───────────────────────────────────────────────────────────────────────────────────────────

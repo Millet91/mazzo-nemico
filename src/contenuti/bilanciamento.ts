@@ -32,7 +32,7 @@ export const BIL = {
     /** il trascinamento della camera non parte entro questi px CSS dai bordi laterali (gesto indietro) */
     margineGestoIndietro: 24,
     /** durata del volo della camera sul pirata attivo */
-    inquadraTick: Math.round(0.6 * S),
+    inquadraTick: Math.round(0.35 * S), // passata di ritmo (m1-ritmo §3): 0,6 → 0,35 s
   },
 
   pirata: {
@@ -88,6 +88,8 @@ export const BIL = {
     fugaTick: 3 * S,
     /** dopo 10 s di risoluzione chi vibra si ferma d'ufficio (13 caso 8) */
     risoluzioneMaxTick: 10 * S,
+    /** la risoluzione passa appena tutto è fermo da 0,25 s (m1-ritmo §3; sostituisce RISOLUZIONE_MIN_TICK della sim) */
+    risoluzioneFermoTick: Math.round(0.25 * S),
   },
 
   battaglia: {
@@ -100,6 +102,27 @@ export const BIL = {
   },
 
   lapide: { danno: 10, raggio: 25 },
+
+  /** barili di polvere già piazzati dal generatore (m1-ritmo §9; 06 §2 Porto e §7.4) */
+  barili: { min: 3, max: 4, danno: 75, raggio: 85, distanzaMinimaSpawn: 200 },
+
+  /** casse (00 §1.1). In M1 solo Rum e Trappola (niente armi): i pesi si normalizzano tra quelli presenti */
+  casse: {
+    dalTurno: 3,
+    probabilita: 0.5,
+    maxInMappa: 3,
+    pesi: { rum: 30, trappola: 15 } as Record<'rum' | 'trappola', number>,
+    rumPv: 25,
+    rumPvMax: 100,
+    trappola: { danno: 30, raggio: 50 },
+    /** una cassa colpita da un'esplosione scoppia */
+    esplosione: { danno: 25, raggio: 45 },
+    /** scende col paracadute a 60 px/s e il vento la sposta */
+    discesa: 60 / S,
+    /** rimonta: la squadra sotto il 60% dei PV avversari ha il 70% di probabilità che la cassa cada nella sua metà */
+    rimontaSoglia: 0.6,
+    rimontaProbabilita: 0.7,
+  },
 
   /** vento massimo per bioma (00 §2.2) */
   ventoMax: { isola: 6, cimitero: 8, scogliera: 10, porto: 5, ghiacci: 7, grotta: 0 } as Record<Bioma, number>,
@@ -140,7 +163,7 @@ export const BIL = {
       capitano: { simulazioni: 600, posizioni: 4, erroreGradi: 1, errorePotenza: 0.02, vento: 1, sceltaTraMigliori: 1, armi: [] },
     } as Record<LivelloIa, { simulazioni: number; posizioni: number; erroreGradi: number; errorePotenza: number; vento: number; sceltaTraMigliori: number; armi: string[] }>,
     /** "il capitano medita": attesa minima prima di mirare, e durata dell'animazione della mira */
-    pensieroMinimoMs: 1000,
-    animazioneMiraMs: 600,
+    pensieroMinimoMs: 450, // m1-ritmo §3
+    animazioneMiraMs: 350, // m1-ritmo §3
   },
 } as const;

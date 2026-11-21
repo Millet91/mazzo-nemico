@@ -39,6 +39,7 @@ Principio: **animazione guidata dallo stato della sim** (aTerra, vx, vy, appeso,
 - **Fable P1 / Render e input**: nuovo `render/pirata-rig.ts`; sotto zoom 0,6 si torna allo sprite unico (nomi già nascosti sotto 0,9).
 - **UX / Comandi**: la carica del corpo "spiega" la potenza e risolve in parte la lezione "ogni gesto nascosto deve avere un segno visibile". La maniglia d'oro resta.
 - **Audio**: passi a tempo sulla fase, "aaarr" su salto e morte (eventi già presenti).
+- **Tecnica** (`tecnica.md`): cambiare la camminata obbliga a rigenerare i replay oro e a ritarare `PASSI_FUGA` dell'IA; corsa con accelerazione, scavalco 28 px e salto con rincorsa costano M ciascuno; dondolo su liana L. Per questo il punto 10 resta facoltativo e il resto è solo render. Se la Tecnica fa lo scavalco da 28 px, il rig lo mostra con la mano sul bordo (punto 2).
 - **Arte/UI**: il rig usa la palette `COLORI_CIURMA`; i volti restano della versione segnaposto finché non arriva l'immagine di stile.
 - **Bilanciamento / QA**: solo punto 10 (replay, `fermo()`, IA Mozzo).
 - **Mappe**: le liane devono sporgere ~14 px dall'appiglio per le mani.

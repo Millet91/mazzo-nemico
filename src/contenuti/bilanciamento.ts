@@ -53,6 +53,7 @@ export const BIL = {
     /** sotto questa velocità (px/tick) il pirata è fermo */
     velocitaFermo: 5 / S,
     /** danno da caduta: oltre 90 px, 1 PV ogni 4 px, massimo 25 */
+    /** danno = min(cadutaMax, floor((caduta − cadutaSoglia) / cadutaPxPerPv)): conta solo l'eccesso */
     cadutaSoglia: 90,
     cadutaPxPerPv: 4,
     cadutaMax: 25,
@@ -122,12 +123,14 @@ export const BIL = {
   /** tratti delle ciurme che valgono in battaglia (00 §2.1) */
   tratti: {
     /** Teschio Rosso: +10% di danno sulle armi esplosive */
+    /** D effettivo = floor(D × (1 + bonus)): cannone 49, granata 44. Non vale sulla lapide. */
     teschioBonusDanno: 0.1,
     teschioArmi: ['cannone', 'granata', 'barile', 'mina', 'pallaSpezzata', 'pappagallo', 'scimmia', 'bordata'] as readonly string[],
   },
 
   /** IA di battaglia (01 §8; 05 n. 19) */
   ia: {
+    /** l'IA sceglie solo tra le armi di `armi` che hanno munizioni nella sua Squadra */
     punteggio: { uccisione: 60, annegamento: 80, dannoAmico: -1.5, dannoSe: -2, seInMare: -200, sogliaMinima: 10 },
     livelli: {
       mozzo: { simulazioni: 40, posizioni: 0, erroreGradi: 8, errorePotenza: 0.15, vento: 0.5, sceltaTraMigliori: 5, armi: ['cannone', 'granata', 'pistola', 'sciabola', 'barile'] },

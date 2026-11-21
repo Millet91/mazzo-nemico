@@ -17,11 +17,14 @@ export function solido(m: Uint8Array, x: number, y: number): boolean {
 
 /** y del primo pixel solido di ogni colonna, dall'alto (= quota dei piedi di chi ci sta sopra). */
 export function superficie(m: Uint8Array): Int32Array {
-  const out = new Int32Array(W);
-  for (let x = 0; x < W; x++) {
-    let y = 0;
-    while (y < H && m[y * W + x] === ARIA) y++;
-    out[x] = y;
+  const out = new Int32Array(W).fill(H);
+  let mancano = W;
+  // riga per riga (memoria in ordine): ci si ferma quando tutte le colonne hanno trovato il terreno
+  for (let y = 0; y < H && mancano > 0; y++) {
+    const r = y * W;
+    for (let x = 0; x < W; x++) {
+      if (out[x] === H && m[r + x] !== ARIA) { out[x] = y; mancano--; }
+    }
   }
   return out;
 }

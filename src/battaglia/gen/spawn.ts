@@ -35,7 +35,7 @@ export function spinte(): { cannone: number; sciabola: number; angoloSciabola: n
 }
 
 /** Dove finisce un pirata spinto da (piedi) con velocità v e angolo a (mezzi gradi) verso dir. */
-function spinto(m: Uint8Array, mare: number, p: Punto, v: number, a: number, dir: -1 | 1) {
+export function spinto(m: Uint8Array, mare: number, p: Punto, v: number, a: number, dir: -1 | 1) {
   return vola(m, mare, p.x, p.y - 1, dir * coseno(a) * v, -seno(a) * v);
 }
 
@@ -124,31 +124,34 @@ export function distanzaMare(sup: Int32Array, mare: number, p: Punto): number {
   return best;
 }
 
-/** Un pirata in p può colpire almeno un nemico col cannone, senza vento (campionatore di 06 §7.5). */
+/** Un pirata in p può colpire almeno un nemico col cannone, senza vento (campionatore di 06 §7.5).
+ *  Prima una griglia larga di angoli e potenze, poi, se serve, una fitta. */
 export function puoColpire(m: Uint8Array, mare: number, p: Punto, nemici: Punto[]): boolean {
   const da = petto(p);
   const bersagli = nemici.map(petto);
   const raggio = ARMA.cannone.raggio * 0.8;
   const dir = bersagli.reduce((s, b) => s + (b.x - da.x), 0) >= 0 ? 1 : -1;
   const vMax = BIL.fisica.velocitaMaxProiettile;
-  for (let potenza = 30; potenza <= 100; potenza += 5) {
-    for (let a = 10; a <= 170; a += 8) {
-      const ang = dir === 1 ? a : 360 - a;
-      const cx = coseno(ang), cy = -seno(ang);
-      const v = (potenza / 100) * vMax;
-      let diretto = false;
-      const fine = vola(m, mare, da.x + cx * 12, da.y + cy * 12, cx * v, cy * v, (x, y) => {
-        for (const b of bersagli) {
-          if (Math.abs(x - b.x) <= MEZZA_CAPSULA && Math.abs(y - b.y) <= ALTEZZA_CAPSULA / 2) { diretto = true; return true; }
-        }
-        return false;
-      }, 400, 4);
-      if (diretto) return true;
-      if (fine.tipo === 'terra') {
-        for (const b of bersagli) if (distanza(fine, b) <= raggio) return true;
+  let xMin = Infinity, xMax = -Infinity;
+  for (const b of bersagli) { xMin = Math.min(xMin, b.x - MEZZA_CAPSULA); xMax = Math.max(xMax, b.x + MEZZA_CAPSULA); }
+  const tiro = (potenza: number, a: number): boolean => {
+    const ang = dir === 1 ? a : 360 - a;
+    const cx = coseno(ang), cy = -seno(ang);
+    const v = (potenza / 100) * vMax;
+    let diretto = false;
+    const fine = vola(m, mare, da.x + cx * 12, da.y + cy * 12, cx * v, cy * v, (x, y) => {
+      if (x < xMin || x > xMax) return false;
+      for (const b of bersagli) {
+        if (Math.abs(x - b.x) <= MEZZA_CAPSULA && Math.abs(y - b.y) <= ALTEZZA_CAPSULA / 2) { diretto = true; return true; }
       }
-    }
-  }
+      return false;
+    }, 400, 4);
+    if (diretto) return true;
+    if (fine.tipo === 'terra') for (const b of bersagli) if (distanza(fine, b) <= raggio) return true;
+    return false;
+  };
+  for (let potenza = 40; potenza <= 100; potenza += 10) for (let a = 20; a <= 160; a += 10) if (tiro(potenza, a)) return true;
+  for (let potenza = 30; potenza <= 100; potenza += 5) for (let a = 10; a <= 170; a += 4) if (tiro(potenza, a)) return true;
   return false;
 }
 
@@ -187,7 +190,7 @@ export function controllaInsieme(m: Uint8Array, sup: Int32Array, mare: number, p
   for (let x = Math.min(...xs); x <= Math.max(...xs); x++) if (sup[x] >= mare) { err.push('mare tra i due lati'); break; }
 
   // sciabola: se butta in mare, nessun nemico deve essere raggiungibile a piedi in un turno
-  for (const [lato, nemici] of [[a, b], [b, a]] as const) {
+  if (REGOLE.sciabolaVieta) for (const [lato, nemici] of [[a, b], [b, a]] as const) {
     for (const p of lato) {
       if (!p.sciabolaInMare) continue;
       const [da, fino] = camminata(sup, mare, p.x, REGOLE.camminataTurno);

@@ -10,9 +10,9 @@ const M = BIL.mondo;
 export const REGOLE = {
   /** posti di spawn per lato (00 §9: 5 per lato, in M1 se ne usano 3) */
   spawnPerLato: 5,
-  /** zona di sbarco, in frazione della larghezza dal proprio lato (06 §4) */
-  zonaDa: 0.12,
-  zonaA: 0.40,
+  /** zona di sbarco, in frazione della larghezza dal proprio lato (06 §4: 12-40%; Lead design 21/11/2026 per l'Isola: 10-42%) */
+  zonaDa: 0.10,
+  zonaA: 0.42,
   /** piano largo almeno 32 px con pendenza ≤ 15° (32 × tan 15° ≈ 8,6 px di dislivello) */
   pianoLarghezza: 32,
   pianoDislivelloMax: 8,
@@ -30,10 +30,15 @@ export const REGOLE = {
   /** niente spawn su sporgenze: 170 px di solido continuo o una parete ≥ 40 px (06 §7.1) */
   sporgenza: 170,
   pareteMin: 40,
+  /** 06 §7.2, clausola della sciabola: spawn scartato se la sciabola lo butta in mare e un nemico è raggiungibile
+   *  a piedi. Spenta per l'Isola (proposta al Lead design 21/11/2026): con la costa aperta non resterebbero spawn. */
+  sciabolaVieta: false,
   /** percorso a piedi in un turno (06 §7.2) */
   camminataTurno: 1200,
-  /** riempimento: solido tra fineCielo e mare (06 §0) */
-  solidoMin: 0.35,
+  /** riempimento: solido tra fineCielo e mare (06 §0: 35-50%; Lead design 21/11/2026 per l'Isola: minimo 20%,
+   *  perché con la costa aperta e 5 spawn in piano il 30% chiede montagne fino al cielo).
+   *  In M1 tutti i biomi usano il terreno dell'Isola: quando arrivano gli altri biomi questi limiti vanno per bioma. */
+  solidoMin: 0.20,
   solidoMax: 0.50,
   /** ferro massimo, sul solido tra fineCielo e mare (il fondale 984-1024 è fuori dal conto) */
   ferroMax: 0.03,
@@ -49,37 +54,54 @@ export const ISOLA = {
   sabbia: 24,
   roccia: 160,
   /** riva: da quanti px dal bordo comincia la terra, e piccola spiaggia bassa */
-  rivaMin: 80,
-  rivaMax: 130,
-  spiaggiaMin: 40,
-  spiaggiaMax: 90,
-  /** cresta (duna) vicino alla costa, in frazione della larghezza, e sua quota sopra il mare */
-  crestaDa: 0.13,
-  crestaA: 0.17,
-  crestaQuotaMin: 340,
-  crestaQuotaMax: 430,
-  /** dalla cresta si scende alla piana interna: distanza e dislivello (il riparo dalle spinte) */
-  piedeMin: 110,
-  piedeMax: 170,
-  riparoMin: 90,
-  riparoMax: 140,
+  rivaMin: 70,
+  rivaMax: 100,
+  spiaggiaMin: 30,
+  spiaggiaMax: 60,
+  /** orlo della costa: quota sopra il mare e px di riva per ogni px di quota (riva quasi dritta: 1,30 ≈ 37,6°, 1,45 ≈ 34,6°) */
+  orloQuotaMin: 130,
+  orloQuotaMax: 180,
+  rivaPerQuotaMin: 130,
+  rivaPerQuotaMax: 145,
+  /** orlo rialzato in cima alla riva (06 §7.3; Lead design: 10-40 px) */
+  labbroMin: 10,
+  labbroMax: 40,
+  /** la piana degli spawn sta sopra l'orlo di questi px */
+  pianaMin: 0,
+  pianaMax: 20,
+  /** la piana sale verso l'interno di questi px fino al punto ondaA (pendenza ≤ ~12°) */
+  salitaMin: 30,
+  salitaMax: 80,
+  /** onda della piana: punto a questa frazione della larghezza, ± px */
+  ondaA: 0.38,
+  pianaOnda: 15,
   /** differenza massima (px) tra i numeri del lato sinistro e del destro */
   scartoLati: 16,
-  /** la piana arriva fin qui (frazione della larghezza) con una piccola onda di quota */
-  pianaFino: 0.40,
-  pianaOnda: 45,
-  /** centro dell'isola: collina (+) o valle (−) rispetto alla piana */
-  centroMin: -120,
-  centroMax: 180,
+  /** il centro sotto le colline può abbassarsi fino a questi px (valle) */
+  centroAbbassa: 60,
+  /** probabilità di una sola collina larga (altrimenti due con una valle in mezzo) */
+  unaCollina: 0.4,
+  collinaUnaMin: 200,
+  collinaUnaMax: 320,
+  collinaDueMin: 150,
+  collinaDueMax: 260,
+  /** distanza delle due colline dal centro */
+  valleMin: 90,
+  valleMax: 140,
+  /** la cima più alta non sale sopra questa y (Lead design 21/11/2026) */
+  cimaMinY: 250,
+  /** le colline si scalano per il riempimento, entro questi limiti */
+  scalaCollineMin: 0.6,
+  scalaCollineMax: 1.4,
   /** rumore 1D sul profilo, entro ±48 px (06 §1.2) */
   rumoreMax: 48,
-  rumoreAmpMin: 6,
-  rumoreAmpMax: 16,
+  rumoreAmpMin: 4,
+  rumoreAmpMax: 10,
   rumorePassoMin: 180,
   rumorePassoMax: 300,
-  /** riempimento cercato prima dei buchi (dentro 35-50%) */
-  riempimentoMin: 0.39,
-  riempimentoMax: 0.46,
+  /** riempimento cercato prima dei buchi (Lead design 21/11/2026: obiettivo 22-26%) */
+  riempimentoMin: 0.22,
+  riempimentoMax: 0.26,
   /** grotte a metaball: gruppi da 2 sfere */
   grotteMin: 1,
   grotteMax: 4,

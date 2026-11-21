@@ -40,47 +40,77 @@ export interface TerrenoIsola {
   massi: Sfera[];
 }
 
+/** Collina a campana polinomiale: altezza a nel centro, zero oltre la mezza larghezza. */
+function campana(x: number, centro: number, mezza: number, a: number): number {
+  const u = (x - centro) / mezza;
+  if (u <= -1 || u >= 1) return 0;
+  const k = 1 - u * u;
+  return a * k * k;
+}
+
 /**
- * Profilo superiore (y della superficie per ogni colonna). Forma dell'isola, uguale nei due lati ma con numeri
- * estratti a parte per ciascuno: piccola spiaggia, costa ripida fino a una cresta (la duna che ripara gli spawn
- * dalle spinte verso il mare, 06 §7.1-7.2), discesa verso la piana interna, poi il centro (collina o valle).
- * I punti di controllo si uniscono con rampe morbide, che lasciano tratti in piano attorno a ogni punto.
+ * Profilo superiore (y della superficie per ogni colonna). Forma dell'isola (Lead design, 21/11/2026):
+ * - per ogni lato: piccola spiaggia, riva verso il mare al massimo ~38°, orlo basso di 10-40 px (06 §7.3),
+ *   poi la piana degli spawn;
+ * - al centro 1 collina larga o 2 colline con una valle in mezzo, in posizione e altezza variabili col seme:
+ *   fanno copertura tra le squadre e portano la massa che serve al riempimento.
+ * I due lati partono dagli stessi numeri con piccole differenze: l'isola resta equa ma non è mai simmetrica.
  * Fuori dall'isola il fondo scende al fondale: ai bordi 0-64 e 1984-2048 c'è sempre acqua aperta.
  */
 export function profilo(s: ConRng): Int32Array {
   const P = ISOLA;
-  // punti (x, quota sopra il mare) del lato sinistro; il destro si costruisce allo stesso modo e si ribalta
-  // i due lati partono dagli stessi numeri con piccole differenze: l'isola resta equa ma non è mai simmetrica
   const base = {
     riva: intero(s, P.rivaMin, P.rivaMax),
     spiaggia: intero(s, P.spiaggiaMin, P.spiaggiaMax),
-    cresta: intero(s, Math.round(W * P.crestaDa), Math.round(W * P.crestaA)),
-    qCresta: intero(s, P.crestaQuotaMin, P.crestaQuotaMax),
-    piede: intero(s, P.piedeMin, P.piedeMax),
-    riparo: intero(s, P.riparoMin, P.riparoMax),
+    qOrlo: intero(s, P.orloQuotaMin, P.orloQuotaMax),
+    rivaPerQuota: intero(s, P.rivaPerQuotaMin, P.rivaPerQuotaMax) / 100,
+    piana: intero(s, P.pianaMin, P.pianaMax),
+    salita: intero(s, P.salitaMin, P.salitaMax),
   };
   const j = P.scartoLati;
-  const lato = (): [number, number][] => {
+  type Lato = { punti: [number, number][]; orlo: number; labbro: number; mezzoLabbro: number };
+  const lato = (): Lato => {
     const riva = base.riva + intero(s, -j, j);
+    const qSpiaggia = intero(s, 10, 25);
     const spiaggia = riva + base.spiaggia + intero(s, -j, j);
-    const cresta = base.cresta + intero(s, -j, j);
-    const qCresta = base.qCresta + intero(s, -2 * j, 2 * j);
-    const piede = cresta + base.piede + intero(s, -j, j);
-    const qPiana = qCresta - base.riparo + intero(s, -j, j);
-    const meta = Math.round(W * P.pianaFino) + intero(s, -40, 40);
-    return [
-      [riva, -20],
-      [spiaggia, intero(s, 16, 40)],
-      [cresta, qCresta],
-      [piede, qPiana],
-      [meta, qPiana + intero(s, -P.pianaOnda, P.pianaOnda)],
-    ];
+    const qOrlo = base.qOrlo + intero(s, -j, j);
+    const orlo = spiaggia + Math.round((qOrlo - qSpiaggia) * base.rivaPerQuota);
+    const qPiana = qOrlo + base.piana + intero(s, -j, j);
+    const onda = Math.round(W * P.ondaA) + intero(s, -30, 30);
+    return {
+      punti: [
+        [riva, -20],
+        [spiaggia, qSpiaggia],
+        [orlo, qOrlo],
+        [orlo + intero(s, 40, 70), qPiana],
+        // la piana sale piano verso l'interno (≤ ~12°): porta massa senza allungare la riva
+        [onda, qPiana + base.salita + intero(s, -P.pianaOnda, P.pianaOnda)],
+      ],
+      orlo,
+      labbro: intero(s, P.labbroMin, P.labbroMax),
+      mezzoLabbro: intero(s, 28, 44),
+    };
   };
   const sx = lato();
-  const dx = lato().map(([x, q]) => [W - 1 - x, q] as [number, number]).reverse();
-  const qMedia = (sx[4][1] + dx[0][1]) / 2;
-  const centro: [number, number] = [Math.round(W / 2) + intero(s, -80, 80), Math.round(qMedia + intero(s, P.centroMin, P.centroMax))];
-  const punti = [...sx, centro, ...dx];
+  const dxL = lato();
+  const dx: [number, number][] = dxL.punti.map(([x, q]) => [W - 1 - x, q] as [number, number]).reverse();
+  const orloD = W - 1 - dxL.orlo;
+  const qCentro = (sx.punti[4][1] + dx[0][1]) / 2 + intero(s, -P.centroAbbassa, 10);
+  const punti: [number, number][] = [...sx.punti, [Math.round(W / 2), Math.round(qCentro)], ...dx];
+
+  // colline: una larga al centro, oppure due con una valle in mezzo
+  const colline: { c: number; m: number; a: number }[] = [];
+  if (probabilita(s, P.unaCollina)) {
+    const a = intero(s, P.collinaUnaMin, P.collinaUnaMax);
+    colline.push({ c: Math.round(W / 2) + intero(s, -30, 30), m: Math.max(intero(s, 220, 290), Math.round(a * 0.9)), a });
+  } else {
+    const d = intero(s, P.valleMin, P.valleMax);
+    const a0 = intero(s, P.collinaDueMin, P.collinaDueMax);
+    for (const v of [-1, 1]) {
+      const a = a0 + intero(s, -j, j);
+      colline.push({ c: Math.round(W / 2) + v * (d + intero(s, -20, 20)), m: Math.max(intero(s, 150, 210), Math.round(a * 0.8)), a });
+    }
+  }
 
   const passo = intero(s, P.rumorePassoMin, P.rumorePassoMax);
   const amp = intero(s, P.rumoreAmpMin, P.rumoreAmpMax);
@@ -89,7 +119,7 @@ export function profilo(s: ConRng): Int32Array {
 
   const rivaS = punti[0][0], rivaD = punti[punti.length - 1][0];
   const quota = new Float64Array(W);
-  const interno = new Float64Array(W); // 1 tra le due creste, sfuma a 0 verso la riva
+  const colle = new Float64Array(W);
   for (let x = 0; x < W; x++) {
     if (x < rivaS || x > rivaD) {
       quota[x] = -20 - Math.min(x < rivaS ? rivaS - x : x - rivaD, 200);
@@ -99,27 +129,39 @@ export function profilo(s: ConRng): Int32Array {
     while (i < punti.length - 2 && x > punti[i + 1][0]) i++;
     const [xa, qa] = punti[i], [xb, qb] = punti[i + 1];
     const t = xb > xa ? (x - xa) / (xb - xa) : 0;
-    quota[x] = qa + (qb - qa) * morbido(t);
-    interno[x] = morbido((x - rivaS) / (punti[2][0] - rivaS)) * morbido((rivaD - x) / (rivaD - punti[punti.length - 3][0]));
-    let n = amp * (r1[x] + 0.35 * r2[x]) * interno[x];
+    // la riva (tratti 1 e ultimo-1) e la salita della piana (tratti 3 e ultimo-3) sono dritte: pendenza uniforme
+    const dritto = i === 1 || i === punti.length - 3 || i === 3 || i === punti.length - 5;
+    const f = dritto ? t : morbido(t);
+    quota[x] = qa + (qb - qa) * f;
+    quota[x] += campana(x, sx.orlo, sx.mezzoLabbro, sx.labbro) + campana(x, orloD, dxL.mezzoLabbro, dxL.labbro);
+    for (const k of colline) colle[x] += campana(x, k.c, k.m, k.a);
+    const interno = morbido((x - sx.orlo) / 120) * morbido((orloD - x) / 120);
+    let n = amp * (r1[x] + 0.35 * r2[x]) * interno;
     if (n > P.rumoreMax) n = P.rumoreMax;
     if (n < -P.rumoreMax) n = -P.rumoreMax;
     quota[x] += n;
   }
 
-  // correzione del riempimento: si alza o si abbassa l'interno per centrare un obiettivo dentro 35-50%
+  // riempimento: si scalano le colline per centrare un obiettivo dentro i limiti dell'Isola
   const area = W * (MARE - CIELO);
   const obiettivo = (P.riempimentoMin + casuale(s) * (P.riempimentoMax - P.riempimentoMin)) * area;
-  let pieno = 0, sommaInt = 0;
+  let pieno = 0, massaColline = 0;
   for (let x = 0; x < W; x++) {
     if (quota[x] > 0) pieno += Math.min(quota[x], MARE - CIELO);
-    sommaInt += interno[x];
+    massaColline += colle[x];
   }
-  const delta = sommaInt > 0 ? (obiettivo - pieno) / sommaInt : 0;
+  let k = massaColline > 0 ? (obiettivo - pieno) / massaColline : 1;
+  if (k < P.scalaCollineMin) k = P.scalaCollineMin;
+  if (k > P.scalaCollineMax) k = P.scalaCollineMax;
+  // la cima non sale sopra P.cimaMinY (Lead design: la camera alta 540 deve mostrare cima e uno spawn insieme)
+  const quotaMax = MARE - P.cimaMinY;
+  for (let x = 0; x < W; x++) {
+    if (colle[x] > 0 && quota[x] + k * colle[x] > quotaMax) k = Math.max(0, (quotaMax - quota[x]) / colle[x]);
+  }
 
   const out = new Int32Array(W);
   for (let x = 0; x < W; x++) {
-    let y = Math.round(MARE - (quota[x] + delta * interno[x]));
+    let y = Math.round(MARE - (quota[x] + k * colle[x]));
     if (x < MONDO.bordo || x >= W - MONDO.bordo) y = FONDALE;
     if (y < CIELO + 24) y = CIELO + 24;
     if (y > FONDALE) y = FONDALE;

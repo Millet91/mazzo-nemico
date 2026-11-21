@@ -3,7 +3,7 @@
 
 import { MATERIALE, type MappaGenerata } from '../../core/tipi';
 import { superficie } from './analisi';
-import { MONDO, REGOLE } from './parametri';
+import { ISOLA, MONDO, REGOLE } from './parametri';
 import { controllaInsieme, controllaPosto, zona, type Posto } from './spawn';
 
 const { w: W, h: H } = MONDO;
@@ -24,13 +24,8 @@ export function riempimento(m: Uint8Array, mare: number): Riempimento {
   const meta = W / 2;
   for (let y: number = MONDO.cielo; y < mare; y++) {
     const r = y * W;
-    for (let x = 0; x < W; x++) {
-      const v = m[r + x];
-      if (v !== ARIA) {
-        if (x < meta) sx++; else dx++;
-        if (v === FERRO) ferro++;
-      }
-    }
+    for (let x = 0; x < meta; x++) { const v = m[r + x]; if (v !== ARIA) { sx++; if (v === FERRO) ferro++; } }
+    for (let x = meta; x < W; x++) { const v = m[r + x]; if (v !== ARIA) { dx++; if (v === FERRO) ferro++; } }
   }
   const solido = sx + dx;
   return { solido, ferro, frazione: solido / (W * (mare - MONDO.cielo)), frazioneFerro: solido ? ferro / solido : 0, meta: [sx, dx] };
@@ -48,13 +43,29 @@ export function validaTerreno(m: Uint8Array, mare: number): string[] {
     const r = y * W;
     for (let x = 0; x < W; x++) if (m[r + x] !== FERRO) { err.push(`fondale non di ferro (${x}, ${y})`); y = H; break; }
   }
-  for (let x: number = 0; x < W; x++) {
-    if (x >= MONDO.bordo && x < W - MONDO.bordo) continue;
-    for (let y = 0; y < MONDO.fondale; y++) if (m[y * W + x] !== ARIA) { err.push(`bordo non di acqua aperta (${x}, ${y})`); x = W; break; }
+  bordi: for (let y = 0; y < MONDO.fondale; y++) {
+    const r = y * W;
+    for (let x = 0; x < MONDO.bordo; x++) {
+      if (m[r + x] !== ARIA || m[r + W - 1 - x] !== ARIA) { err.push(`bordo non di acqua aperta (riga ${y})`); break bordi; }
+    }
   }
+  return err.concat(validaMassa(m, mare));
+}
+
+/** Riempimento, ferro, altezza della cima ed equità delle masse: gli unici controlli del terreno che il generatore
+ *  non garantisce per costruzione (fasce e bordi li garantisce). */
+export function validaMassa(m: Uint8Array, mare: number): string[] {
+  const err: string[] = [];
   const r = riempimento(m, mare);
-  if (r.frazione < REGOLE.solidoMin || r.frazione > REGOLE.solidoMax) err.push(`solido al ${(r.frazione * 100).toFixed(1)}% (35-50%)`);
+  if (r.frazione < REGOLE.solidoMin || r.frazione > REGOLE.solidoMax) err.push(`solido al ${(r.frazione * 100).toFixed(1)}% (${REGOLE.solidoMin * 100}-${REGOLE.solidoMax * 100}%)`);
   if (r.frazioneFerro > REGOLE.ferroMax) err.push(`ferro al ${(r.frazioneFerro * 100).toFixed(1)}% del solido (max 3%)`);
+  // prima riga con terreno fuori dai bordi (riga per riga: veloce)
+  let cima: number = MONDO.h;
+  for (let y = 0; y < MONDO.fondale && cima === MONDO.h; y++) {
+    const r = y * W;
+    for (let x = MONDO.bordo; x < W - MONDO.bordo; x++) if (m[r + x] !== ARIA) { cima = y; break; }
+  }
+  if (cima < ISOLA.cimaMinY) err.push(`cima a y ${cima}, sopra ${ISOLA.cimaMinY}`);
   const [sx, dx] = r.meta;
   if (Math.abs(sx - dx) > REGOLE.equitaMassa * Math.max(sx, dx)) err.push(`equità: massa delle due metà ${sx} / ${dx}`);
   return err;

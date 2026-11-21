@@ -18,7 +18,7 @@ import { specchiaMaschera, terrenoIsola } from './isola';
 import { MONDO, REGOLE } from './parametri';
 import { conTentativi } from './tentativi';
 import { controllaInsieme, distanzaMare, postiValidi, type Posto } from './spawn';
-import { validaTerreno } from './valida';
+import { validaMassa } from './valida';
 
 const { w: W } = MONDO;
 
@@ -75,16 +75,18 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
   const mare = MONDO.mare;
   const specchiata = probabilita(s, 0.5);
   const { maschera } = terrenoIsola(s);
-  if (validaTerreno(maschera, mare).length) return null;
+  if (validaMassa(maschera, mare).length) return null;
   const sup = superficie(maschera);
   const n = REGOLE.spawnPerLato;
   const candidati: [Posto[], Posto[]] = [[], []];
   for (const lato of [0, 1] as const) {
     const tutti = postiValidi(maschera, sup, mare, lato === 1);
     if (impacca(tutti) < n) return null;
-    // meglio i posti da cui la sciabola non butta in mare, se bastano
-    const sicuri = tutti.filter((p) => !p.sciabolaInMare);
-    candidati[lato] = impacca(sicuri) >= n ? sicuri : tutti;
+    if (REGOLE.sciabolaVieta) {
+      // meglio i posti da cui la sciabola non butta in mare, se bastano
+      const sicuri = tutti.filter((p) => !p.sciabolaInMare);
+      candidati[lato] = impacca(sicuri) >= n ? sicuri : tutti;
+    } else candidati[lato] = tutti;
   }
 
   let scelti: [Posto[], Posto[]] | null = null;

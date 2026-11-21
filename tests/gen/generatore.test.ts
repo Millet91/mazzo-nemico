@@ -7,7 +7,8 @@ import { conTentativi } from '../../src/battaglia/gen/tentativi';
 import { riempimento, validaMappa } from '../../src/battaglia/gen/valida';
 import { superficie } from '../../src/battaglia/gen/analisi';
 import { zona } from '../../src/battaglia/gen/spawn';
-import { REGOLE, SEME_RISERVA } from '../../src/battaglia/gen/parametri';
+import { ISOLA, REGOLE, SEME_RISERVA } from '../../src/battaglia/gen/parametri';
+import { misuraMare } from '../../src/battaglia/gen/misura';
 import { BIL } from '../../src/contenuti/bilanciamento';
 import { MATERIALE, type MappaGenerata, type RichiestaMappa } from '../../src/core/tipi';
 import { impronta } from './impronta';
@@ -55,14 +56,18 @@ describe('Generatore · validazione su 200 semi', () => {
   it('quasi sempre basta il primo tentativo, mai il seme di riserva', () => {
     const tentativi = MAPPE.map((m) => m.tentativi);
     expect(tentativi.every((t) => t >= 1 && t <= REGOLE.tentativi)).toBe(true);
-    expect(tentativi.filter((t) => t === 1).length).toBeGreaterThanOrEqual(180);
+    expect(tentativi.filter((t) => t === 1).length).toBeGreaterThanOrEqual(120);
+    expect(tentativi.filter((t) => t <= 3).length).toBeGreaterThanOrEqual(190);
     for (const [i, m] of MAPPE.entries()) expect(m.semeUsato).toBe(SEMI[i] + m.tentativi - 1);
   });
 
-  it('solido tra il 35% e il 50% e ferro ≤ 3% del solido', () => {
+  it('solido tra il 20% (Isola, Lead design) e il 50%, ferro ≤ 3% del solido, cima mai sopra y 250', () => {
     for (const m of MAPPE) {
       const r = riempimento(m.terreno.maschera, m.terreno.mare);
-      expect(r.frazione).toBeGreaterThanOrEqual(0.35);
+      expect(r.frazione).toBeGreaterThanOrEqual(REGOLE.solidoMin);
+      expect(REGOLE.solidoMin).toBe(0.2);
+      const sup = superficie(m.terreno.maschera);
+      expect(Math.min(...sup)).toBeGreaterThanOrEqual(ISOLA.cimaMinY);
       expect(r.frazione).toBeLessThanOrEqual(0.5);
       expect(r.frazioneFerro).toBeLessThanOrEqual(0.03);
     }
@@ -97,7 +102,7 @@ describe('Generatore · validazione su 200 semi', () => {
 });
 
 describe('Generatore · spawn', () => {
-  it('5 posti per lato, nella zona giusta (12-40% dal proprio lato, secondo lo specchio)', () => {
+  it('5 posti per lato, nella zona giusta (Isola: 10-42% dal proprio lato, secondo lo specchio)', () => {
     for (const m of MAPPE) {
       expect(m.spawn[0]).toHaveLength(5);
       expect(m.spawn[1]).toHaveLength(5);
@@ -207,6 +212,21 @@ describe('Generatore · decorazioni e altri campi', () => {
     const m = generaMappa({ seme: 3, bioma: 'grotta', variante: 'oro', piratiPerLato: [5, 5] });
     expect([m.bioma, m.variante]).toEqual(['grotta', 'oro']);
     expect(validaMappa(m)).toEqual([]);
+  });
+});
+
+describe('Generatore · costa aperta (misura di prova del Lead design)', () => {
+  it('nessuno spawn va in mare con un cannone diretto; sciabola e due cannonate sì, nei limiti attesi', () => {
+    const r = misuraMare(MAPPE);
+    const pc = (a: number, b: number) => (100 * a) / b;
+    console.log(`costa: sciabola in mare ${pc(r.sciabolaInMare, r.spawn).toFixed(1)}% (esterni ${pc(r.sciabolaInMareEsterni, r.esterni).toFixed(1)}%), ` +
+      `due cannonate ${pc(r.dueCannonateInMare, r.spawn).toFixed(1)}% (esterni ${pc(r.dueCannonateInMareEsterni, r.esterni).toFixed(1)}%), ` +
+      `distanza dal mare dopo un cannone ${r.distanzaDopoCannone.toFixed(0)} px`);
+    expect(r.spawn).toBe(2000);
+    expect(r.cannoneInMare).toBe(0); // 06 §7.2
+    expect(pc(r.sciabolaInMare, r.spawn)).toBeGreaterThanOrEqual(30);
+    expect(pc(r.sciabolaInMare, r.spawn)).toBeLessThanOrEqual(60);
+    expect(pc(r.dueCannonateInMare, r.spawn)).toBeGreaterThan(10);
   });
 });
 

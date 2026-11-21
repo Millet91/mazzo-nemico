@@ -115,6 +115,8 @@ export const it = {
     turni: (n: number) => (n === 1 ? '1 turno' : `${n} turni`),
     rigioca: 'Rigioca',
     menu: 'Menu',
+    /** P2: fine battaglia di carriera */
+    continua: 'Continua',
   },
   info: {
     titolo: 'Info',

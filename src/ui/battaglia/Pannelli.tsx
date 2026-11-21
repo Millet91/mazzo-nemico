@@ -66,8 +66,13 @@ export function Esito({ v }: { v: VistaBattaglia }) {
           <span class="turni">{T.esito.turni(e.turni)}</span>
         </div>
         <div class="azioni">
-          <Bottone id="menu" tipo="secondario" onClick={esci}>{T.esito.menu}</Bottone>
-          <Bottone id="rigioca" tipo="primario" onClick={rigioca}>{T.esito.rigioca}</Bottone>
+          {/* P2: in carriera niente "Rigioca"; "Continua" chiude la battaglia e la Campagna torna alla mappa */}
+          {bus.battagliaCarriera.value
+            ? <Bottone id="continua" tipo="primario" onClick={esci}>{T.esito.continua}</Bottone>
+            : <>
+              <Bottone id="menu" tipo="secondario" onClick={esci}>{T.esito.menu}</Bottone>
+              <Bottone id="rigioca" tipo="primario" onClick={rigioca}>{T.esito.rigioca}</Bottone>
+            </>}
         </div>
       </section>
     </div>

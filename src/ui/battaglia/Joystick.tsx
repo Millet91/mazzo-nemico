@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { T } from '../../testi/it';
 import { tocco } from '../../piattaforma/haptics';
-import { creaJoystick, creaJoystickMira, limitaPomello, pomelloDaMira, versoDaMira } from './logica';
+import { creaJoystick, creaJoystickMira, limitaPomello, pomelloDaMira, versoDaMira, type ModoArrampicata } from './logica';
 import { invia } from './stato';
 import { bus, type VistaBattaglia } from '../../core/bus';
 
@@ -54,6 +54,14 @@ function Zona(p: {
   );
 }
 
+/**
+ * Il pirata attivo è vicino a una scala o liana, o appeso? Lo dice la vista (campo `arrampicata`, chiesto al
+ * Lead per il contratto della scalata); finché non c'è vale 'libero' e il joystick fa quello di prima.
+ */
+export function modoArrampicata(v: VistaBattaglia | null): ModoArrampicata {
+  return (v as (VistaBattaglia & { arrampicata?: ModoArrampicata }) | null)?.arrampicata ?? 'libero';
+}
+
 /** Joystick di movimento: sinistra/destra cammina, in alto salta (all'indietro = salto alto). */
 export function JoystickMovimento() {
   const [k, setK] = useState({ x: 0, y: 0 });
@@ -68,7 +76,8 @@ export function JoystickMovimento() {
     if (!v) return 0;
     const u = ultimoVerso.current;
     return u && u.turno === v.numeroTurno ? u.verso : versoDaMira(v.miraGradi);
-  }), []);
+  }, () => modoArrampicata(bus.battaglia.peek())), []);
+  const appeso = modoArrampicata(bus.battaglia.value) === 'appeso';
   // se il joystick sparisce col dito sopra (fine della fase), il pirata si ferma
   useEffect(() => () => j.rilascia(), [j]);
   return (
@@ -76,7 +85,8 @@ export function JoystickMovimento() {
       giu={(dx, dy) => { tocco(); setAttivo(true); setK(j.sposta(dx, dy)); return true; }}
       muovi={(dx, dy) => setK(j.sposta(dx, dy))}
       su={() => { j.rilascia(); setK({ x: 0, y: 0 }); setAttivo(false); }}>
-      <div class="base-joystick movimento">
+      <div class={`base-joystick movimento ${appeso ? 'appeso' : ''}`}>
+        {appeso && <><span class="freccia-scala su" aria-hidden="true">▲</span><span class="freccia-scala giu" aria-hidden="true">▼</span></>}
         <div class="pomello" style={{ transform: `translate(${k.x}px, ${k.y}px)` }} />
       </div>
     </Zona>

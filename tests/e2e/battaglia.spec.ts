@@ -355,6 +355,24 @@ test('doppio joystick: movimento a sinistra, mira a destra con FUOCO al centro; 
   }
 });
 
+test('scale e liane: appeso compaiono ▲▼, su = arrampica, destra pura niente, diagonale salta via', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 360 });
+  await entraInBattaglia(page, vista({ arrampicata: 'appeso' }), false);
+  await expect(page.locator('.freccia-scala')).toHaveCount(2);
+  const { x, y } = await centro(page, 'joystick-movimento');
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 50, y, { steps: 4 });   // destra pura: niente
+  await page.mouse.move(x, y - 50, { steps: 4 });   // su (da destra passa dalla diagonale ma non salta)
+  await page.mouse.move(x + 40, y - 40, { steps: 4 }); // dalla salita alla diagonale: salta via
+  await page.mouse.up();
+  expect((await registro(page)).comandi).toEqual([{ t: 'arrampica', dir: -1 }, { t: 'arrampica', dir: 0 }, { t: 'salta', indietro: false }]);
+  await page.screenshot({ path: 'test-results/screenshot/appeso-20x9.png' });
+  // senza appigli niente frecce
+  await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; }, vista());
+  await expect(page.locator('.freccia-scala')).toHaveCount(0);
+});
+
 test('doppio joystick: in fuga solo il movimento, nel turno dell\'IA nessuno', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 360 });
   await entraInBattaglia(page, vista({ fase: 'fuga' }), false);

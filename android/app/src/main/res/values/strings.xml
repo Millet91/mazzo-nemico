@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kaboom Ahoy!</string>
+    <string name="title_activity_main">Kaboom Ahoy!</string>
+    <string name="package_name">it.millet91.kaboomahoy</string>
+    <string name="custom_url_scheme">it.millet91.kaboomahoy</string>
+</resources>

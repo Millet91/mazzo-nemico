@@ -10,15 +10,20 @@ import { T } from '../../testi/it';
 
 // ─── Schermaglia di M1 (contratti §1) ───
 
-/** Teschio Rosso (umano, attaccante) contro Marina Reale (IA Mozzo, difensore), 3 contro 3 sull'Isola. */
-export function configSchermaglia(seme: number): ConfigBattaglia {
+/** Teschio Rosso (umano, attaccante) contro Marina Reale (IA Mozzo, difensore) sull'Isola, da 1 a 5 pirati per lato (m1-ritmo §9). */
+export const PIRATI_MIN = 1;
+export const PIRATI_MAX = 5;
+export const PIRATI_PREDEFINITI = 3;
+const limitaPirati = (n: number) => Math.max(PIRATI_MIN, Math.min(PIRATI_MAX, Math.round(n) || PIRATI_PREDEFINITI));
+
+export function configSchermaglia(seme: number, pirati: [number, number] = [PIRATI_PREDEFINITI, PIRATI_PREDEFINITI]): ConfigBattaglia {
   return {
     versioneRegole: VERSIONE_REGOLE,
     seme: seme >>> 0,
     bioma: 'isola',
     squadre: [
-      { ciurma: 'teschio', ruolo: 'attaccante', controllo: 'umano', pirati: 3 },
-      { ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: 3 },
+      { ciurma: 'teschio', ruolo: 'attaccante', controllo: 'umano', pirati: limitaPirati(pirati[0]) },
+      { ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: limitaPirati(pirati[1]) },
     ],
     timerSecondi: BIL.turno.timerMozzo,
     traiettoriaCompleta: true,
@@ -152,7 +157,8 @@ export function creaGrillettoUnico(spara: () => void) {
 
 // ─── Banner ───
 
-export const DURATA_BANNER_MS = 1200;
+/** banner di turno: 0,8 s e non bloccano i comandi (m1-ritmo §3) */
+export const DURATA_BANNER_MS = 800;
 
 /** Banner da mostrare per gli eventi di un frame (in ordine). */
 export function bannerDaEventi(eventi: readonly EventoBattaglia[], v: VistaBattaglia): string[] {
@@ -164,6 +170,10 @@ export function bannerDaEventi(eventi: readonly EventoBattaglia[], v: VistaBatta
     if (e.numero === v.mareSaleDalTurno) out.push(T.battaglia.mareSale);
     if (e.numero === v.turnoLimite - 2) out.push(T.battaglia.ultimiTurni);
   }
+  for (const e of eventi) {
+    if (e.t === 'cassaCaduta') out.push(T.battaglia.cassaCaduta);
+    else if (e.t === 'cassaAperta') out.push(e.contenuto === 'rum' ? T.battaglia.cassaRum(BIL.casse.rumPv) : T.battaglia.cassaTrappola);
+  }
   return out;
 }
 
@@ -171,4 +181,56 @@ export function bannerDaEventi(eventi: readonly EventoBattaglia[], v: VistaBatta
 
 export function squadraUmana(v: VistaBattaglia): 0 | 1 {
   return v.squadre[1].controllo === 'umano' && v.squadre[0].controllo !== 'umano' ? 1 : 0;
+}
+
+// ─── Joystick virtuale (m1-ritmo §1, 00 §9.16) ───
+
+export const JOYSTICK = {
+  /** raggio del joystick in px CSS */
+  raggio: 56,
+  /** zona morta al centro */
+  zonaMorta: 12,
+  /** spinta verso l'alto oltre questa frazione del raggio = salto */
+  sogliaSalto: 0.6,
+  /** il salto si riarma quando la spinta scende sotto questa frazione */
+  riarmoSalto: 0.4,
+} as const;
+
+/** Verso del pirata attivo dalla mira (la sim gira il pirata verso la mira): 1 destra, −1 sinistra, 0 non si sa. */
+export function versoDaMira(gradi: number): 1 | -1 | 0 {
+  const g = ((gradi % 360) + 360) % 360;
+  if (g === 90 || g === 270) return 0;
+  return g < 90 || g > 270 ? 1 : -1;
+}
+
+/**
+ * Logica del joystick: riceve la posizione del pollice rispetto al punto d'appoggio (y verso il basso) e manda
+ * `muovi` e `salta` come i tasti. Settore orizzontale (|dx| ≥ |dy|, oltre la zona morta) = cammina; spinta in
+ * alto oltre il 60% del raggio = salto: in avanti, oppure salto alto all'indietro se la spinta va contro il verso
+ * del pirata. Nel settore alto il pirata non cammina, così non si gira prima di saltare.
+ */
+export function creaJoystick(invia: (c: { t: 'muovi'; dir: -1 | 0 | 1 } | { t: 'salta'; indietro: boolean }) => void, verso: () => 1 | -1 | 0) {
+  let dir: -1 | 0 | 1 = 0;
+  let saltoArmato = true;
+  const R = JOYSTICK.raggio;
+  const imposta = (d: -1 | 0 | 1) => { if (d !== dir) { dir = d; invia({ t: 'muovi', dir: d }); } };
+  return {
+    /** dx, dy dal punto d'appoggio; restituisce la posizione del pomello limitata al raggio */
+    sposta(dx: number, dy: number): { x: number; y: number } {
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const k = d > R ? R / d : 1;
+      const x = dx * k, y = dy * k;
+      const orizzontale = Math.abs(x) >= Math.abs(y);
+      imposta(orizzontale && Math.abs(x) > JOYSTICK.zonaMorta ? (x > 0 ? 1 : -1) : 0);
+      if (saltoArmato && -y > JOYSTICK.sogliaSalto * R) {
+        saltoArmato = false;
+        const v = verso();
+        const indietro = Math.abs(x) > JOYSTICK.zonaMorta && v !== 0 && Math.sign(x) === -v;
+        invia({ t: 'salta', indietro });
+      } else if (!saltoArmato && -y < JOYSTICK.riarmoSalto * R) saltoArmato = true;
+      return { x, y };
+    },
+    rilascia() { imposta(0); saltoArmato = true; },
+    get direzione() { return dir; },
+  };
 }

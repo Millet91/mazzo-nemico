@@ -8,16 +8,27 @@ import { INFO_BUILD } from '../core/build';
 import { tocco } from '../piattaforma/haptics';
 import { caricaImpostazioni, salvaImpostazioni } from '../piattaforma/impostazioni';
 import { Battaglia } from './battaglia/Battaglia';
-import { avviaAscoltoBattaglia, avviaSchermaglia, indietroInBattaglia, inBattaglia } from './battaglia/stato';
+import { avviaAscoltoBattaglia, avviaTicTac, indietroInBattaglia, inBattaglia, sceltaSchermaglia } from './battaglia/stato';
+import { SceltaSchermaglia } from './battaglia/SceltaSchermaglia';
+import { sbloccaAudio } from '../piattaforma/audio';
 import { Diagnostica, provaAttiva, statoFps } from './Diagnostica';
-import { caricaPreferenzeHud, impostaMancini, mancini } from './preferenze';
+import { caricaPreferenzeHud, comandiClassici, impostaComandiClassici, impostaMancini, impostaVolumeHud, mancini, piratiSchermaglia, volume } from './preferenze';
 
 // avvio dell'HUD (main.tsx non è una cartella dell'HUD): preferenze salvate, banner e vibrazioni della battaglia
 void caricaPreferenzeHud();
 avviaAscoltoBattaglia();
+avviaTicTac();
+// l'audio parte solo dopo un tocco (regola dei browser e della WebView)
+if (typeof window !== 'undefined') window.addEventListener('pointerdown', sbloccaAudio, { capture: true, passive: true });
+
+const PASSI_VOLUME = [0, 0.25, 0.5, 0.8, 1];
+function volumeSuccessivo(v: number): number {
+  const i = PASSI_VOLUME.findIndex((x) => x > v + 0.01);
+  return i < 0 ? PASSI_VOLUME[0] : PASSI_VOLUME[i];
+}
 // gancio per i test Playwright (tests/e2e): con ?prova nell'indirizzo il bus è raggiungibile dalla pagina
 if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('prova')) {
-  (window as unknown as { __kaboom: unknown }).__kaboom = { bus, gestisciIndietro: () => gestisciIndietro() };
+  (window as unknown as { __kaboom: unknown }).__kaboom = { bus, gestisciIndietro: () => gestisciIndietro(), preferenze: { comandiClassici, mancini } };
 }
 
 type Pannello = null | 'impostazioni' | 'info' | 'diagnostica';
@@ -34,6 +45,7 @@ function mostraAvviso(testo: string) {
 /** Tasto indietro di Android: chiude il pannello aperto. Restituisce false se non c'era niente da chiudere. */
 export function gestisciIndietro(): boolean {
   if (indietroInBattaglia()) return true;
+  if (sceltaSchermaglia.value) { sceltaSchermaglia.value = false; return true; }
   if (pannello.value === 'info' || pannello.value === 'diagnostica') { pannello.value = 'impostazioni'; return true; }
   if (pannello.value === 'impostazioni') { pannello.value = null; return true; }
   return false;
@@ -116,6 +128,16 @@ function PannelloImpostazioni() {
               <span class="testi"><span class="etichetta">{T.impostazioni.mancini}</span><span class="nota">{T.impostazioni.manciniNota}</span></span>
               <span class="stato-interruttore">{mancini.value ? T.impostazioni.acceso : T.impostazioni.spento}</span>
             </button>
+            <button type="button" id="comandi-classici" class="interruttore" role="switch" aria-checked={comandiClassici.value}
+              onClick={() => { tocco(); void impostaComandiClassici(!comandiClassici.value); }}>
+              <span class="testi"><span class="etichetta">{T.impostazioni.comandiClassici}</span><span class="nota">{T.impostazioni.comandiClassiciNota}</span></span>
+              <span class="stato-interruttore">{comandiClassici.value ? T.impostazioni.acceso : T.impostazioni.spento}</span>
+            </button>
+            <button type="button" id="volume" class="interruttore" aria-label={`${T.impostazioni.volume}: ${T.impostazioni.volumeValore(Math.round(volume.value * 100))}`}
+              onClick={() => { tocco(); void impostaVolumeHud(volumeSuccessivo(volume.value)); }}>
+              <span class="testi"><span class="etichetta">{T.impostazioni.volume}</span></span>
+              <span class="stato-interruttore" data-testid="volume-valore">{T.impostazioni.volumeValore(Math.round(volume.value * 100))}</span>
+            </button>
             <Pulsante id="apri-diagnostica" onClick={() => (pannello.value = 'diagnostica')}>{T.impostazioni.diagnostica}</Pulsante>
             <Pulsante id="apri-info" onClick={() => (pannello.value = 'info')}>{T.impostazioni.info}</Pulsante>
           </div>
@@ -152,9 +174,9 @@ export function App() {
           <p class="sottotitolo">{T.gioco.sottotitolo}</p>
         </div>
         <div class="menu-principale">
-          <button type="button" id="schermaglia" class="btn primario grande" onClick={() => { tocco(); avviaSchermaglia(); }}>
+          <button type="button" id="schermaglia" class="btn primario grande" onClick={() => { tocco(); sceltaSchermaglia.value = true; }}>
             <span>{T.home.schermaglia}</span>
-            <span class="sotto">{T.home.schermagliaSotto}</span>
+            <span class="sotto">{T.home.schermagliaSottoN(piratiSchermaglia.value[0], piratiSchermaglia.value[1])}</span>
           </button>
         </div>
         {errore && (
@@ -166,6 +188,7 @@ export function App() {
       </main>
       )}
       {!battaglia && <PannelloImpostazioni />}
+      {!battaglia && <SceltaSchermaglia />}
       {battaglia && provaAttiva.value && <div class="avviso" role="status">{statoFps.value}</div>}
       {avviso.value && <div class="avviso" role="status">{avviso.value}</div>}
     </>

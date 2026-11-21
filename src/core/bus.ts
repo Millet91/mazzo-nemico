@@ -40,6 +40,13 @@ export interface VistaBattaglia {
   arrampicata?: 'libero' | 'vicino' | 'appeso';
   /** il pirata attivo è fuori dallo schermo (camera spostata a mano): l'HUD mostra il tasto per ricentrare */
   pirataFuoriVista?: boolean;
+  /**
+   * Fase 1: cosa farebbe ora il tasto Balzo (stesso id `tasto-salta`), per icona e nome: 'salto', 'scavalca' un
+   * muretto, 'afferra' scala o liana, 'stacca' dall'appiglio, 'muro' = salto dal muro. Assente = 'salto'.
+   */
+  balzo?: 'salto' | 'scavalca' | 'afferra' | 'stacca' | 'muro';
+  /** Fase 1: in fuga il giocatore può chiudere il turno col tasto "fatto" (comando 'fatto') */
+  puoFinire?: boolean;
   /** un pirata vivo sta sotto i tasti di un angolo in basso (sinistro / destro): l'HUD li rende quasi trasparenti */
   pirataSottoTasti?: 'sx' | 'dx' | 'entrambi';
   /**

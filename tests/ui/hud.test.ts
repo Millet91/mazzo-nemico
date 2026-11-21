@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   alzo, bannerDaEventi, barraVento, celleGriglia, comandiVisibili, configSchermaglia, creaDoppioTocco,
-  creaGrillettoUnico, creaRipetitore, micciaSuccessiva, miraAttiva, PASSO_MIRA, RIPETI_OGNI_MS, type Tempi,
+  creaGrillettoUnico, creaJoystick, creaRipetitore, micciaSuccessiva, miraAttiva, PASSO_MIRA, RIPETI_OGNI_MS, versoDaMira,
+  DURATA_BANNER_MS, type Tempi,
 } from '../../src/ui/battaglia/logica';
 import { dotazioneIniziale } from '../../src/contenuti/armi';
 import { BIL } from '../../src/contenuti/bilanciamento';
@@ -55,6 +56,12 @@ describe('Schermaglia di M1', () => {
     expect(c.timerSecondi).toBe(30);
     expect(c.traiettoriaCompleta).toBe(true);
     expect(configSchermaglia(-1).seme).toBe(0xffffffff);
+  });
+  it('da 1 a 5 pirati per lato (m1-ritmo §9), fuori scala si limita', () => {
+    const c = configSchermaglia(1, [5, 1]);
+    expect([c.squadre[0].pirati, c.squadre[1].pirati]).toEqual([5, 1]);
+    const d = configSchermaglia(1, [9, 0]);
+    expect([d.squadre[0].pirati, d.squadre[1].pirati]).toEqual([5, 3]);
   });
 });
 
@@ -148,5 +155,58 @@ describe('Banner', () => {
     expect(bannerDaEventi([inizio(BIL.battaglia.mareSaleDalTurno, 1)], v)).toEqual(['Turno della Marina Reale', T.battaglia.mareSale]);
     expect(bannerDaEventi([inizio(16, 1)], v)).toEqual(['Turno della Marina Reale', T.battaglia.ultimiTurni]);
     expect(bannerDaEventi([{ t: 'timerAvviato' }], v)).toEqual([]);
+  });
+});
+
+describe('Joystick (m1-ritmo §1)', () => {
+  const prova = (verso: 1 | -1 | 0) => {
+    const c: unknown[] = [];
+    return { c, j: creaJoystick((x) => c.push(x), () => verso) };
+  };
+  it('zona morta 12 px, poi cammina nel verso; al rilascio si ferma', () => {
+    const { c, j } = prova(1);
+    j.sposta(10, 0);
+    expect(c).toEqual([]);
+    j.sposta(30, 5);
+    j.sposta(-30, 0);
+    j.rilascia();
+    expect(c).toEqual([{ t: 'muovi', dir: 1 }, { t: 'muovi', dir: -1 }, { t: 'muovi', dir: 0 }]);
+  });
+  it('il pomello resta dentro il raggio 56', () => {
+    const { j } = prova(1);
+    const k = j.sposta(300, 400);
+    expect(Math.round(Math.sqrt(k.x * k.x + k.y * k.y))).toBe(56);
+  });
+  it('spinta in alto oltre il 60% = salto avanti, una volta sola finché non si torna giù', () => {
+    const { c, j } = prova(1);
+    j.sposta(0, -30);
+    expect(c).toEqual([]);
+    j.sposta(0, -40);
+    j.sposta(0, -50);
+    expect(c).toEqual([{ t: 'salta', indietro: false }]);
+    j.sposta(0, -10);
+    j.sposta(0, -40);
+    expect(c).toEqual([{ t: 'salta', indietro: false }, { t: 'salta', indietro: false }]);
+  });
+  it('in alto contro il verso del pirata = salto alto all\'indietro, senza girarsi prima', () => {
+    const { c, j } = prova(1);
+    j.sposta(-20, -50);
+    expect(c).toEqual([{ t: 'salta', indietro: true }]);
+    const b = prova(-1);
+    b.j.sposta(-20, -50);
+    expect(b.c).toEqual([{ t: 'salta', indietro: false }]);
+  });
+  it('verso dalla mira', () => {
+    expect(versoDaMira(45)).toBe(1);
+    expect(versoDaMira(135)).toBe(-1);
+    expect(versoDaMira(90)).toBe(0);
+    expect(versoDaMira(350)).toBe(1);
+  });
+  it('banner di 0,8 s e avvisi delle casse', () => {
+    expect(DURATA_BANNER_MS).toBe(800);
+    const v = vista();
+    expect(bannerDaEventi([{ t: 'cassaCaduta', proiettile: 1, x: 100 }], v)).toEqual(['Cassa in arrivo!']);
+    expect(bannerDaEventi([{ t: 'cassaAperta', proiettile: 1, pirata: 0, contenuto: 'rum' }], v)).toEqual(['Rum! +25 PV']);
+    expect(bannerDaEventi([{ t: 'cassaAperta', proiettile: 1, pirata: 0, contenuto: 'trappola' }], v)).toEqual(['Trappola!']);
   });
 });

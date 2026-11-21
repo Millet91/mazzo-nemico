@@ -1,9 +1,10 @@
-// HUD di battaglia (00 §3, design M1 §6), sopra il canvas. Progettato a 800×360 CSS.
+// HUD di battaglia (00 §3 e §9.16, design M1 §6, m1-ritmo §1-3), sopra il canvas. Progettato a 800×360 CSS.
 //
 // [II] [PV + emblema A]   ⏱ timer  ~vento~   [PV + emblema B]
-//                                                 [ARMA]
-// [ ◀ ][ ▶ ]                           [▲][▼]   [SALTA][ FUOCO ]
+//                                                 [miccia]
+// (joystick dove appoggi il pollice)                [ARMA]
 //
+// Con "Comandi classici": [◀][▶] … [▲][▼] [SALTA][FUOCO] come prima. Mira e sparo stanno sul canvas (fionda di B).
 // I tasti usano i pointer event (non click) così due pollici lavorano insieme (caso 22).
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo } from 'preact/hooks';
@@ -15,9 +16,11 @@ import {
   alzo, barraVento, comandiVisibili, creaDoppioTocco, creaGrillettoUnico, creaRipetitore, frazioneTimer,
   micciaSuccessiva, miraAttiva, PASSO_MIRA, usaMiccia,
 } from './logica';
-import { apriPausa, banner, grigliaAperta, invia } from './stato';
+import { apriPausa, banner, cambiaVelocitaIa, grigliaAperta, invia, velocitaIa } from './stato';
 import { EMBLEMA, ICONA_ARMA } from './segnaposto';
-import { mancini } from '../preferenze';
+import { comandiClassici, mancini } from '../preferenze';
+import { Joystick } from './Joystick';
+import { suona } from '../../piattaforma/audio';
 import { GrigliaArmi } from './GrigliaArmi';
 
 /** Tasto di battaglia: `giu` al tocco, `su` al rilascio (anche se il dito scivola fuori o il sistema lo annulla). */
@@ -40,6 +43,7 @@ function Tasto(p: {
         try { el.setPointerCapture(e.pointerId); } catch { /* puntatore sintetico o già rilasciato */ }
         el.classList.add('premuto');
         tocco();
+        suona('tocco');
         p.giu();
       }}
       onPointerUp={fine} onPointerCancel={fine} onLostPointerCapture={(e) => (e.currentTarget as HTMLElement).classList.remove('premuto')}
@@ -88,6 +92,28 @@ function Vento({ v }: { v: VistaBattaglia }) {
   );
 }
 
+/** ARMA: icona grande dell'arma su un cerchio nel colore della ciurma (m1-ritmo §2). */
+function TastoArma({ v, attivo }: { v: VistaBattaglia; attivo: boolean }) {
+  const c = COLORI_CIURMA[v.squadre[v.squadraDiTurno].ciurma];
+  return (
+    <Tasto id="tasto-arma" label={T.battaglia.armaAiuto} cls="arma" disabilitato={!attivo}
+      giu={() => (grigliaAperta.value = !grigliaAperta.value)}>
+      <span class="cerchio-arma" style={{ background: c.colore, borderColor: c.scuro }}>
+        <span class="icona-arma">{ICONA_ARMA[v.arma]}</span>
+      </span>
+    </Tasto>
+  );
+}
+
+function ChipMiccia({ v, attivo }: { v: VistaBattaglia; attivo: boolean }) {
+  return (
+    <Tasto id="chip-miccia" label={T.battaglia.micciaAiuto} cls="chip" disabilitato={!attivo}
+      giu={() => invia({ t: 'miccia', secondi: micciaSuccessiva(v.miccia, v.arma) })}>
+      ⏲ {T.battaglia.miccia(v.miccia)}
+    </Tasto>
+  );
+}
+
 export function Hud({ v }: { v: VistaBattaglia }) {
   const cfg = bus.richiestaBattaglia.value;
   const vedi = comandiVisibili(v);
@@ -131,10 +157,22 @@ export function Hud({ v }: { v: VistaBattaglia }) {
         <div class="medita" data-testid="medita" role="status">{T.battaglia.medita}</div>
       )}
 
-      {vedi && (
-        <>
-          <div class="mira-info" data-testid="mira">{T.battaglia.mira(alzo(v.miraGradi), Math.round(v.potenza))}</div>
+      {vedi && <div class="mira-info" data-testid="mira">{T.battaglia.mira(alzo(v.miraGradi), Math.round(v.potenza))}</div>}
 
+      {vedi && !comandiClassici.value && (
+        <>
+          <Joystick />
+          <div class="gruppo gruppo-azione">
+            <div class="colonna">
+              {conMiccia && <ChipMiccia v={v} attivo={mira} />}
+              <TastoArma v={v} attivo={mira} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {vedi && comandiClassici.value && (
+        <>
           <div class="gruppo gruppo-muovi">
             <Tasto id="tasto-sinistra" label={T.battaglia.sinistra} giu={() => invia({ t: 'muovi', dir: -1 })} su={fermaCammino}>◀</Tasto>
             <Tasto id="tasto-destra" label={T.battaglia.destra} giu={() => invia({ t: 'muovi', dir: 1 })} su={fermaCammino}>▶</Tasto>
@@ -145,24 +183,23 @@ export function Hud({ v }: { v: VistaBattaglia }) {
             <Tasto id="tasto-giu" label={T.battaglia.giu} disabilitato={!mira} giu={() => t.giu.premi()} su={() => t.giu.rilascia()}>▼</Tasto>
             <span class="spazio" />
             <div class="colonna">
-              {conMiccia && (
-                <Tasto id="chip-miccia" label={T.battaglia.micciaAiuto} cls="chip" disabilitato={!mira}
-                  giu={() => invia({ t: 'miccia', secondi: micciaSuccessiva(v.miccia, v.arma) })}>
-                  ⏲ {T.battaglia.miccia(v.miccia)}
-                </Tasto>
-              )}
+              {conMiccia && <ChipMiccia v={v} attivo={mira} />}
               <Tasto id="tasto-salta" label={T.battaglia.saltaAiuto} cls="testo" giu={() => t.salta.tocca()}>{T.battaglia.salta}</Tasto>
             </div>
             <div class="colonna">
-              <Tasto id="tasto-arma" label={T.battaglia.armaAiuto} cls="arma" disabilitato={!mira}
-                giu={() => (grigliaAperta.value = !grigliaAperta.value)}>
-                <span class="icona-arma">{ICONA_ARMA[v.arma]}</span>
-              </Tasto>
+              <TastoArma v={v} attivo={mira} />
               <Tasto id="tasto-fuoco" label={T.battaglia.fuoco} cls="fuoco testo" disabilitato={!mira}
                 giu={() => t.fuoco.tocca(v.numeroTurno)}>{T.battaglia.fuoco}</Tasto>
             </div>
           </div>
         </>
+      )}
+
+      {v.tocca === 'ia' && !v.esito && (
+        <div class="gruppo gruppo-azione">
+          <Tasto id="tasto-veloce" label={T.battaglia.veloce} cls={`veloce testo ${velocitaIa.value === 2 ? 'acceso' : ''}`}
+            giu={cambiaVelocitaIa}>{T.battaglia.velocita(2)}</Tasto>
+        </div>
       )}
 
       {grigliaAperta.value && mira && <GrigliaArmi v={v} />}

@@ -10,6 +10,7 @@ export function stileVibrazione(e: EventoBattaglia): ImpactStyle | null {
     case 'sparo': return ImpactStyle.Medium;
     case 'danno': return ImpactStyle.Light;
     case 'morto': return ImpactStyle.Heavy;
+    case 'cassaAperta': return e.contenuto === 'trappola' ? ImpactStyle.Heavy : ImpactStyle.Light;
     default: return null;
   }
 }

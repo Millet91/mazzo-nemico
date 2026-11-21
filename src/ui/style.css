@@ -149,11 +149,12 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 
 .hud-alto {
   position: absolute; top: var(--sicura-a); left: var(--bordo-corto); right: var(--bordo-corto);
-  display: flex; align-items: center; gap: 12px; height: 56px;
+  display: flex; align-items: center; gap: 12px; height: 48px;
 }
+/* passata di ritmo (m1-ritmo §2): barra alta più sottile (pannelli 32, timer 48), tasti rotondi al 55% */
 .tasto-pausa {
-  width: 56px; height: 56px; flex: none; border-radius: 50%; border: 1px solid #FFFFFF22; color: var(--testo);
-  background: rgba(19, 41, 58, .85); font: 400 22px var(--font-titolo); cursor: pointer;
+  width: 48px; height: 48px; flex: none; border-radius: 50%; border: 2px solid #FFFFFF40; color: var(--testo);
+  background: rgba(19, 41, 58, .55); font: 400 20px var(--font-titolo); cursor: pointer; text-shadow: 0 1px 2px #000a;
 }
 .caricamento .tasto-pausa { position: absolute; top: var(--sicura-a); left: var(--bordo-corto); }
 .caricamento p {
@@ -167,9 +168,10 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
   width: 24px; height: 24px; flex: none; display: inline-grid; place-items: center; border-radius: 50%;
   border: 2px solid; color: #fff; font-size: 13px; line-height: 1; text-shadow: 0 1px 0 #0008;
 }
+.squadra { height: 32px; padding: 0 8px; border-radius: 16px; background: rgba(19, 41, 58, .55); }
 .barra-pv {
-  position: relative; width: 140px; height: 14px; border-radius: 7px; overflow: hidden;
-  background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF33;
+  position: relative; width: 120px; height: 12px; border-radius: 6px; overflow: hidden;
+  background: rgba(14, 27, 38, .7); border: 1px solid #FFFFFF33;
 }
 .barra-pv .riempi { position: absolute; inset: 0 auto 0 0; transition: width var(--lenta) var(--curva); }
 .squadra.lato-1 .barra-pv .riempi { inset: 0 0 0 auto; }
@@ -187,19 +189,19 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 }
 .timer {
   --f: 360deg;
-  width: 56px; height: 56px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  width: 48px; height: 48px; flex: none; border-radius: 50%; display: grid; place-items: center;
   background: conic-gradient(var(--oro) var(--f), #FFFFFF22 0);
 }
 .timer span {
-  width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--abisso);
-  font: 400 24px var(--font-titolo); font-variant-numeric: tabular-nums;
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--abisso);
+  font: 400 21px var(--font-titolo); font-variant-numeric: tabular-nums;
 }
 .timer.fermo { background: conic-gradient(var(--testo-dim) var(--f), #FFFFFF22 0); }
 .timer.urgente { background: conic-gradient(var(--pericolo) var(--f), #FFFFFF22 0); }
 .timer.urgente span { color: var(--pericolo); }
 .vento {
-  width: 120px; height: 28px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 6px;
-  border-radius: 14px; background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22;
+  width: 120px; height: 32px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 8px;
+  border-radius: 16px; background: rgba(19, 41, 58, .55);
 }
 .vento .freccia { width: 16px; text-align: center; font-size: 14px; color: var(--info); }
 .vento .freccia.verso--1 { transform: scaleX(-1); }
@@ -208,11 +210,11 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 .barra-vento .centro { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--testo); }
 
 .banner {
-  position: absolute; left: 50%; top: calc(var(--sicura-a) + 68px); transform: translateX(-50%);
+  position: absolute; left: 50%; top: calc(var(--sicura-a) + 72px); transform: translateX(-50%); pointer-events: none;
   height: 44px; padding: 0 22px; display: grid; place-items: center; white-space: nowrap; border-radius: 22px;
   background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22;
   font: 400 28px var(--font-titolo); color: var(--oro); -webkit-text-stroke: 1px var(--inchiostro); paint-order: stroke fill;
-  animation: banner 1.2s var(--curva) both;
+  animation: banner .8s var(--curva) both;
 }
 @keyframes banner { 0% { opacity: 0; transform: translate(-50%, -8px); } 12%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
 .medita {
@@ -238,23 +240,51 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 .hud.mancini .gruppo-azione { right: auto; left: var(--bordo-corto); flex-direction: row-reverse; }
 .tasto {
   width: 64px; height: 64px; flex: none; padding: 0; border-radius: 16px; cursor: pointer; touch-action: none;
-  display: grid; place-items: center; color: var(--testo); font-size: 26px; line-height: 1;
-  background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF33; border-bottom: 4px solid #0008;
-  transition: transform var(--rapida) var(--curva);
+  display: grid; place-items: center; color: #fff; font-size: 26px; line-height: 1; border-radius: 50%;
+  background: rgba(19, 41, 58, .55); border: 2px solid rgba(255, 255, 255, .25); text-shadow: 0 2px 3px #000a;
+  transition: transform 80ms var(--curva);
 }
-.tasto.premuto { transform: translateY(3px); background: rgba(38, 70, 94, .9); }
+.tasto.premuto { transform: scale(.92); }
 .tasto:disabled { opacity: .4; cursor: default; }
 .tasto.testo { font: 400 16px var(--font-titolo); letter-spacing: .5px; }
 .tasto.fuoco {
   width: 80px; height: 80px; border-radius: 50%; font-size: 20px; color: var(--inchiostro);
-  background: var(--oro); border: 0; border-bottom: 5px solid var(--oro-ombra);
+  background: var(--oro); border: 2px solid var(--oro-ombra); text-shadow: none;
 }
 .tasto.chip { height: 48px; border-radius: 24px; font: 900 14px var(--font-testo); font-variant-numeric: tabular-nums; }
-.tasto.arma .icona-arma { font-size: 30px; }
+.tasto.chip { width: auto; min-width: 64px; padding: 0 12px; }
+.tasto.arma { background: transparent; border: 0; }
+.cerchio-arma {
+  width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; border: 3px solid;
+  box-shadow: 0 3px 0 #0006;
+}
+.tasto.arma .icona-arma { font-size: 36px; filter: drop-shadow(0 2px 2px #0008); }
+.tasto.veloce.acceso { background: var(--oro); color: var(--inchiostro); text-shadow: none; border-color: var(--oro-ombra); }
+
+/* joystick (m1-ritmo §1): zona nella metà bassa a sinistra, a destra con i mancini; lascia 24 px al gesto indietro */
+.zona-joystick {
+  position: absolute; left: 24px; bottom: 0; width: calc(50% - 24px); height: 58%;
+  pointer-events: auto; touch-action: none;
+}
+.hud.mancini .zona-joystick { left: auto; right: 24px; }
+.joystick {
+  position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
+  background: rgba(19, 41, 58, .35); border: 2px solid rgba(255, 255, 255, .25); pointer-events: none;
+}
+.joystick .pomello {
+  position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%;
+  background: rgba(255, 255, 255, .55); border: 2px solid #fff; box-shadow: 0 2px 6px #0008;
+}
+
+/* scelta della Schermaglia */
+.scelta-schermaglia { display: flex; flex-direction: column; gap: 12px; width: min(70vw, 460px); }
+.contatore { display: flex; align-items: center; gap: 12px; }
+.contatore .etichetta { flex: 1; font-weight: 900; font-size: 16px; }
+.contatore .numero { min-width: 32px; text-align: center; font: 400 28px var(--font-titolo); font-variant-numeric: tabular-nums; }
 
 /* la griglia parte sotto la barra alta: timer e vento restano visibili (il timer non si ferma, 00 §3) */
 .scrim-griglia {
-  position: absolute; inset: calc(var(--sicura-a) + 76px) 0 0; pointer-events: auto; background: rgba(14, 27, 38, .4);
+  position: absolute; inset: calc(var(--sicura-a) + 68px) 0 0; pointer-events: auto; background: rgba(14, 27, 38, .4);
   display: flex; justify-content: center; align-items: center; padding-bottom: var(--sicura-b);
 }
 .griglia-armi {

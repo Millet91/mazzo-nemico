@@ -1,0 +1,85 @@
+// Validatore di una MappaGenerata (06 §0, §4, §7 con il mare a BIL.mondo.mareIniziale). Lo usa il generatore
+// a ogni tentativo e lo usano i test (e il QA) su qualsiasi mappa. Restituisce l'elenco dei problemi: vuoto = valida.
+
+import { MATERIALE, type MappaGenerata } from '../../core/tipi';
+import { superficie } from './analisi';
+import { MONDO, REGOLE } from './parametri';
+import { controllaInsieme, controllaPosto, zona, type Posto } from './spawn';
+
+const { w: W, h: H } = MONDO;
+const ARIA = MATERIALE.aria, FERRO = MATERIALE.ferro;
+
+export interface Riempimento {
+  solido: number;
+  ferro: number;
+  frazione: number;
+  frazioneFerro: number;
+  /** solido della metà sinistra e della destra (equità della massa, 06 §4) */
+  meta: [number, number];
+}
+
+/** Solido e ferro nella fascia tra fineCielo e il mare. */
+export function riempimento(m: Uint8Array, mare: number): Riempimento {
+  let ferro = 0, sx = 0, dx = 0;
+  const meta = W / 2;
+  for (let y: number = MONDO.cielo; y < mare; y++) {
+    const r = y * W;
+    for (let x = 0; x < W; x++) {
+      const v = m[r + x];
+      if (v !== ARIA) {
+        if (x < meta) sx++; else dx++;
+        if (v === FERRO) ferro++;
+      }
+    }
+  }
+  const solido = sx + dx;
+  return { solido, ferro, frazione: solido / (W * (mare - MONDO.cielo)), frazioneFerro: solido ? ferro / solido : 0, meta: [sx, dx] };
+}
+
+/** Controlli sul terreno soltanto (fasce, bordi, riempimento, ferro). */
+export function validaTerreno(m: Uint8Array, mare: number): string[] {
+  const err: string[] = [];
+  if (m.length !== W * H) return [`maschera di ${m.length} byte invece di ${W * H}`];
+  for (let y: number = 0; y < MONDO.cielo; y++) {
+    const r = y * W;
+    for (let x = 0; x < W; x++) if (m[r + x] !== ARIA) { err.push(`solido nel cielo libero (${x}, ${y})`); y = MONDO.cielo; break; }
+  }
+  for (let y: number = MONDO.fondale; y < H; y++) {
+    const r = y * W;
+    for (let x = 0; x < W; x++) if (m[r + x] !== FERRO) { err.push(`fondale non di ferro (${x}, ${y})`); y = H; break; }
+  }
+  for (let x: number = 0; x < W; x++) {
+    if (x >= MONDO.bordo && x < W - MONDO.bordo) continue;
+    for (let y = 0; y < MONDO.fondale; y++) if (m[y * W + x] !== ARIA) { err.push(`bordo non di acqua aperta (${x}, ${y})`); x = W; break; }
+  }
+  const r = riempimento(m, mare);
+  if (r.frazione < REGOLE.solidoMin || r.frazione > REGOLE.solidoMax) err.push(`solido al ${(r.frazione * 100).toFixed(1)}% (35-50%)`);
+  if (r.frazioneFerro > REGOLE.ferroMax) err.push(`ferro al ${(r.frazioneFerro * 100).toFixed(1)}% del solido (max 3%)`);
+  const [sx, dx] = r.meta;
+  if (Math.abs(sx - dx) > REGOLE.equitaMassa * Math.max(sx, dx)) err.push(`equità: massa delle due metà ${sx} / ${dx}`);
+  return err;
+}
+
+/** Validazione completa: terreno, requisiti di ogni spawn, equità e anti-frustrazione. */
+export function validaMappa(mappa: MappaGenerata): string[] {
+  const t = mappa.terreno;
+  if (t.w !== W || t.h !== H) return [`dimensioni ${t.w}×${t.h} invece di ${W}×${H}`];
+  const err = validaTerreno(t.maschera, t.mare);
+  const sup = superficie(t.maschera);
+  // lato 0 a sinistra, salvo specchio
+  const sinistra = mappa.specchiata ? 1 : 0;
+  const posti: [Posto[], Posto[]] = [[], []];
+  for (const lato of [0, 1] as const) {
+    const aDestra = (lato === sinistra) === false;
+    const [da, a] = zona(aDestra);
+    for (const p of mappa.spawn[lato]) {
+      if (p.x < da || p.x > a) err.push(`spawn del lato ${lato} fuori zona (${p.x}, ${p.y})`);
+      const c = controllaPosto(t.maschera, sup, t.mare, p.x);
+      if (typeof c === 'string') err.push(`spawn del lato ${lato} in (${p.x}, ${p.y}): ${c}`);
+      else if (c.y !== p.y) err.push(`spawn del lato ${lato} in (${p.x}, ${p.y}): piedi non sul terreno (${c.y})`);
+      else posti[aDestra ? 1 : 0].push(c);
+    }
+  }
+  if (err.length) return err;
+  return controllaInsieme(t.maschera, sup, t.mare, posti);
+}

@@ -1,1 +1,11 @@
 # battaglia/gen/ — generatore di mappe da seme e bioma (puro). Proprietario: agente Generatore (da M1, ramo claude/m1-gen).
+
+- `index.ts` — `generaMappa` (firma del contratto) e `tentativo(seme)`.
+- `tentativi.ts` — seme, seme+1, … fino a 8 tentativi, poi il seme di riserva (`tentativi = 0`).
+- `isola.ts` — terreno dell'Isola tropicale: profilo da parametri (spiaggia, cresta che ripara gli spawn, piana, centro), rumore 1D, grotte a metaball, strati, massi.
+- `spawn.ts` — requisiti dei posti (06 §4), equità tra i lati, regole anti-frustrazione (06 §7).
+- `valida.ts` — `validaMappa(mappa)`: elenco dei problemi di una mappa qualsiasi (vuoto = valida). Lo usano generatore e test.
+- `analisi.ts` — superficie, voli balistici semplificati (un punto, senza rimbalzi), linea di tiro, camminata.
+- `parametri.ts` — tutti i numeri del livello e il seme di riserva. Fisica, mare e armi si leggono da `BIL` e `ARMA`.
+
+Test: `tests/gen/` (determinismo con impronte d'oro, validazione su 200 semi, riserva, tempo).

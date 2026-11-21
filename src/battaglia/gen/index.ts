@@ -1,40 +1,134 @@
-// API pubblica del generatore di mappe: CONTRATTO CONGELATO dal Lead (M1).
-// L'agente Generatore (C, ramo claude/m1-gen) sostituisce l'implementazione; la firma non cambia.
-// ⚠ IMPLEMENTAZIONE SEGNAPOSTO: una collina di sabbia e terra con spawn equidistanti, senza validazione.
+// API pubblica del generatore di mappe: CONTRATTO CONGELATO dal Lead (M1). La firma non cambia.
+// Implementazione: agente Generatore (C, ramo claude/m1-gen).
 //
 // Regole: TypeScript puro e deterministico (stesse regole della sim: core/rng.ts, core/trig.ts, niente Math.random).
 // Stessa RichiestaMappa ⇒ stessa MappaGenerata, byte per byte.
+//
+// Pipeline (06 §1 corretta da 00 §2.2), per il bioma Isola tropicale:
+//  1. specchio orizzontale 50% dal seme;  2. profilo procedurale da parametri (spiagge, 1-2 colline) + rumore 1D;
+//  3. grotte a metaball;  4. strati (24 px sabbia, terra, roccia sotto 160 px);  5. 1-2 massi di roccia;
+//  6. 5 spawn per lato con requisiti ed equità (06 §4);  7. validazione anti-frustrazione (06 §7).
+// Se la validazione fallisce si riprova con seme+1, fino a 8 tentativi; poi si usa il seme di riserva già validato.
+// In M1 esiste solo l'Isola: per gli altri biomi si usa lo stesso terreno (il campo `bioma` resta quello chiesto).
 
-import type { MappaGenerata, Punto, RichiestaMappa } from '../../core/tipi';
-import { MATERIALE } from '../../core/tipi';
-import { BIL } from '../../contenuti/bilanciamento';
-import { seno } from '../../core/trig';
+import type { Decorazione, MappaGenerata, Punto, RichiestaMappa } from '../../core/tipi';
+import { intero, mescola, probabilita, semeIniziale, type ConRng } from '../../core/rng';
+import { superficie } from './analisi';
+import { specchiaMaschera, terrenoIsola } from './isola';
+import { MONDO, REGOLE } from './parametri';
+import { conTentativi } from './tentativi';
+import { controllaInsieme, distanzaMare, postiValidi, type Posto } from './spawn';
+import { validaTerreno } from './valida';
+
+const { w: W } = MONDO;
+
+/** Quante combinazioni di spawn si provano su un terreno prima di cambiare seme. */
+const SCELTE_SPAWN = 60;
+
+/**
+ * Sceglie fino a n posti distanti almeno REGOLE.distanzaCompagni, in ordine casuale. Con `vicinoA` preferisce i posti
+ * la cui distanza dal mare è vicina a quel valore (a fasce di 25 px): così i due lati restano equi (06 §4).
+ */
+function scegli(s: ConRng, posti: Posto[], n: number, dMare?: Map<Posto, number>, vicinoA?: number): Posto[] {
+  let v = mescola(s, posti.slice());
+  if (dMare && vicinoA !== undefined) {
+    const fascia = (p: Posto) => Math.floor(Math.abs((dMare.get(p) ?? 0) - vicinoA) / 25);
+    v = v.map((p, i) => ({ p, i, f: fascia(p) })).sort((a, b) => a.f - b.f || a.i - b.i).map((e) => e.p);
+  }
+  const out: Posto[] = [];
+  for (const p of v) {
+    if (out.every((q) => Math.abs(q.x - p.x) >= REGOLE.distanzaCompagni)) out.push(p);
+    if (out.length === n) break;
+  }
+  return out.sort((a, b) => a.x - b.x);
+}
+
+/** Quanti posti distanti tra loro almeno REGOLE.distanzaCompagni ci stanno al massimo (da sinistra a destra è ottimo). */
+function impacca(posti: Posto[]): number {
+  let n = 0, ultimo = -Infinity;
+  for (const p of posti.slice().sort((a, b) => a.x - b.x)) if (p.x - ultimo >= REGOLE.distanzaCompagni) { n++; ultimo = p.x; }
+  return n;
+}
+
+function decorazioni(s: ConRng, sup: Int32Array, mare: number, spawn: Punto[]): Decorazione[] {
+  const out: Decorazione[] = [];
+  const piazza = (tipo: Decorazione['tipo'], quante: number) => {
+    for (let i = 0, prove = 0; i < quante && prove < 30; prove++) {
+      const x = intero(s, MONDO.bordo + 60, W - MONDO.bordo - 60);
+      if (sup[x] >= mare - 30) continue;
+      if (Math.abs(sup[x - 8] - sup[x + 8]) > 10) continue;
+      if (spawn.some((p) => Math.abs(p.x - x) < REGOLE.decorazioniLontanoDaSpawn)) continue;
+      if (out.some((d) => Math.abs(d.x - x) < 50)) continue;
+      out.push({ tipo, x, y: sup[x], scala: intero(s, 80, 120) / 100, specchio: probabilita(s, 0.5) });
+      i++;
+    }
+  };
+  piazza('palma', intero(s, 2, 4));
+  piazza('cespuglio', intero(s, 3, 6));
+  piazza('masso', intero(s, 1, 3));
+  return out.sort((a, b) => a.x - b.x);
+}
+
+/** Un tentativo con un seme: la mappa se passa la validazione, altrimenti null. */
+export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null {
+  const s: ConRng = { rng: semeIniziale(seme) };
+  const mare = MONDO.mare;
+  const specchiata = probabilita(s, 0.5);
+  const { maschera } = terrenoIsola(s);
+  if (validaTerreno(maschera, mare).length) return null;
+  const sup = superficie(maschera);
+  const n = REGOLE.spawnPerLato;
+  const candidati: [Posto[], Posto[]] = [[], []];
+  for (const lato of [0, 1] as const) {
+    const tutti = postiValidi(maschera, sup, mare, lato === 1);
+    if (impacca(tutti) < n) return null;
+    // meglio i posti da cui la sciabola non butta in mare, se bastano
+    const sicuri = tutti.filter((p) => !p.sciabolaInMare);
+    candidati[lato] = impacca(sicuri) >= n ? sicuri : tutti;
+  }
+
+  let scelti: [Posto[], Posto[]] | null = null;
+  const dMare = new Map<Posto, number>();
+  for (const p of [...candidati[0], ...candidati[1]]) dMare.set(p, distanzaMare(sup, mare, p));
+  for (let k = 0, complete = 0; k < SCELTE_SPAWN && complete < 3; k++) {
+    // un lato a caso, l'altro scelto per somigliargli (si alterna quale dei due guida)
+    const guida = k % 2;
+    const primo = scegli(s, candidati[guida], n);
+    const media = primo.reduce((t, p) => t + (dMare.get(p) ?? 0), 0) / Math.max(1, primo.length);
+    const secondo = scegli(s, candidati[1 - guida], n, dMare, media);
+    const prova: [Posto[], Posto[]] = guida === 0 ? [primo, secondo] : [secondo, primo];
+    if (prova[0].length < n || prova[1].length < n) continue;
+    if (controllaInsieme(maschera, sup, mare, prova, false).length) continue;
+    complete++;
+    if (controllaInsieme(maschera, sup, mare, prova, true).length) continue;
+    scelti = prova;
+    break;
+  }
+  if (!scelti) return null;
+
+  const piedi = (p: Posto): Punto => ({ x: p.x, y: p.y });
+  let sx = scelti[0].map(piedi), dx = scelti[1].map(piedi);
+  let decor = decorazioni(s, sup, mare, [...sx, ...dx]);
+  if (specchiata) {
+    specchiaMaschera(maschera);
+    const sp = (p: Punto): Punto => ({ x: W - 1 - p.x, y: p.y });
+    sx = sx.map(sp).reverse();
+    dx = dx.map(sp).reverse();
+    decor = decor.map((d) => ({ ...d, x: W - 1 - d.x, specchio: !d.specchio })).reverse();
+  }
+  // lato 0 (attaccante) = il gruppo scelto a sinistra; con lo specchio finisce a destra
+  return {
+    terreno: { w: W, h: MONDO.h, maschera, mare },
+    spawn: [sx, dx],
+    bioma: r.bioma,
+    variante: r.variante,
+    semeUsato: seme,
+    tentativi: 1,
+    specchiata,
+    decorazioni: decor,
+  };
+}
 
 export function generaMappa(r: RichiestaMappa): MappaGenerata {
-  const { larghezza: w, altezza: h, mareIniziale, inizioFondale } = BIL.mondo;
-  const maschera = new Uint8Array(w * h);
-  const superficie = (x: number) => {
-    if (x < 200 || x > w - 200) return h; // acqua aperta ai lati
-    const t = (x - 200) / (w - 400); // 0..1
-    return Math.round(700 - 260 * seno(t * 360) - 40 * seno(t * 1440 + (r.seme % 720)));
-  };
-  for (let x = 0; x < w; x++) {
-    const top = superficie(x);
-    for (let y = 0; y < h; y++) {
-      let m: number = MATERIALE.aria;
-      if (y >= inizioFondale) m = MATERIALE.ferro;
-      else if (y >= top) m = y - top < 24 ? MATERIALE.sabbia : y - top < 160 ? MATERIALE.terra : MATERIALE.roccia;
-      maschera[y * w + x] = m;
-    }
-  }
-  const spawn: [Punto[], Punto[]] = [[], []];
-  for (let i = 0; i < 5; i++) {
-    const xa = Math.round(w * (0.14 + 0.06 * i)), xd = Math.round(w * (0.86 - 0.06 * i));
-    spawn[0].push({ x: xa, y: superficie(xa) });
-    spawn[1].push({ x: xd, y: superficie(xd) });
-  }
-  return {
-    terreno: { w, h, maschera, mare: mareIniziale }, spawn, bioma: r.bioma, variante: r.variante,
-    semeUsato: r.seme, tentativi: 1, specchiata: false, decorazioni: [],
-  };
+  return conTentativi(r, (seme) => tentativo(seme, r));
 }

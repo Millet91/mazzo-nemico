@@ -1,0 +1,34 @@
+const { chromium } = require('/home/claude/mazzo-nemico/node_modules/playwright-core');
+exports.S='/tmp/claude-0/-home-claude/dc968a01-02bf-5e00-8464-acbb3c3eff89/scratchpad/shots/';
+exports.avvia = async (w,h,{url='http://localhost:4173/?prova',dsf=1}={})=>{
+  const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const ctx = await b.newContext({viewport:{width:w,height:h},hasTouch:true,isMobile:true,deviceScaleFactor:dsf});
+  const p = await ctx.newPage();
+  const errs=[]; p.on('console',m=>{if(m.type()==='error')errs.push(m.text())}); p.on('pageerror',e=>errs.push('PAGEERR '+e.message));
+  const cdp = await ctx.newCDPSession(p);
+  const tocca = async (type,pts,ms=40)=>{await cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts}); if(ms) await p.waitForTimeout(ms);};
+  const box = async id=>{const bb=await p.getByTestId(id).boundingBox(); return bb&&{x:bb.x+bb.width/2,y:bb.y+bb.height/2}};
+  const vista = ()=>p.evaluate(()=>{const v=window.__kaboom.bus.battaglia.value; return v&&JSON.parse(JSON.stringify(v))});
+  const inizia = async ()=>{
+    await p.goto(url); await p.waitForTimeout(1500);
+    await p.locator('#schermaglia').click(); await p.waitForTimeout(300);
+    await p.locator('#salpa').click();
+    await p.waitForFunction(()=>{const v=window.__kaboom.bus.battaglia.value;return v&&v.fase==='azione'&&v.tocca==='umano'},null,{timeout:60000});
+    await p.waitForTimeout(1200);
+  };
+  const premi = async (id,ms)=>{const c=await box(id); if(!c) return false; await tocca('touchStart',[{...c,id:7}],ms); await tocca('touchEnd',[],30); return true;};
+  const tieni = async (id,ms)=>{const c=await box(id); if(!c) return false; await tocca('touchStart',[{...c,id:7}],ms); await tocca('touchEnd',[],30); return true;};
+  const mira = async (gradi,pot)=>{ // trascina il mirino fino a (gradi,pot) con un dito
+    const m = await p.evaluate(()=>window.__kaboom.mirino());
+    const r = 48+(136-48)*pot/100, a=gradi*Math.PI/180;
+    // il pirata sta al centro: ricavo da mira corrente
+    const v = await vista();
+    const cur = v.miraGradi*Math.PI/180, rc = 48+(136-48)*v.potenza/100;
+    const cx = m.x - rc*Math.cos(cur), cy = m.y + rc*Math.sin(cur);
+    const tx = cx + r*Math.cos(a), ty = cy - r*Math.sin(a);
+    await tocca('touchStart',[{x:m.x,y:m.y,id:2}],30);
+    const N=8; for(let i=1;i<=N;i++) await tocca('touchMove',[{x:m.x+(tx-m.x)*i/N,y:m.y+(ty-m.y)*i/N,id:2}],40);
+    await tocca('touchEnd',[],60);
+  };
+  return {b,ctx,p,errs,cdp,tocca,box,vista,inizia,premi,tieni,mira};
+};

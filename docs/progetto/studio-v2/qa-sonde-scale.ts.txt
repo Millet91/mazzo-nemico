@@ -1,0 +1,68 @@
+# Sonde QA (solo lettura). Copiare ognuna in tests/qa-scratch/ (cartella da NON committare) e lanciare 'npx tsx tests/qa-scratch/<file>' dalla radice, su claude/m1-integrazione.
+# === SONDA 1: scale e camminata (tests/qa-scratch/sonda.ts) ===
+import { creaBattaglia, eseguiComando } from '../../src/battaglia/sim';
+import { avanzaTick } from '../../src/battaglia/sim';
+import { mappaFatta } from '../../src/battaglia/mappe/index';
+import { config } from '../../tests/sim/aiuti';
+import type { EventoBattaglia } from '../../src/core/tipi';
+
+function nuova(px:number, py:number) {
+  const m = mappaFatta('cala-pappagallo')!;
+  m.spawn[0][0] = { x: px, y: py };
+  const s = creaBattaglia(config(3, 3), m);
+  const ev: EventoBattaglia[] = [];
+  for (let i=0;i<20000 && s.turno.fase!=='azione';i++) avanzaTick(s, ev);
+  return s;
+}
+const att = (s:any)=> s.pirati.find((p:any)=>p.id===s.turno.pirata);
+function passo(s:any,n:number,ev:EventoBattaglia[]=[]){ for(let i=0;i<n;i++) avanzaTick(s,ev); }
+
+// A) cammina a destra dallo spawn 0 (701,605): fin dove arriva in 12 s?
+{ const s=nuova(701,605); eseguiComando(s,{t:'muovi',dir:1}); const ev:EventoBattaglia[]=[]; let ult=-1, f=0;
+  for(let i=0;i<60*12;i++){ avanzaTick(s,ev); } const p=att(s); console.log('A) camminata dx dallo spawn 0: x=',p.x.toFixed(1),'y=',p.y.toFixed(1),'appeso',p.appeso); }
+// B) scala 428: pirata ai piedi (x=420,y=840) sale
+for (const [nome,x,y,dirmuovi] of [['scala 428 dal basso',400,845,1],['scala 202 dal basso',190,825,1],['scala 1618 dal basso',1640,845,-1],['scala 1846 dal basso',1830,845,1]] as const) {
+  const s=nuova(x,y); eseguiComando(s,{t:'muovi',dir:dirmuovi as any}); passo(s,30); eseguiComando(s,{t:'muovi',dir:0});
+  const p0=att(s); console.log(`B) ${nome}: dopo cammino x=${p0.x.toFixed(1)} y=${p0.y.toFixed(1)} aTerra=${p0.aTerra} appeso=${p0.appeso}`);
+  eseguiComando(s,{t:'arrampica',dir:-1}); const ev:EventoBattaglia[]=[]; let yMin=1e9; const traccia:number[]=[];
+  for(let i=0;i<60*8;i++){ avanzaTick(s,ev); const p=att(s); yMin=Math.min(yMin,p.y); if(i%60==0) traccia.push(Math.round(p.y)+(p.appeso>=0?'A':'-')); }
+  const p=att(s); console.log(`   y/s: ${traccia.join(' ')} | finale y=${p.y.toFixed(1)} x=${p.x.toFixed(1)} appeso=${p.appeso} eventi=${[...new Set(ev.map(e=>e.t))].join(',')}`);
+  console.log('   appigli:',JSON.stringify(s.appigli.filter((a:any)=>Math.abs(a.x-p0.x)<40)));
+}
+console.log('--- C) tutte le scale: dal basso (cammino finché a portata) e dall alto');
+import { appiglioVicino } from '../../src/battaglia/sim/appigli';
+const SC: [string, number, number, number, number, number, number][] = [
+ // nome, ax, yBasso(piedi), xStartBasso, dirBasso, xStartAlto,yAlto(piedi), 
+ ['scala 428', 428, 851, 400, 1, 470, 764],
+ ['scala 202', 202, 826, 150, 1, 240, 726],
+ ['scala 1618', 1618, 852, 1660, -1, 1580, 764],
+ ['scala 1846', 1846, 848, 1800, 1, 1890, 726],
+];
+for (const [nome, ax, yb, xs, dir, xa, ya] of SC) {
+  for (const verso of ['su','giu'] as const) {
+    const s = verso==='su' ? nuova(xs, yb-5) : nuova(xa, ya-12);
+    const d = verso==='su' ? dir : (xa>ax?-1:1);
+    eseguiComando(s,{t:'muovi',dir:d as any});
+    let k=0; for(;k<400;k++){ avanzaTick(s,[]); const p=att(s); if(appiglioVicino(s,p.x,p.y)) break; }
+    eseguiComando(s,{t:'muovi',dir:0});
+    const p0=att(s); const ev:EventoBattaglia[]=[]; 
+    eseguiComando(s,{t:'arrampica',dir: verso==='su'?-1:1});
+    const tr:string[]=[]; for(let i=0;i<60*8;i++){ avanzaTick(s,ev); const p=att(s); if(i%60==0) tr.push(Math.round(p.y)+(p.appeso>=0?'A':'-')); }
+    const p=att(s);
+    console.log(`C) ${nome} ${verso}: partenza x=${p0.x.toFixed(1)} y=${p0.y.toFixed(0)} (a portata dopo ${k} tick, asse ${ax}) -> y/s ${tr.join(' ')} finale y=${p.y.toFixed(0)} appeso=${p.appeso} ev=${[...new Set(ev.map(e=>e.t))].join(',')}`);
+  }
+}
+
+# === SONDA 2: salti al muro della liana (tests/qa-scratch/sonda2.ts) ===
+import { creaBattaglia, eseguiComando, avanzaTick } from '../../src/battaglia/sim';
+import { mappaFatta } from '../../src/battaglia/mappe/index';
+import { config } from '../../tests/sim/aiuti';
+import { appiglioVicino } from '../../src/battaglia/sim/appigli';
+const m = mappaFatta('cala-pappagallo')!;
+const s = creaBattaglia(config(3,3), m);
+for (let i=0;i<20000 && s.turno.fase!=='azione';i++) avanzaTick(s,[]);
+const att=()=>s.pirati.find(p=>p.id===s.turno.pirata)!;
+eseguiComando(s,{t:'muovi',dir:1}); for(let i=0;i<60*8;i++) avanzaTick(s,[]);
+console.log('al muro', att().x.toFixed(1), att().y.toFixed(1));
+let tent=0, best=0, vic=false, hp0=att().pv;
+for (let k=0;k<6;k++){ eseguiComando(s,{t:'salta',indietro:false}); let ymin=1e9; for(let i=0;i<90;i++){ avanzaTick(s,[]); const p=att(); ymin=Math.min(ymin,p.y); best=Math.max(best,p.x); if(appiglioVicino(s,p.x,p.y)) vic=true;} console.log(`salto ${k}: x=${att().x.toFixed(1)} y=${att().y.toFixed(1)} yMin=${ymin.toFixed(0)} pv=${att().pv} vicinoLiana=${vic}`); }

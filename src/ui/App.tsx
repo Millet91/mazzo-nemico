@@ -12,12 +12,15 @@ import { avviaAscoltoBattaglia, avviaTicTac, indietroInBattaglia, inBattaglia, s
 import { SceltaSchermaglia } from './battaglia/SceltaSchermaglia';
 import { sbloccaAudio } from '../piattaforma/audio';
 import { Diagnostica, provaAttiva, statoFps } from './Diagnostica';
+import { PulsanteKit, PulsanteTondo, applicaKit, urlKit } from './kit';
 import { caricaPreferenzeHud, comandiClassici, impostaComandiClassici, impostaMancini, impostaVolumeHud, impostaZoomMira, mancini, piratiSchermaglia, volume, zoomMira } from './preferenze';
 
 // avvio dell'HUD (main.tsx non è una cartella dell'HUD): preferenze salvate, banner e vibrazioni della battaglia
 void caricaPreferenzeHud();
 avviaAscoltoBattaglia();
 avviaTicTac();
+// immagini del kit dipinto (P2) nelle variabili CSS
+if (typeof document !== 'undefined') applicaKit();
 // l'audio parte solo dopo un tocco (regola dei browser e della WebView)
 if (typeof window !== 'undefined') window.addEventListener('pointerdown', sbloccaAudio, { capture: true, passive: true });
 
@@ -45,6 +48,7 @@ function mostraAvviso(testo: string) {
 /** Tasto indietro di Android: chiude il pannello aperto. Restituisce false se non c'era niente da chiudere. */
 export function gestisciIndietro(): boolean {
   if (indietroInBattaglia()) return true;
+  if (bus.schermata.value !== 'menu' && !pannello.value && !sceltaSchermaglia.value) { bus.schermata.value = 'menu'; return true; }
   if (sceltaSchermaglia.value) { sceltaSchermaglia.value = false; return true; }
   if (pannello.value === 'info' || pannello.value === 'diagnostica') { pannello.value = 'impostazioni'; return true; }
   if (pannello.value === 'impostazioni') { pannello.value = null; return true; }
@@ -116,10 +120,10 @@ function PannelloImpostazioni() {
       <section class="modale" role="dialog" aria-modal="true" aria-labelledby="titolo-pannello">
         <header>
           {p !== 'impostazioni' && (
-            <Pulsante tipo="icona" label={T.impostazioni.indietro} onClick={() => (pannello.value = 'impostazioni')}>‹</Pulsante>
+            <PulsanteTondo label={T.impostazioni.indietro} onClick={() => (pannello.value = 'impostazioni')}>‹</PulsanteTondo>
           )}
           <h2 id="titolo-pannello">{titolo}</h2>
-          <Pulsante tipo="icona" label={T.impostazioni.chiudi} onClick={() => (pannello.value = null)}>✕</Pulsante>
+          <PulsanteTondo label={T.impostazioni.chiudi} onClick={() => (pannello.value = null)}>✕</PulsanteTondo>
         </header>
         {p === 'impostazioni' ? (
           <div class="voci">
@@ -154,6 +158,12 @@ function PannelloImpostazioni() {
   );
 }
 
+/** la carriera ha già un salvataggio con almeno una battaglia: il pulsante grande dice "Continua" */
+function carrieraIniziata(): boolean {
+  const c = bus.carriera.value;
+  return !!c && (c.battaglieGiocate > 0 || c.capitolo > 1);
+}
+
 export function App() {
   const errore = !bus.webgl2.value.ok
     ? { titolo: T.errori.webgl2Titolo, testo: T.errori.webgl2Testo }
@@ -169,20 +179,34 @@ export function App() {
           <Battaglia />
         </main>
       ) : (
-      <main class="ui" key="menu">
+      bus.schermata.value !== 'menu' ? (
+        // Carriera: la scena del mondo (Pixi) e i pannelli della Campagna stanno sopra; qui solo l'uscita al menu
+        <main class="ui fuori-menu" key="carriera">
+          <ContatoreFps />
+          <div class="angolo-sinistra">
+            <PulsanteTondo id="torna-menu" label={T.home.tornaMenu} onClick={() => (bus.schermata.value = 'menu')}>‹</PulsanteTondo>
+          </div>
+        </main>
+      ) : (
+      <main class="ui menu" key="menu">
+        <img class="menu-sfondo" src={urlKit('ui_menu_sfondo')} alt="" draggable={false} />
         <ContatoreFps />
         <div class="angolo">
-          <Pulsante tipo="icona" id="apri-impostazioni" label={T.home.impostazioni} onClick={() => (pannello.value = 'impostazioni')}>⚙</Pulsante>
+          <PulsanteTondo id="apri-impostazioni" label={T.home.impostazioni} onClick={() => (pannello.value = 'impostazioni')}>⚙</PulsanteTondo>
         </div>
         <div class="titolo">
           <h1>{T.gioco.titolo}</h1>
           <p class="sottotitolo">{T.gioco.sottotitolo}</p>
         </div>
         <div class="menu-principale">
-          <button type="button" id="schermaglia" class="btn primario grande" onClick={() => { tocco(); sceltaSchermaglia.value = true; }}>
-            <span>{T.home.schermaglia}</span>
-            <span class="sotto">{T.home.schermagliaSottoN(piratiSchermaglia.value[0], piratiSchermaglia.value[1])}</span>
-          </button>
+          <PulsanteKit id="carriera" tipo="oro" grande onClick={() => (bus.schermata.value = 'mondo')}
+            sotto={carrieraIniziata() ? T.home.carrieraSottoContinua(bus.carriera.value!.capitolo) : T.home.carrieraSottoNuova}>
+            {T.home.carriera}
+          </PulsanteKit>
+          <PulsanteKit id="schermaglia" tipo="legno" onClick={() => (sceltaSchermaglia.value = true)}
+            sotto={T.home.schermagliaSottoN(piratiSchermaglia.value[0], piratiSchermaglia.value[1])}>
+            {T.home.schermaglia}
+          </PulsanteKit>
         </div>
         {errore && (
           <div class="errore" role="alert">
@@ -191,7 +215,7 @@ export function App() {
           </div>
         )}
       </main>
-      )}
+      ))}
       {!battaglia && <PannelloImpostazioni />}
       {!battaglia && <SceltaSchermaglia />}
       {battaglia && provaAttiva.value && <div class="avviso" role="status">{statoFps.value}</div>}

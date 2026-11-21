@@ -9,6 +9,7 @@ import { coseno, seno } from '../../core/trig';
 import { BIL } from '../../contenuti/bilanciamento';
 import { traiettoria } from '../sim';
 import type { Camera } from './camera';
+import { frecciaBordo } from './bordo';
 import { Effetti } from './effetti';
 import { Forme, sprite, type IdForma } from './forme';
 import { TerrenoRender } from './terreno';
@@ -94,6 +95,8 @@ export class ScenaBattaglia {
   private readonly pirati = new Map<number, VisPirata>();
   private readonly proiettili = new Map<number, { sp: Sprite; paracadute: Sprite | null; scia: number }>();
   private readonly fineTraiettoria: Sprite;
+  /** freccia rossa sul bordo quando il mirino d'impatto è fuori schermo */
+  private readonly frecciaBordo = new Graphics();
   private readonly puntini: Sprite[] = [];
   /** punti della traiettoria in px di mondo (ricalcolati solo quando cambia la mira) */
   private puntiTraiettoria: Punto[] = [];
@@ -143,6 +146,10 @@ export class ScenaBattaglia {
     this.fineTraiettoria = sprite(this.forme.get('mirino'));
     this.fineTraiettoria.visible = false;
     this.contenitoreTraiettoria.addChild(this.fineTraiettoria);
+    // punta verso destra (angolo 0) in (0, 0)
+    this.frecciaBordo.poly([0, 0, -18, -11, -13, 0, -18, 11]).fill(hex(PALETTE.pericolo)).stroke({ width: 2, color: hex('#2B1B10') });
+    this.frecciaBordo.visible = false;
+    this.contenitoreTraiettoria.addChild(this.frecciaBordo);
     for (const p of s.pirati) this.creaPirata(p);
 
     // freccia verso destra (angolo 0): asta da 22 a 44 px dal centro del pirata, punta fino a 56 px
@@ -444,7 +451,7 @@ export class ScenaBattaglia {
 
   private aggiornaTraiettoria(mostra: boolean, aSchermo: (x: number, y: number) => Punto): void {
     if (!mostra) {
-      if (this.chiaveTraiettoria) { for (const p of this.puntini) p.visible = false; this.fineTraiettoria.visible = false; this.chiaveTraiettoria = ''; }
+      if (this.chiaveTraiettoria) { for (const p of this.puntini) p.visible = false; this.fineTraiettoria.visible = false; this.frecciaBordo.visible = false; this.chiaveTraiettoria = ''; }
       return;
     }
     const s = this.s;
@@ -491,7 +498,19 @@ export class ScenaBattaglia {
     // a traiettoria intera: mirino rosso dove il colpo tocca il terreno (o dove esplode la granata)
     const fine = punti[punti.length - 1];
     this.fineTraiettoria.visible = s.config.traiettoriaCompleta && !!fine;
-    if (fine) { const f = aSchermo(fine.x, fine.y); this.fineTraiettoria.position.set(f.x, f.y); }
+    this.frecciaBordo.visible = false;
+    if (fine) {
+      const f = aSchermo(fine.x, fine.y);
+      this.fineTraiettoria.position.set(f.x, f.y);
+      // mirino fuori schermo: piccola freccia rossa sul bordo che punta verso di lui (niente zoom automatico)
+      const b = this.fineTraiettoria.visible ? frecciaBordo(f.x, f.y, this.cieloW, this.cieloH) : null;
+      if (b) {
+        this.frecciaBordo.visible = true;
+        this.frecciaBordo.position.set(b.x, b.y);
+        this.frecciaBordo.rotation = b.angolo;
+        this.frecciaBordo.scale.set(1 + 0.08 * Math.sin(this.tempo / 150));
+      }
+    }
   }
 
   private disegnaCielo(camera: Camera, deltaMS: number): void {

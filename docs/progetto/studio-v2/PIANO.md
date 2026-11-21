@@ -1,6 +1,6 @@
 # Piano dello studio v2 — Kaboom Ahoy!
 
-*Producer, 21/11/2026. Sintesi dei 13 documenti di ruolo in questa cartella. Dove un ruolo e un altro litigano, qui c'è la decisione. Stato: **bozza 1**, manca solo Bilanciamento (§7).*
+*Producer, 21/11/2026. Sintesi dei 13 documenti di ruolo in questa cartella. Dove un ruolo e un altro litigano, qui c'è la decisione. Stato: **bozza 2**, con Bilanciamento (§7).*
 
 ## 0. In una pagina
 
@@ -10,7 +10,7 @@
 
 **Cosa cambia, in una frase per ruolo:**
 - *Movimento:* i pirati corrono a falcate, scavalcano muretti, si arrampicano mano su mano, dondolano sul rampino. Non esiste più il salto all'indietro.
-- *Ritmo:* si muove mentre il colpo vola (fuga a 0 s), turno 12 s, turno IA ≤ 4 s, due spari a turno di squadra.
+- *Ritmo:* ci si muove già mentre il colpo vola, fuga da 3 s a 1,5 s interrompibile, 12 s per sparo, turno IA ≤ 4 s, due spari a turno, armi con più raggio.
 - *Campo:* torri, ponti e cengie si staccano e cadono facendo danno; il legno brucia, la sabbia frana; barili e casse reagiscono. Il buco tondo resta, ma non è più l'unica cosa.
 - *Armi:* 4 nuove che fanno ciò che il cannone non fa (barile che rotola, palla incatenata, arpione, sciabola taglia-funi).
 - *Aspetto:* mappa a 2 pixel per unità con distruzione fatta da shader (bordi lisci), pirata a 9-10 pezzi animato da codice con cappello diverso per ciurma, mappa del mondo come carta fisica sul tavolo di Mastro Gancio.
@@ -30,7 +30,7 @@
 | 1 | Crediti Magnific: 35 rimasti (Arte, Animazione, Audio) | Una carta sola al proprietario. Fino alla risposta si lavora **in casa**: pittore in Chromium per la mappa, pezzi del pirata disegnati nel codice, musica segnaposto procedurale. Magnific solo per 1-2 immagini di riferimento. Oggi comunque il proxy blocca il download a piena risoluzione (Livelli, Arte): Magnific non può dare l'HD. |
 | 2 | Risoluzione mappa: Tecnica 4096×2048, Arte 3 px/unità, Livelli 2 px | **2 px per unità (4096×2048) in tessere da 512, garantito.** 3× solo se la misura sul Pixel 6 lo permette (Tecnica decide). Maschera di collisione resta **2048×1024** (non si tocca: costerebbe 4× in collisioni e rompe i replay). |
 | 3 | Rampino: UX e Game design lo vogliono dal turno 1; Progressione dal Forte Rampino (1C) | **Si costruisce in P1** come movimento firma, in Schermaglia c'è dall'inizio. In carriera: nel Prologo un solo punto con rampino scritto (lezione di Mastro Gancio); **premio di 1C = Rampino in stiva a ogni battaglia**. |
-| 4 | Due spari a turno (Game design) contro 00 §1.1 | Si implementa dietro interruttore. **Resta acceso solo se** la sim dà 3 contro 3 in ≤ 2 min e Mozzo ≥ 80% vittorie del giocatore (parere di Bilanciamento). Ripiego: 1 sparo, timer 12 s. |
+| 4 | Due spari a turno (Game design) contro 00 §1.1; fuga 0 s (Game design) contro 1,5 s (Bilanciamento) | **Due spari restano accesi, ma solo insieme ai nuovi numeri di Bilanciamento** (§7): da soli non bastano (24% di battaglie a tempo, con i numeri nuovi 7,5%). **Fuga 1,5 s interrompibile**, che parte allo sparo mentre il proiettile vola (così il tempo morto sparisce, misurato 107→80 s a battaglia). Timer 12 s per sparo. |
 | 5 | Mappa del mondo: "carta in rilievo 2.5D" (Mondo) contro "Tavolo del Timone con pedine e cartelli" (Narrativa) | **Si fondono**: carta fisica con isole come sprite separati, stesa su un tavolo di legno; pedine di legno = pirati, cartelli di cartone grigi = Marina. Sostituisce 03 §5.4 e n.30. |
 | 6 | Battaglie del cap. 1: 7 (Mondo) contro 6 (Progressione) | **6 conquiste obbligate** (1D, 1C, 1E, 1F, 1G, 1H); 1A e 1B sono la costa di partenza. Una 7ª solo se serve a difendere. |
 | 7 | Tipi di scontro (Bandiera, Duello) in P1 o P2 | **Tutti in P2.** Il Duello non richiede codice (1 contro 1). La Bandiera è una condizione di vittoria in `sim/`, fatta da Opus con Fable che lascia il punto d'aggancio. |
@@ -68,9 +68,10 @@
 
 ### Fase 1 — Pirati che si muovono da pirata, ritmo veloce (M-L)
 - **Movimento** (Tecnica, Game design, UX, Animazione d'accordo): corsa a falcate (0→96 px/s in 0,15 s, tenendo ◀ ▶ oltre 0,4 s; passo corto con il tocco), scavalco automatico fino a 28 px, salto d'appoggio con rincorsa, salto dal muro, scivolata sui pendii oltre 25°, salvataggio al bordo, **Balzo contestuale**, scale in un tocco (90 px/s).
-- **Ritmo:** fuga a 0 s per i colpi diretti (3 s solo con miccia o armi piazzate); timer 12 s (20 s nelle prime battaglie); turno IA ≤ 4 s con la mira visibile 0,8 s; compagni mai sotto i tasti; frecce rosse sul bordo per i nemici fuori vista + panoramica 1,2 s a inizio turno.
+- **Ritmo:** fuga di 1,5 s interrompibile che parte allo sparo (tocco su "fatto" o pirata fermo: il turno passa subito); timer 12 s per sparo (25 s con Mozzo e nel Prologo); turno IA ≤ 4 s con la mira visibile 0,8 s; compagni mai sotto i tasti; frecce rosse sul bordo per i nemici fuori vista + panoramica 1,2 s a inizio turno.
 - **Pirata a pezzi** (Arte, Animazione, Tecnica): ~9-10 sprite (cappello, testa, torace, bacino, 2 braccia, 2 gambe, arma) animati da codice, passo guidato dalla distanza, pose per riposo/corsa/salto/caduta/atterraggio/colpito/mira/scala/liana/morte. **Passo 0: pezzi disegnati nel codice** (gratis), cappello di forma diversa per ciurma. Sotto zoom 0,6 si torna allo sprite unico.
 - **Audio, in parallelo:** motore nuovo con bus e registro, ogni evento a un suono, esplosioni a 3 strati, evento sim nuovo `passo`/`scivola`, via "boing" e "sproing", musica segnaposto procedurale, slider musica/effetti.
+- **Numeri di battaglia di Bilanciamento** (un solo commit, §7): cannone 60 raggio 70, granata 52 raggio 64, pistola 28×2, sciabola 40, Mozzo ±14°/gittata ±35%.
 - **Criterio di uscita:** 4 foto su 6 diverse nella camminata; turno umano ≤ 10 s; 3 contro 3 in ≤ 2-4 min; replay rigenerati.
 
 ### Fase 2 — Cala Pappagallo in alta definizione (L)
@@ -81,8 +82,8 @@
 - **Criterio di uscita:** guida sovrapposta ≤ 3 px; 60 fps su Pixel 6; caricamento ≤ 3 s; crateri integrati con l'arte (QA §3.3, §3.9).
 
 ### Fase 3 — Il campo si spezza (L)
-- **Sostegno strutturale, tempo 1** (Livelli, Game design): dopo ogni esplosione, legno e roccia sotto 24 px non più collegati a terra, ferro o ancoraggi cadono in blocco e fanno macerie (danno ≤ 12, mai morte sicura). Calcolo solo attorno al colpo, ≤ 2 ms.
-- **Elementi di Cala** (3 per lato): torre di vedetta che crolla, ponte di corda con 2 ancoraggi (tagli uno, cala di lato), **masso in bilico** che rotola fino alla Valle (danno 20 e spinta, valori da confermare con Bilanciamento).
+- **Sostegno strutturale, tempo 1** (Livelli, Game design): dopo ogni esplosione, legno e roccia sotto 24 px non più collegati a terra, ferro o ancoraggi cadono in blocco e fanno macerie (8 PV a pirata, massimo 20 a turno, mai morte sicura). Calcolo solo attorno al colpo, ≤ 2 ms.
+- **Elementi di Cala** (3 per lato): torre di vedetta che crolla, ponte di corda con 2 ancoraggi (tagli uno, cala di lato), **masso in bilico** che rotola fino alla Valle (danno 20 e spinta, da provare dopo l'implementazione).
 - **Materiali:** legno che brucia 4 s, sabbia che chiude i buchi piccoli. Barili e casse riconoscibili (rosso esplode, blu acqua, giallo fuoco).
 - **Strutture dipinte in pezzi** (Arte): 4-8 per struttura, ognuno con la sua maschera, così il codice li stacca; sprite di fuoco, fumo, spruzzo, polvere di crollo, scintille della miccia.
 - **Leggibilità:** **anteprima delle conseguenze** tenendo premuto sul punto d'impatto (cratere e pezzi che cadrebbero, in rosso, con `simulaColpo`); combo "×N" con rallentamento 1,2 s, **senza bonus di danno**; contorno bianco ai pirati, ancora/teschio sopra la testa.
@@ -92,8 +93,8 @@
 ### Fase 4 — Rampino, armi nuove, due spari, Prologo (L)
 - **Rampino a corda** (Game design, UX, Tecnica): 2 lanci a turno, 260 px, non chiude il turno; si aggancia a roccia, travi, anelli di ferro, liane; dondolo a pendolo con tabella di seni; SALTA stacca e lancia con la velocità del momento. **Dondolo sulle liane** (seconda fase, dopo i movimenti base).
 - **4 armi nuove:** Barile rotolante (tocco = piazza, tenuto = lo spingi giù per il pendio; esplode al secondo urto o dopo 3 s), Palla incatenata, Arpione (tira un nemico di 120 px verso bordo o mare), Sciabola che taglia funi e ponti. Con le 4 base fanno **8 armi attive**.
-- **Due spari per turno di squadra** (timer unico 15 s, scegli chi spara toccando il pirata) dietro interruttore, secondo la regola del conflitto 4.
-- **Prologo a stazioni, ~4 minuti, giocabile subito** (Livelli, Narrativa, UX): Scarlatta e **Mastro Gancio** (2 pirati) contro 2 marinai; Gancio mostra e parla (fumetti da 5 parole, massimo 12 parole di testo), una mossa per volta: 1) molo e muretto, 2) scala della torre, 3) cannonata al ponte di corda, 4) liana-pendolo, 5) parabola sulla Rocca. Verbale, il pappagallo, ripete le regole del Re. Si entra senza menu e il primo scoppio arriva entro 90 s.
+- **Due spari per turno di squadra** (timer unico 15 s, scegli chi spara toccando il pirata) insieme ai numeri di Bilanciamento (conflitto 4). Il tasto FUOCO e il timer vanno rivisti per i due mirini (con UX e Comandi).
+- **Prologo a stazioni, ~4 minuti, giocabile subito** (Livelli, Narrativa, UX, Bilanciamento: oggi è perso, vince solo il 18-35% degli umani; servono un **Mozzo Tutorial** che spara a turni alterni e mai a meno di 150 px, spawn ≥ 300 px invece di 176, fuoco amico spento, obiettivo 80-90% di vittorie): Scarlatta e **Mastro Gancio** (2 pirati) contro 2 marinai; Gancio mostra e parla (fumetti da 5 parole, massimo 12 parole di testo), una mossa per volta: 1) molo e muretto, 2) scala della torre, 3) cannonata al ponte di corda, 4) liana-pendolo, 5) parabola sulla Rocca. Verbale, il pappagallo, ripete le regole del Re. Si entra senza menu e il primo scoppio arriva entro 90 s.
 - **Criterio di uscita:** QA §3 interi, 8 armi, 60 fps, 3 contro 3 in 2-4 minuti, 0 errori in console, Prologo completabile dal bot.
 
 ### Squadra consigliata per P1 (un thread per agente, tutti Fable)
@@ -148,20 +149,29 @@ P2:   mappa del mondo, tavolo, menu ───┘ (parte subito, indipendente)
 
 Il proprietario ha detto "decidete voi", quindi le registro in 00 §7 (decisioni prese senza chiedere). Se il proprietario non è d'accordo, si torna indietro:
 
-1. §1.1 **timer 12 s** (20 s nelle prime battaglie, 30 s a Mozzo resta nel Timer lungo) e **fuga 0 s** per i colpi diretti.
+1. §1.1 **timer 12 s per sparo** (25 s con Mozzo e Prologo, Timer lungo 45 s), **fuga 1,5 s interrompibile**, **cannone 60/70 e granata 52/64**.
 2. §1.2 **camminata 60 px/s resta, corsa 96 px/s, scavalco 28 px (era 8)**.
 3. 01 §3 "**il sospeso non crolla**" → **il campo si spezza** (tempo 1 in P1).
 4. **Rampino da M2 a M1**; **Palla incatenata da v1.1 a M1**; **salto all'indietro abolito**.
-5. **Due spari per turno di squadra**, condizionato (conflitto 4).
+5. **Due spari per turno di squadra**, insieme ai numeri di Bilanciamento (conflitto 4).
 6. 03 §5.4 e n.30 (velatura al 35%, pergamena piatta) **decadono**: vale la mappa fisica col Tavolo del Timone.
 7. 15 §2 e 16: sblocchi **per isola**; «Forte Uncino» → «Forte Rampino»; Prologo con 2 pirati giocabili.
 8. Pittura della mappa: **a 2 px per unità, in casa**; Magnific solo per riferimenti.
 
 ---
 
-## 7. Bilanciamento (provvisorio)
+## 7. Bilanciamento (misurato su ~9000 battaglie con sim e IA vere)
 
-Il documento di Bilanciamento non è ancora arrivato. Finché non c'è, valgono come **ipotesi da confermare** questi numeri (tutti da verificare con il simulatore prima della Fase 3): danno delle macerie ≤ 12, masso in bilico 20 e spinta, schiacciamento di una struttura intera 20-40 (tempo 2, P2), legno che brucia 6 PV per turno per 4 s, caduta e scivolata senza danno se atterri scivolando. Il simulatore dovrà dimostrare: giocatore batte Mozzo ≥ 80%; 3 contro 3 in ≤ 2 min con bot; almeno 1 pirata colpito per squadra nel 90% delle partite; nessuna morte garantita dal solo crollo al turno 1. I 10 replay d'oro e `PASSI_FUGA` dell'IA si rigenerano a ogni fase che cambia il movimento.
+Documento: `bilanciamento.md`. Numeri decisi:
+- **Armi con più raggio che danno:** cannone 60 / raggio 70, granata 52 / raggio 64 (era 45/55). Pistola 18×2 → 28×2, sciabola 25 → 40 (spinta 450 invariata). L'IA riceve +15 punti se la spinta porta in mare entro 100 px.
+- **Due spari per turno insieme ai numeri nuovi:** 5 contro 5 passa da 17,7 a 14,0 turni, battaglie a tempo da 60% a 7,5%; 3 contro 3 ≈ 10,9 turni, 77 s di sim (≈ 2 min con la mira umana). Con i vecchi 45/55 resterebbe 24% a tempo: i due interventi vanno insieme.
+- **Fuga 1,5 s interrompibile; timer 12 s per sparo (25 s Mozzo/Prologo); Timer lungo 45 s resta.** Il timer è una stima, non simulabile.
+- **Mozzo:** errore ±14° e gittata ±35% (umano medio batte Mozzo ~83%; obiettivo 85%). Il Capitano va ritarato dopo.
+- **Macerie:** 8 PV a pirata, massimo 20 per turno, sotto 5 PV non si mostra, non valgono come uccisione per l'IA. **Numeri a priori: si provano col simulatore dopo la Fase 3.**
+- **Limite 18 turni, mare dal turno 12** restano. Le mappe devono essere più spesse (raggio 70-85 le svuota prima).
+- **Replay d'oro:** un solo commit cambia tutti i numeri, alza `VERSIONE_REGOLE` e rigenera i 10 file (`npx tsx tests/replay/genera.ts`); la copertura (barile, mare, ritirata, lapide) resta verde. Non un numero alla volta.
+- **Velocità di camminata/corsa:** non si tara ora (nella sim non influenza Mozzo): si ripete la misura dopo la Fase 1.
+- Gli script del simulatore sono in `/mnt/project-files/studio-v2/bilanciamento/`.
 
 ---
 

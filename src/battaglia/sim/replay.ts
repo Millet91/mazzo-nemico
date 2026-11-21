@@ -42,12 +42,21 @@ export function giocaComandi(
   const limite = opz.fermaA ?? opz.tickFinale ?? TICK_MASSIMI_REPLAY;
   let k = 0;
   while (k < lista.length && lista[k].tick < s.tick) k++; // comandi nel passato: ignorati
-  while (!s.esito && s.tick < limite) {
+  for (;;) {
+    // i comandi del tick corrente si applicano SEMPRE, anche all'ultimo tick: una ritirata decide l'esito in
+    // eseguiComando proprio al tick finale, senza farlo avanzare
     while (k < lista.length && lista[k].tick === s.tick) eseguiComando(s, lista[k++].c);
+    if (s.esito || s.tick >= limite) break;
     avanzaTick(s, eventi);
     if (opz.suEventi) opz.suEventi(s, eventi);
     eventi.length = 0;
     if (s.tick % PASSO_HASH === 0) hash[s.tick] = hashStato(s);
+  }
+  if (s.esito && s.turno.fase !== 'fine') {
+    // esito deciso da un comando (ritirata): l'avanzaTick chiude la battaglia senza far avanzare il tick
+    avanzaTick(s, eventi);
+    if (opz.suEventi) opz.suEventi(s, eventi);
+    eventi.length = 0;
   }
   hash[s.tick] = hashStato(s);
   return { stato: s, hash };

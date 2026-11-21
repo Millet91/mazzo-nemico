@@ -1,5 +1,6 @@
 // Agente Fisica · hashStato, determinismo, replay, simulaColpo (per l'IA), traiettoria e prestazioni.
 import { describe, it, expect } from 'vitest';
+import { BIL } from '../../src/contenuti/bilanciamento';
 import { daGradi } from '../../src/core/trig';
 import { generaMappa } from '../../src/battaglia/gen';
 import { avanzaTick, creaBattaglia, eseguiComando, hashStato, simulaColpo, traiettoria } from '../../src/battaglia/sim';
@@ -98,6 +99,31 @@ describe('Determinismo e replay', () => {
     const r = rigiocaReplay(rotto, mappa);
     expect(r.ok).toBe(false);
     expect(r.differenze.length).toBeGreaterThan(0);
+  });
+
+  it('una battaglia che finisce in ritirata si rigioca uguale (comando proprio al tick finale)', () => {
+    const cfg = config(3, 3, { seme: 3004 });
+    const mappa = mappaDi(3004, [3, 3]);
+    // si gioca dal vivo, come il ciclo di gioco: ci si ritira al primo tick del turno 4
+    const s = creaBattaglia(cfg, mappa);
+    const comandi: ComandoRegistrato[] = [];
+    const ev: EventoBattaglia[] = [];
+    while (!s.esito) {
+      if (s.turno.numero === BIL.battaglia.ritirataDalTurno && s.turno.fase === 'azione') {
+        const c = { t: 'ritirata' } as const;
+        comandi.push({ tick: s.tick, c });
+        eseguiComando(s, c);
+      }
+      avanzaTick(s, ev);
+    }
+    expect(s.esito).toMatchObject({ motivo: 'ritirata' });
+    const replay = creaReplay(cfg, mappa, comandi);
+    expect(replay.tickFinale).toBe(s.tick);
+    expect(replay.hash![s.tick]).toBe(hashStato(s));
+    const r = rigiocaReplay(JSON.parse(JSON.stringify(replay)), mappaDi(3004, [3, 3]));
+    expect(r.differenze).toEqual([]);
+    expect(r.stato.esito).toMatchObject({ motivo: 'ritirata' });
+    expect(r.stato.turno.fase).toBe('fine');
   });
 
   it('copie dello stato con structuredClone avanzano uguali (stato tutto dentro StatoBattaglia)', () => {

@@ -120,6 +120,7 @@ for (const f of FORMATI) {
     await page.setViewportSize({ width: f.width, height: f.height });
     await entraInBattaglia(page);
     await expect(page.getByTestId('timer')).toHaveText('24');
+    await expect(page.getByTestId('turno')).toHaveText('Turno 1/18');
     await expect(page.getByTestId('mira')).toHaveText('45° · 60%');
     await expect(page.getByTestId('squadra-0')).toHaveAttribute('aria-label', /Teschio Rosso: 180 PV/);
     await page.screenshot({ path: `test-results/screenshot/hud-${f.nome}.png` });
@@ -134,6 +135,13 @@ for (const f of FORMATI) {
     await page.locator('#tasto-arma').click();
     await expect(page.getByTestId('griglia-armi')).toBeVisible();
     await page.screenshot({ path: `test-results/screenshot/armi-${f.nome}.png` });
+    // timer e vento restano visibili sopra la griglia (il timer non si ferma)
+    const [timer] = await rettangoli(page, '[data-testid="timer"]');
+    const [vento] = await rettangoli(page, '[data-testid="vento"]');
+    const [griglia] = await rettangoli(page, '[data-testid="griglia-armi"]');
+    expect(griglia.y, 'la griglia copre il timer').toBeGreaterThanOrEqual(timer.y + timer.h);
+    expect(griglia.y, 'la griglia copre il vento').toBeGreaterThanOrEqual(vento.y + vento.h);
+    expect(griglia.y + griglia.h).toBeLessThanOrEqual(f.height - 16);
     const celle = await rettangoli(page, '.cella-arma');
     for (const c of celle) { expect(c.x).toBeGreaterThanOrEqual(56); expect(c.x + c.w).toBeLessThanOrEqual(f.width - 56); }
     await page.mouse.click(60, f.height / 2);

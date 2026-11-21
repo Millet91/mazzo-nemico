@@ -7,7 +7,7 @@ export const EMBLEMA: Record<IdCiurma, string> = {
 };
 
 export const ICONA_ARMA: Record<IdArma, string> = {
-  cannone: '💣', granata: '🧨', pistola: '🔫', sciabola: '🗡',
+  cannone: '⚫', granata: '💣', pistola: '🔫', sciabola: '🗡',
   barile: '🛢', mina: '🐚', rum: '🍾', pallaSpezzata: '⁂',
   pappagallo: '🦜', scimmia: '🐒', ancora: '⚓', bordata: '⛵',
   rampino: '🪝', vanga: '⛏', bussola: '🧭', kraken: '🐙',

@@ -4,12 +4,21 @@
 
 import { Rng } from './rng';
 import { P, slotNames } from '../content/config';
-import { ENEMIES, type Seme } from '../content/enemies';
+import { ENEMIES, ag, vb, di, al, type Seme } from '../content/enemies';
 import { DEFENSES } from '../content/defenses';
 import type { Asso, DeckCard, Ev, EvKind, RunState, Snap, SnapCard, WaveSpec, WC } from './types';
 
 type Src = { kind: 'segno' | 'trucco' | 'ally' | 'burn' | 'enemy' | 'rito'; id: string; slot?: number };
 const PLAYER_KINDS = new Set(['segno', 'trucco', 'ally', 'burn', 'rito']);
+/** Segni che tolgono Forza: colpiscono anche i tuoi Patti nel loro Passo (CD-2, "il fuoco non sa di chi sei"). */
+export const HURTS_ALLY: Record<string, ((c: WC) => boolean) | true> = {
+  brace: true, spina: true, tagliola: true, corno: true, rogo: true, catena: true, campanaMorto: true,
+  trappola: (c) => c.seme === 'Bastoni', calamita: (c) => c.seme === 'Spade', moneta: (c) => c.seme === 'Denari',
+};
+export function hurtsAlly(segno: string, c: WC): boolean {
+  const h = HURTS_ALLY[segno];
+  return h === true || (typeof h === 'function' && h(c));
+}
 
 export interface WaveOutcome {
   events: Ev[];
@@ -34,7 +43,18 @@ export interface WaveOutcome {
   allyLoss: Record<number, number>;
   revealExtra: number;
   why: Record<number, string[]>;
+  /** catene di effetti troncate dal limite (dovrebbe restare 0) */
+  chainCuts: number;
+  /** wid delle carte scoperte in Preparazione (fissate prima del Rito) */
+  revealed: number[];
+  /** danno fatto dai Segni ai tuoi Patti */
+  allyHurt: number;
+  /** Segni restituiti a fine ondata (rubati da carte fuori dal mazzo) */
+  returned?: string[];
 }
+
+const PREP_NEL: Record<string, string> = { Crocevia: 'nel Crocevia', Strada: 'nella Strada', Cortile: 'nel Cortile', Scala: 'sulla Scala', Uscio: "sull'Uscio", Ponte: 'sul Ponte', Argine: "sull'Argine" };
+const PREP_DAL: Record<string, string> = { Crocevia: 'dal Crocevia', Strada: 'dalla Strada', Cortile: 'dal Cortile', Scala: 'dalla Scala', Uscio: "dall'Uscio", Ponte: 'dal Ponte', Argine: "dall'Argine" };
 
 export function minDeck(run: RunState): number {
   const d = P.DRAWS[Math.min(3, Math.max(1, run.act))] ?? P.DRAWS[1];
@@ -73,6 +93,9 @@ export class WaveSim {
   denariDead = 0;
   lastDead: WC | null = null;
   richiamoUsed = false;
+  /** Ritorno e Tenace: una volta per carta per ondata (GDD §4.9), registrati per uid */
+  ritornoUid = new Set<number>();
+  tenaceUid = new Set<number>();
   segUse: Record<string, number> = {};
   stolen: string[] = [];
   bossDead = false;
@@ -93,6 +116,16 @@ export class WaveSim {
   allyLoss: Record<number, number> = {};
   truccatoTop: DeckCard[] = [];
   all: WC[] = [];
+  chainCuts = 0;
+  /** Passi zittiti dal Silenzio in questo tick */
+  silencedAt = new Set<number>();
+  allyHurt = 0;
+  /** wid delle prime N carte nell'ordine di pescata, prima del Rito (SD-2) */
+  revealed: number[] = [];
+  /** uid da mettere in cima al mazzo dopo la mescolata (previsione con le carte scoperte fissate) */
+  pinTop: number[] = [];
+  /** quante carte scoperte calcolare */
+  revealN = 0;
   /** solo per i test: Coda fissa (id di carta = gettone nuovo, numero = uid del mazzo), senza pescata */
   fixed: (string | number)[] | null = null;
 
@@ -165,6 +198,13 @@ export class WaveSim {
   slotOf(c: WC): number {
     return this.lane.indexOf(c);
   }
+  /** "nel Crocevia", "nella Strada", "sulla Scala", "sull'Uscio"… */
+  nel(i: number) {
+    return PREP_NEL[this.pname(i)] ?? `nel ${this.pname(i)}`;
+  }
+  dal(i: number) {
+    return PREP_DAL[this.pname(i)] ?? `dal ${this.pname(i)}`;
+  }
   pname(i: number) {
     return this.names[i] ?? `Passo ${i + 1}`;
   }
@@ -172,6 +212,17 @@ export class WaveSim {
     if (i < 0 || i >= this.L) return null;
     const c = this.lane[i];
     return c && !c.ally ? c : null;
+  }
+  /** carta (nemica o tua) in un Passo */
+  /** mette una carta in fondo alla Coda ma prima della carta del Mazziere, che entra sempre per ultima */
+  pushBeforeBoss(n: WC) {
+    const k = this.queue.findIndex((x) => x.tier === 'b');
+    if (k < 0) this.queue.push(n);
+    else this.queue.splice(k, 0, n);
+  }
+  cardAt(i: number): WC | null {
+    if (i < 0 || i >= this.L) return null;
+    return this.lane[i];
   }
   isPlayer(src: Src) {
     return PLAYER_KINDS.has(src.kind);
@@ -189,7 +240,7 @@ export class WaveSim {
     if (n <= 0) return;
     this.gained += n;
     this.run.sp += n;
-    this.log('coins', `+${n} Spiccioli (${why})`, { n });
+    this.log('coins', `+${n} ${n === 1 ? 'Spicciolo' : 'Spiccioli'} (${why})`, { n });
   }
   heal(n: number, why: string) {
     const before = this.run.lumi;
@@ -224,7 +275,7 @@ export class WaveSim {
       this.log('fizzle', `${this.srcName(src)} non fa danno (Stonatura)`, { slot: i });
       return false;
     }
-    if (c.ally && src.kind !== 'enemy') return false;
+    if (c.ally && src.kind !== 'enemy' && !((src.kind === 'segno' || src.kind === 'burn') && hurtsAlly(src.id, c))) return false;
     if (this.isPlayer(src) && c.cor > 0) {
       c.cor -= 1;
       this.log('block', `${c.name}: la Corazza para ${this.srcName(src)} (restano ${c.cor})`, { slot: i, wid: c.wid, float: { slot: i, text: '⛨', color: 'white' } });
@@ -235,11 +286,12 @@ export class WaveSim {
       return false;
     }
     c.forza -= amount;
-    this.creditTo(src, amount);
+    if (c.ally) this.allyHurt += amount;
+    else this.creditTo(src, amount);
     if (src.kind !== 'enemy') this.tickCombo++;
     if (!this.silent) c.why.push(`${this.srcName(src)} −${amount} (${this.pname(i)})`);
-    this.log('damage', `${this.srcName(src)}: −${amount} a ${c.name} nel ${this.pname(i)} (Forza ${Math.max(0, c.forza)})`, {
-      slot: i, wid: c.wid, src: src.id, n: amount, float: { slot: i, text: `−${amount}`, color: src.kind === 'enemy' ? 'white' : 'gold' },
+    this.log('damage', `${this.srcName(src)}: −${amount} ${c.ally ? 'al tuo Patto ' + c.name : al(c.name)} ${this.nel(i)} (Forza ${Math.max(0, c.forza)})`, {
+      slot: i, wid: c.wid, src: src.id, srcKind: src.kind, srcSlot: src.slot, n: amount, float: { slot: i, text: `−${amount}`, color: src.kind === 'enemy' || c.ally ? 'white' : 'gold' },
     });
     if (c.forza <= 0) this.kill(c, src);
     return true;
@@ -265,26 +317,27 @@ export class WaveSim {
       // un Infiltrato ferito a morte (Esplosivo) torna nel mazzo e perde 1 Lealtà in più
       this.lane[i] = null;
       if (c.uid != null) this.allyLoss[c.uid] = (this.allyLoss[c.uid] ?? 0) + 1;
-      this.log('destroy', `${c.name} (tuo Patto) cade e torna nel mazzo: −1 Lealtà`, { slot: i, wid: c.wid, important: true });
+      this.log('destroy', `${c.name} (tuo Patto) ${vb(c.name, 'cade', 'cadono')} e ${vb(c.name, 'torna', 'tornano')} nel mazzo: −1 Lealtà`, { slot: i, wid: c.wid, important: true, src: src.id, srcKind: src.kind, srcSlot: src.slot });
       return;
     }
-    if (c.kw.tenace) {
+    if (c.kw.tenace && !(c.uid != null && this.tenaceUid.has(c.uid))) {
       delete c.kw.tenace;
+      if (c.uid != null) this.tenaceUid.add(c.uid);
       c.forza = 1;
-      this.log('ability', `${c.name} è Tenace: resta in piedi a Forza 1`, { slot: i, wid: c.wid });
+      this.log('ability', `${c.name} ${vb(c.name, 'è', 'sono')} ${vb(c.name, 'Tenace', 'Tenaci')}: ${vb(c.name, 'resta', 'restano')} in piedi a Forza 1`, { slot: i, wid: c.wid });
       return;
     }
     this.lane[i] = null;
     this.creditTo(src, 2);
     if (c.tier === 'b') {
       this.bossDead = true;
-      this.log('destroy', `${c.name} è distrutto!`, { slot: i, wid: c.wid, important: true });
+      this.log('destroy', `${c.name} ${vb(c.name, 'è', 'sono')} ${ag(c.name, 'distrutt')}!`, { slot: i, wid: c.wid, important: true, src: src.id, srcKind: src.kind, srcSlot: src.slot });
       this.gain(P.KILL_BOSS, 'carta del Mazziere');
     } else if (c.tier === 'e') {
-      this.log('destroy', `${c.name} è distrutta!`, { slot: i, wid: c.wid, important: true });
+      this.log('destroy', `${c.name} ${vb(c.name, 'è', 'sono')} ${ag(c.name, 'distrutt')}!`, { slot: i, wid: c.wid, important: true, src: src.id, srcKind: src.kind, srcSlot: src.slot });
       this.gain(P.KILL_ELITE, 'élite');
     } else {
-      this.log('destroy', `${c.name} è distrutta (${this.srcName(src)})`, { slot: i, wid: c.wid });
+      this.log('destroy', `${c.name} ${vb(c.name, 'è', 'sono')} ${ag(c.name, 'distrutt')} (${this.srcName(src)})`, { slot: i, wid: c.wid, src: src.id, srcKind: src.kind, srcSlot: src.slot });
       if (!c.token) this.gain(this.spec.processione && c.seme === 'Denari' ? P.KILL * 2 : P.KILL, 'sventura distrutta');
     }
     this.destroyed.push(c);
@@ -293,18 +346,19 @@ export class WaveSim {
     // il Ladro distrutto restituisce il bottino
     if (c.uid != null) this.returnLoot(c.uid);
     // Segni del Passo che pagano
-    const segs = this.contro.has(i) ? [] : this.seg[i];
-    for (const s of segs) {
-      if (s === 'tagliola') this.gain(1, 'Tagliola');
-      if (s === 'moneta' && c.seme === 'Denari') this.gain(2, 'Moneta Falsa');
+    if (src.kind === 'segno' && !this.contro.has(i) && !this.silencedAt.has(i)) {
+      if (src.id === 'tagliola') this.gain(1, 'Tagliola');
+      if (src.id === 'moneta' && c.seme === 'Denari') this.gain(2, 'Moneta Falsa');
     }
     // effetti "alla morte", poi Segni che reagiscono, in coda FIFO
-    if (c.kw.ritorno && !c.ritornoUsed) {
+    if (c.kw.ritorno && !c.ritornoUsed && !(c.uid != null && this.ritornoUid.has(c.uid))) {
+      if (c.uid != null) this.ritornoUid.add(c.uid);
       this.fx.push(() => {
         const n = this.mk(c.def, c.uid, { ritornoUsed: true, token: c.token, tier: c.tier });
-        if (c.tier === 'e') n.forza = n.base = ENEMIES[c.def].forza;
-        this.queue.push(n);
-        this.log('ability', `${c.name} ha Ritorno: torna in fondo alla Coda`, { wid: n.wid });
+        if (c.uid != null && this.tenaceUid.has(c.uid)) delete n.kw.tenace;
+        if (c.tier === 'e') n.forza = n.base = Math.ceil(ENEMIES[c.def].forza / 2);
+        this.pushBeforeBoss(n);
+        this.log('ability', `${c.name} ${vb(c.name, 'ha', 'hanno')} Ritorno: ${vb(c.name, 'torna', 'tornano')} in fondo alla Coda${c.tier === 'e' ? ` con Forza ${n.forza}` : ''}`, { wid: n.wid });
       });
     }
     if (c.kw.sobilla) {
@@ -345,9 +399,9 @@ export class WaveSim {
     if (!this.contro.has(i)) {
       for (const s of this.seg[i]) {
         if (s === 'catena') {
-          const n = this.plus('catena') ? 3 : 2;
+          const n = this.plus('catena') ? 4 : 3;
           this.fx.push(() => {
-            const b = this.enemyAt(i - 1);
+            const b = this.cardAt(i - 1);
             if (!b) return this.log('fizzle', 'Catena: nessuna carta nel Passo dietro');
             this.damage(b, n, { kind: 'segno', id: 'catena', slot: i });
           });
@@ -363,9 +417,9 @@ export class WaveSim {
   }
 
   campanaMorto(i: number) {
-    this.log('segno', `Campana a Morto suona nel ${this.pname(i)}`, { slot: i, src: 'campanaMorto' });
+    this.log('segno', `Campana a Morto suona ${this.nel(i)}`, { slot: i, src: 'campanaMorto' });
     for (let j = this.L - 1; j >= 0; j--) {
-      const e = this.enemyAt(j);
+      const e = this.cardAt(j);
       if (e) this.damage(e, 1, { kind: 'segno', id: 'campanaMorto', slot: i });
     }
   }
@@ -388,6 +442,7 @@ export class WaveSim {
       n++;
       if (n > P.CHAIN) {
         this.fx.length = 0;
+        this.chainCuts++;
         this.log('info', 'La catena di effetti si interrompe (limite 16)');
         break;
       }
@@ -401,7 +456,11 @@ export class WaveSim {
     const spec = this.spec;
     const rng = this.rng;
     // 1. mescola il mazzo intero
-    this.pile = rng.shuffle([...run.deck]);
+    this.pile = rng.shuffle(run.deck.filter((x) => !spec.carry.includes(x.uid)));
+    if (this.pinTop.length) {
+      const pinned = this.pinTop.map((u) => this.pile.find((x) => x !== 'scartina' && x.uid === u)).filter((x): x is DeckCard => !!x);
+      this.pile = [...pinned, ...this.pile.filter((x) => !pinned.includes(x as DeckCard))];
+    }
     if (this.fixed) {
       this.queue = this.fixed.map((x) => {
         if (typeof x === 'number') { const dc = run.deck.find((d) => d.uid === x)!; this.pile = this.pile.filter((p) => p !== dc); this.drawn.add(x); return this.mk(dc.def, x); }
@@ -475,7 +534,7 @@ export class WaveSim {
     }
     for (const c of q) {
       if (c.ally || c.tier === 't') continue;
-      if (setaccio && setacciate >= 2 && !this.plus('setaccio') && c.seme === 'Bastoni') {
+      if (setaccio && setacciate >= 1 && !this.plus('setaccio') && c.seme === 'Bastoni') {
         c.forza++; c.base++; c.why.push('Setaccio: +1');
       }
       if (this.has('avara')) { c.forza++; c.base++; c.why.push('Pescata Avara: +1'); }
@@ -488,14 +547,18 @@ export class WaveSim {
     if (spec.elite) {
       const el = this.mk(spec.elite, null);
       el.cor += spec.eliteArmor;
-      el.kw.corazza = el.cor;
+      if (el.cor) el.kw.corazza = el.cor;
+      if (spec.eliteForza) { el.forza += spec.eliteForza; el.base += spec.eliteForza; el.why.push(`Sigillo: +${spec.eliteForza} Forza`); }
       el.why.push('élite: entra a metà Coda');
       q.splice(Math.floor(q.length / 2), 0, el);
     }
+    // carte scoperte: le prime N nell'ordine di pescata, prima del Rito (SD-2)
+    this.revealed = q.filter((c) => c.tier !== 'e').slice(0, this.revealN).map((c) => c.wid);
     // 5. Rito
     const ritoId = spec.bossRito ?? run.def.rito?.id ?? null;
     let sorted = this.applyRito(q, ritoId, spec.bossRito ? undefined : run.def.rito?.seme);
     if (spec.bossRito && spec.bossRitoBonus) for (const c of sorted) if (!c.ally) c.forza += spec.bossRitoBonus;
+    if (ritoId && !spec.bossRito) this.ritoBonus(sorted, ritoId, run.def.rito?.seme);
     if (ritoId && !spec.bossRito && this.plus(ritoId)) {
       const f = sorted.find((c) => !c.ally);
       if (f) { f.forza = Math.max(1, f.forza - 1); f.why.push(`${DEFENSES[ritoId].name}+: −1`); }
@@ -533,6 +596,24 @@ export class WaveSim {
       }
     }
     this.queue = sorted;
+  }
+
+  /** Effetto proprio dei Riti di ordinamento (Content P1.3): −1 a chi entra in un punto preciso. */
+  ritoBonus(q: WC[], rito: string, seme?: Seme) {
+    const hit = (c: WC | undefined) => {
+      if (!c || c.ally || c.tier === 'b') return;
+      c.forza = Math.max(1, c.forza - 1);
+      c.why.push(`${DEFENSES[rito].name}: −1`);
+      this.creditTo({ kind: 'rito', id: rito }, 1);
+    };
+    if (rito === 'raggruppa') {
+      let last = '';
+      for (const c of q) { if (c.seme !== last) hit(c); last = c.seme; }
+    } else if (rito === 'alternanza') {
+      for (let k = 1; k < q.length; k++) if (q[k].forza < q[k - 1].forza) hit(q[k]);
+    } else if (rito === 'avanguardia' || rito === 'retroguardia') {
+      hit(q.find((c) => c.seme === seme && !c.ally));
+    }
   }
 
   applyRito(q: WC[], rito: string | null, seme?: Seme): WC[] {
@@ -580,10 +661,10 @@ export class WaveSim {
     for (let i = this.L - 1; i >= 0; i--) {
       const c = this.lane[i];
       if (!c) continue;
-      if (extra && c.ally) continue;
+      if (extra && (c.ally || c.frozen > 0 || c.heldT === this.t)) continue;
       if (!extra && this.asso && this.asso.kind === 'trattieni' && this.asso.tick === this.t && this.asso.slot === i) continue;
       if (!extra) {
-        if (c.frozen > 0) { c.frozen--; continue; }
+        if (c.frozen > 0) { c.frozen--; c.heldT = this.t; if (c.kw.lento) c.lt ^= 1; continue; }
         let lento = !!c.kw.lento;
         if (!c.ally && !lento) {
           for (let j = i + 1; j < this.L; j++) {
@@ -627,7 +708,7 @@ export class WaveSim {
   impact(c: WC, i: number) {
     if (c.ally) {
       const g = ENEMIES[c.def].girata;
-      this.log('impact', `${c.name} (tuo) esce dall'Uscio`, { slot: i, wid: c.wid });
+      this.log('impact', `${c.name} (tuo Patto) ${vb(c.name, 'esce', 'escono')} dall'Uscio`, { slot: i, wid: c.wid });
       if (g === 'borseggio') this.gain(4, 'Borseggio');
       else if (g === 'creditori') this.gain(Math.min(3, Math.floor(this.run.sp / 10)), 'Creditori');
       else if (g === 'esattore') this.gain(5, 'Esattore');
@@ -635,7 +716,7 @@ export class WaveSim {
       else this.heal(1, c.name);
       if (g === 'ritornoAlleato' && !c.allyRitornoUsed) {
         const n = this.mk(c.def, c.uid, { allyRitornoUsed: true });
-        this.queue.push(n);
+        this.pushBeforeBoss(n);
         this.log('ability', `${c.name} torna in fondo alla Coda`, { wid: n.wid });
       }
       return;
@@ -656,7 +737,7 @@ export class WaveSim {
     if (!this.firstImpact && d > 0) this.firstImpact = c.name;
     this.arrived.push(c.name);
     if (c.tier === 'b') this.bossImpact = d;
-    this.log('impact', `${c.name} arriva alla Soglia: −${d} Lumi`, {
+    this.log('impact', `${c.name} ${vb(c.name, 'arriva', 'arrivano')} alla Soglia: −${d} Lumi`, {
       slot: i, wid: c.wid, n: d, important: true, float: { slot: i, text: `−${d} 🕯`, color: 'crimson' },
     });
     if (c.kw.ladro) this.steal(c);
@@ -669,9 +750,12 @@ export class WaveSim {
 
   steal(c: WC) {
     const segni = this.run.def.segni;
+    const holderCard = c.uid != null ? this.run.deck.find((x) => x.uid === c.uid) : undefined;
+    if (holderCard?.bottino) { this.loseCoins(3, `${c.name} porta già un bottino`); return; }
     for (let b = 4; b >= 0; b--) {
-      if (segni[b].length) {
-        const s = segni[b].pop()!;
+      const k0 = segni[b].map((x, k) => (x !== 'bastione' ? k : -1)).filter((k) => k >= 0).pop();
+      if (k0 !== undefined) {
+        const s = segni[b].splice(k0, 1)[0];
         const li = b + this.off;
         const k = this.seg[li].lastIndexOf(s);
         if (k >= 0) this.seg[li].splice(k, 1);
@@ -679,13 +763,12 @@ export class WaveSim {
         if (holder != null) {
           const dc = this.run.deck.find((x) => x.uid === holder);
           if (dc) {
-            if (dc.bottino) { this.run.def.stolen.push({ segno: dc.bottino, holder: null }); }
             dc.bottino = s;
           }
         }
-        this.run.def.stolen.push({ segno: s, holder });
+        this.run.def.stolen.push(holder != null ? { segno: s, holder } : { segno: s, holder, returnAt: this.spec.rintocco + 1 });
         this.stolen.push(DEFENSES[s].name);
-        this.log('steal', `${c.name} ruba il Segno ${DEFENSES[s].name} dal ${this.pname(li)}!`, { slot: li, important: true });
+        this.log('steal', `${c.name} ${vb(c.name, 'ruba', 'rubano')} il Segno ${DEFENSES[s].name} ${this.dal(li)}!`, { slot: li, important: true, src: s });
         return;
       }
     }
@@ -695,18 +778,18 @@ export class WaveSim {
   enter(c: WC) {
     this.lane[0] = c;
     if (!c.ally) {
-      if ((c.tier === 'n' || (c.tier === 't' && c.def !== 'scartina')) && !c.night && this.spec.nightBonus > 0) {
+      if (c.tier === 'n' && !c.night && this.spec.nightBonus > 0) {
         c.night = true;
         c.forza += this.spec.nightBonus;
         c.why.push(`bonus della notte +${this.spec.nightBonus}`);
       }
     }
-    this.log('enter', `${c.name}${c.ally ? ' (tuo Patto)' : ''} entra nel ${this.pname(0)}`, { slot: 0, wid: c.wid, important: c.tier === 'b' || c.tier === 'e' });
+    this.log('enter', `${c.name}${c.ally ? ' (tuo Patto)' : ''} ${vb(c.name, 'entra', 'entrano')} ${this.nel(0)}`, { slot: 0, wid: c.wid, important: c.tier === 'b' || c.tier === 'e' });
     if (c.kw.sciame) {
       const cp = this.mk(c.def, null, { token: true, tier: 't' });
       delete cp.kw.sciame;
       cp.forza = cp.base = ENEMIES[c.def].forza;
-      cp.name = `Copia di ${c.name}`;
+      cp.name = `Copia ${di(c.name)}`;
       cp.ally = c.ally;
       if (c.ally) cp.kw = {};
       cp.why.push(`Sciame di ${c.name}`);
@@ -733,19 +816,20 @@ export class WaveSim {
     }
     if (c.kw.ingordo && this.scart) {
       c.forza += this.scart;
-      this.log('ability', `${c.name} mangia le Scartine: +${this.scart} Forza`, { slot: 0, wid: c.wid });
+      this.log('ability', `${c.name} ${vb(c.name, 'mangia', 'mangiano')} le Scartine: +${this.scart} Forza`, { slot: 0, wid: c.wid });
     }
     if (c.kw.spinta) {
-      const s = this.lane[1];
-      if (s && this.L > 2 && !this.lane[2]) {
-        this.lane[2] = s;
-        this.lane[1] = null;
-        this.log('ability', `${c.name} spinge ${s.name} nel ${this.pname(2)}`, { slot: 2 });
+      const a = this.off + 1, b = this.off + 2;
+      const s = this.lane[a];
+      if (s && b < this.L && !this.lane[b]) {
+        this.lane[b] = s;
+        this.lane[a] = null;
+        this.log('ability', `${c.name} spinge ${s.name} ${this.nel(b)}`, { slot: b });
       }
     }
     if (c.kw.lamento) {
-      for (const x of this.lane) if (x && !x.ally) x.forza += 1;
-      this.log('ability', `${c.name} intona il lamento: +1 Forza a tutte le sventure in Fila`, { important: true });
+      for (const x of this.lane) if (x && !x.ally && x !== c) x.forza += 1;
+      this.log('ability', `${c.name} intona il lamento: +1 Forza a tutte le altre sventure in Fila`, { important: true });
     }
     if (c.kw.riscossione) {
       const n = Math.min(3, Math.floor(this.run.sp / 10));
@@ -756,11 +840,13 @@ export class WaveSim {
       if (n) { c.forza += n; this.log('ability', `${c.name} è furiosa: +${n} Forza`, { slot: 0, wid: c.wid }); }
     }
     if (c.kw.profezia && this.queue.length > 1) {
-      this.rng.shuffle(this.queue);
+      const boss = this.queue.filter((x) => x.tier === 'b');
+      const rest = this.rng.shuffle(this.queue.filter((x) => x.tier !== 'b'));
+      this.queue = [...rest, ...boss];
       this.log('ability', `${c.name} profetizza: la Coda è rimescolata, il tuo Rito non vale più`, { important: true });
     }
     if (c.kw.imitatore) {
-      const s = this.lane[1];
+      const s = this.lane[this.off + 1];
       if (s) {
         for (const [k, v] of Object.entries(s.kw)) if (k !== 'imitatore' && !(k in c.kw)) c.kw[k] = v;
         if (s.kw.corazza && !c.cor) c.cor = s.kw.corazza;
@@ -774,7 +860,7 @@ export class WaveSim {
     const firstEnemyInQueue = () => this.queue.find((x) => !x.ally && x.tier !== 'b');
     if (g === 'staffetta') {
       const f = firstEnemyInQueue();
-      if (f) { this.queue.splice(this.queue.indexOf(f), 1); this.queue.push(f); this.log('ability', `${c.name} (tuo): ${f.name} va in fondo alla Coda`); }
+      if (f) { this.queue.splice(this.queue.indexOf(f), 1); this.pushBeforeBoss(f); this.log('ability', `${c.name} (tuo): ${f.name} va in fondo alla Coda`); }
     } else if (g === 'ingordoAlleato') {
       const s = this.queue.filter((x) => x.def === 'scartina');
       if (s.length) {
@@ -792,7 +878,7 @@ export class WaveSim {
       const f = firstEnemyInQueue();
       if (f) { f.forza = Math.max(1, f.forza - 2); this.log('ability', `${c.name} (tuo): ${f.name} perde 2 Forza in Coda`); }
     } else if (g === 'carica') {
-      const f = this.enemyAt(1);
+      const f = this.enemyAt(this.off + 1);
       if (f) this.damage(f, 3, { kind: 'ally', id: c.def });
     } else if (g === 'nebbia') {
       this.revealExtra = Math.max(this.revealExtra, 4);
@@ -812,10 +898,18 @@ export class WaveSim {
       const list = this.seg[i];
       for (let k = 0; k < list.length; k++) {
         const c = this.lane[i];
-        if (!c || c.ally) break;
-        if (c.kw.silenzio) {
-          this.log('silence', `Silenzio: i Segni del ${this.pname(i)} tacciono`, { slot: i });
-          break;
+        if (!c) break;
+        if (c.ally) {
+          // i Segni che tolgono Forza colpiscono anche i tuoi Patti (CD-2)
+          if (hurtsAlly(list[k], c)) { this.applySegno(list[k], i, c); this.flush(); if (this.defeat) return; }
+          continue;
+        }
+        if (c.kw.silenzio && list[k] !== 'lanterna') {
+          c.kw.silenzio--;
+          if (!c.kw.silenzio) delete c.kw.silenzio;
+          this.silencedAt.add(i);
+          this.log('silence', `Silenzio: ${DEFENSES[list[k]].name} tace ${this.nel(i)}${c.kw.silenzio ? ` (restano ${c.kw.silenzio})` : ''}`, { slot: i, wid: c.wid, src: list[k] });
+          continue;
         }
         const f = this.lane[i + 1];
         if (f && !f.ally && f.kw.velo) {
@@ -841,7 +935,7 @@ export class WaveSim {
       case 'brace': this.damage(c, pl ? 3 : 2, src); break;
       case 'tagliola': this.damage(c, pl ? 2 : 1, src); break;
       case 'spina':
-        if (c.cor > 0) { c.cor--; this.log('segno', `Spina toglie una Corazza a ${c.name}`, { slot: i, src: s }); }
+        if (c.cor > 0) { c.cor--; this.log('segno', `Spina toglie una Corazza ${al(c.name)}`, { slot: i, src: s }); }
         this.damage(c, pl ? 2 : 1, src);
         break;
       case 'taglio':
@@ -855,14 +949,14 @@ export class WaveSim {
         }
         break;
       case 'lanterna':
-        if (c.kw.etereo) { delete c.kw.etereo; this.log('segno', `La Lanterna toglie Etereo a ${c.name}`, { slot: i, src: s }); }
+        if (c.kw.etereo || c.kw.silenzio) { delete c.kw.etereo; delete c.kw.silenzio; this.log('segno', `La Lanterna illumina ${c.name}: niente più Etereo né Silenzio`, { slot: i, src: s }); }
         this.damage(c, c.seme === 'Coppe' ? (pl ? 4 : 3) : 1, src);
         break;
       case 'trappola':
         if (c.seme === 'Bastoni') { delete c.kw.rapido; this.damage(c, pl ? 4 : 3, src); }
         break;
       case 'calamita':
-        if (c.cor > 0) { c.cor = 0; delete c.kw.corazza; this.log('segno', `Calamita strappa la Corazza a ${c.name}`, { slot: i, src: s }); }
+        if (c.cor > 0) { c.cor = 0; delete c.kw.corazza; this.log('segno', `Calamita strappa la Corazza ${al(c.name)}`, { slot: i, src: s }); }
         if (c.seme === 'Spade') this.damage(c, pl ? 4 : 3, src);
         break;
       case 'moneta':
@@ -961,7 +1055,7 @@ export class WaveSim {
       const f = this.enemyAt(i + 1);
       const src: Src = { kind: 'ally', id: c.def };
       if ((g === 'morso' || g === 'morso2') && f) this.damage(f, g === 'morso2' ? 2 : 1, src);
-      if (g === 'scardina' && f && f.cor > 0) { f.cor--; this.log('ability', `${c.name} (tuo) toglie una Corazza a ${f.name}`, { slot: i + 1 }); }
+      if (g === 'scardina' && f && f.cor > 0) { f.cor--; this.log('ability', `${c.name} (tuo) toglie una Corazza ${al(f.name)}`, { slot: i + 1 }); }
       if (g === 'purifica') {
         for (const j of [i - 1, i + 1]) {
           const e = this.enemyAt(j);
@@ -976,7 +1070,7 @@ export class WaveSim {
   burnTick() {
     for (let i = this.L - 1; i >= 0; i--) {
       const c = this.lane[i];
-      if (!c || c.ally || !c.burn) continue;
+      if (!c || !c.burn) continue;
       this.damage(c, c.burn, { kind: 'burn', id: 'rogo', slot: i });
       this.creditTo({ kind: 'segno', id: 'rogo' }, c.burn);
       this.flush();
@@ -989,7 +1083,7 @@ export class WaveSim {
     if (a.kind === 'scambia') {
       const x = this.lane[a.slot];
       const y = this.lane[a.slot + 1];
-      if (x && y) {
+      if (x && y && !x.ally && !y.ally) {
         this.lane[a.slot] = y;
         this.lane[a.slot + 1] = x;
         this.log('asso', `Asso nella manica: scambi ${x.name} e ${y.name}`, { slot: a.slot, important: true });
@@ -1008,6 +1102,7 @@ export class WaveSim {
     while ((this.queue.length || this.lane.some((x) => x)) && this.t < P.MAX_TICKS) {
       this.t++;
       this.tickCombo = 0;
+      this.silencedAt.clear();
       if (this.run.lumi <= 0) break;
       this.log('tick', `Tick ${this.t}`);
       this.applyAsso();
@@ -1072,14 +1167,19 @@ export class WaveSim {
       allyLoss: this.allyLoss,
       revealExtra: this.revealExtra,
       why: Object.fromEntries(this.all.map((c) => [c.wid, c.why])),
+      chainCuts: this.chainCuts,
+      revealed: this.revealed,
+      allyHurt: this.allyHurt,
     };
   }
 
   /** Coda prevista (senza risolvere): per l'anteprima in Preparazione. */
-  preview(): { queue: SnapCard[]; pileTop: { uid: number; def: string }[] } {
+  preview(): { queue: SnapCard[]; pileTop: { uid: number; def: string }[]; revealed: number[]; revealedUids: number[] } {
     this.buildQueue();
     return {
       queue: this.queue.map((c) => this.snapCard(c)),
+      revealed: this.revealed,
+      revealedUids: this.queue.filter((c) => this.revealed.includes(c.wid) && c.uid != null).map((c) => c.uid!),
       pileTop: this.pile.slice(0, 8).filter((x): x is DeckCard => x !== 'scartina').map((x) => ({ uid: x.uid, def: x.def })),
     };
   }

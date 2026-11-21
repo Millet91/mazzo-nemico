@@ -1,18 +1,18 @@
 // Parametri di bilanciamento (GDD §7). Tutti in un posto, per i ritocchi.
 
-export const CONTENT_VERSION = '1.0.0';
+export const CONTENT_VERSION = '0.2.0';
 
 export const P = {
-  LUMI: 35,
+  LUMI: 32,
   START_DECK: ['topi', 'topi', 'lupo', 'lupo', 'volpe', 'affogata', 'falce', 'banditore', 'sobillatore', 'gazza'],
   DRAWS: { 1: [6, 7, 7, 8], 2: [9, 10, 10, 11], 3: [11, 12, 12, 13] } as Record<number, number[]>,
   BOSS_DRAWS: { 1: [4, 5, 5], 2: [5, 6, 6], 3: [5, 6, 6] } as Record<number, number[]>,
   ADDS: { 1: 2, 2: 2, 3: 3 } as Record<number, number>,
-  ACT_BONUS: { 1: 0, 2: 1, 3: 1 } as Record<number, number>,
+  ACT_BONUS: { 1: 0, 2: 1, 3: 2 } as Record<number, number>,
   KILL: 1,
   KILL_ELITE: 5,
   KILL_BOSS: 10,
-  CLEAN: 3,
+  CLEAN: 2,
   BOSS_WIN: 10,
   SKIP: 3,
   PRICE: { C: 12, NC: 18, R: 25 } as Record<string, number>,
@@ -33,6 +33,11 @@ export const P = {
   CHAIN: 16,
   MAX_EVENTS: 2000,
   PATTI_MAX: 3,
+  /** dopo aver battuto il Forestiero si possono avere 4 Patti (CD-7) */
+  PATTI_MAX_A3: 4,
+  DEPOSITO_MAX: 4,
+  SHOP_AFFINA: 20,
+  SIGILLO1_ELITE_FORZA: 2,
   LEALTA: 3,
   MIN_DECK_MARGIN: 4,
   VISIBLE_QUEUE: 2,
@@ -41,12 +46,13 @@ export const P = {
 
 /** Mappa di un atto (GDD §6.1): 7 livelli, tipi di nodo possibili per livello. */
 export type NodeKind = 'ondata' | 'elite' | 'negozio' | 'riposo' | 'evento' | 'mazziere';
+/** 4 rintocchi di ondata per atto, sempre (SD-1): le scelte stanno nei livelli 3, 4 e 6. */
 export const MAP_LEVELS: NodeKind[][] = [
   ['ondata'],
-  ['ondata', 'evento'],
-  ['ondata', 'negozio', 'evento'],
-  ['elite', 'ondata', 'riposo'],
-  ['ondata', 'evento', 'negozio'],
+  ['ondata'],
+  ['evento', 'negozio', 'riposo'],
+  ['elite', 'ondata'],
+  ['ondata'],
   ['riposo', 'negozio'],
   ['mazziere'],
 ];

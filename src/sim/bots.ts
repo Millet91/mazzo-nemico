@@ -1,6 +1,6 @@
 // Bot per il simulatore headless (GDD §7.3, §13.5): casuale, medio, greedy (anteprima di un'ondata).
 import { Rng } from '../core/rng';
-import { apply, allies, eventChoices, hypotheticalWave, newRun, ownedIds, type Action } from '../core/run';
+import { apply, allies, eventChoices, hypotheticalWave, newRun, ownedIds, pattiMax, affinabili, sellValue, type Action } from '../core/run';
 import type { RunConfig } from '../core/types';
 import { meanDamage } from '../core/forecast';
 import { minDeck, cardForza } from '../core/wave';
@@ -17,6 +17,7 @@ export interface BotOpts {
 
 function placements(s: RunState, id: string): Partial<Action & { slot?: number; replace?: number }>[] {
   const d = DEFENSES[id];
+  if (!d) return [{}];
   if (d.family === 'segno') {
     if (id === 'bastione') return [{ slot: 4 }];
     return [0, 1, 2, 3, 4].map((slot) => ({ slot }));
@@ -86,6 +87,7 @@ function gain(c: RunState, id: string, slot?: number, replace?: number) {
 function randomPick(s: RunState, ids: string[], r: Rng): Action {
   const id = r.pick(ids);
   const d = DEFENSES[id];
+  if (!d) return { t: 'pick', id };
   if (d.family === 'segno') {
     const free = [0, 1, 2, 3, 4].filter((i) => s.def.segni[i].length < s.def.cap[i]);
     const slot = id === 'bastione' ? 4 : free.length ? r.pick(free) : r.int(5);
@@ -124,9 +126,9 @@ export class Bot {
         const pref = (k: string) => lv.find((n) => n.kind === k);
         const hp = s.lumi / s.maxLumi;
         const order: string[] =
-          s.level === 3 ? (hp >= 0.6 ? ['elite', 'ondata', 'riposo'] : ['riposo', 'ondata', 'elite'])
+          s.level === 3 ? (hp >= 0.6 ? ['elite', 'ondata'] : ['ondata', 'elite'])
           : s.level === 5 ? (hp < 0.8 ? ['riposo', 'negozio'] : ['negozio', 'riposo'])
-          : s.level === 2 ? (s.sp >= 12 ? ['negozio', 'ondata', 'evento'] : ['ondata', 'negozio', 'evento'])
+          : s.level === 2 ? (s.sp >= 12 ? ['negozio', 'evento', 'riposo'] : hp < 0.7 ? ['riposo', 'evento', 'negozio'] : ['evento', 'negozio', 'riposo'])
           : ['ondata', 'negozio', 'evento', 'riposo', 'elite', 'mazziere'];
         for (const k of order) { const n = pref(k); if (n) return { t: 'map', node: n.id }; }
         return { t: 'map', node: lv[0].id };
@@ -161,7 +163,7 @@ export class Bot {
       case 'patto': {
         const c = s.pattoCands ?? [];
         const take = this.smart() || r.int(100) < 50;
-        if (!c.length || !take || allies(s).length >= P.PATTI_MAX) return { t: 'patto', uid: null };
+        if (!c.length || !take || allies(s).length >= pattiMax(s)) return { t: 'patto', uid: null };
         const best = [...c].sort((a, b) => ENEMIES[b.def].forza - ENEMIES[a.def].forza)[0];
         return { t: 'patto', uid: best.uid };
       }
@@ -196,6 +198,10 @@ export class Bot {
         }
         const sh = r.shuffle([...ids]);
         return { t: 'forestiero', keep: sh[0], give: sh[1] };
+      }
+      case 'sellPick': {
+        const dep = [...s.def.deposito].sort((a, b) => sellValue(a) - sellValue(b));
+        return { t: 'sellPick', id: this.policy === 'random' ? r.pick(dep) : dep[0] };
       }
       case 'exilePick': {
         const en = s.deck.filter((x) => x.owner === 'fato').sort((a, b) => cardForza(b) - cardForza(a) || a.uid - b.uid);
@@ -237,6 +243,10 @@ export class Bot {
       const en = s.deck.filter((x) => x.owner === 'fato').sort((a, b) => cardForza(b) - cardForza(a) || a.uid - b.uid);
       if (en.length) return { t: 'exile', uid: en[0].uid };
     }
+    if (g && !sh.affinato && s.sp >= P.SHOP_AFFINA + 5) {
+      const id = affinabili(s).find((x) => !s.def.stolen.some((y) => y.segno === x));
+      if (id) return { t: 'shopAffina', id };
+    }
     if (s.lumi <= 0.8 * s.maxLumi && s.sp >= P.HEAL_COST + (s.cfg.sigillo >= 4 ? 2 : 0)) return { t: 'heal' };
     return { t: 'leave' };
   }
@@ -260,6 +270,8 @@ export interface RunResult {
   deck: number;
   actions: number;
   errors: string[];
+  sp: number;
+  owned: string[];
 }
 
 export function playRun(cfg: RunConfig, policy: Policy, botSeed: number, K = 8, check?: (s: RunState) => void): RunResult {
@@ -279,6 +291,7 @@ export function playRun(cfg: RunConfig, policy: Policy, botSeed: number, K = 8, 
       else if (s.phase === 'exilePick') apply(s, { t: 'exileDone' });
       else if (s.phase === 'offer' && s.offer) apply(s, { t: 'pick', id: s.offer.canSkip ? null : s.offer.ids[0] });
       else if (s.phase === 'prep') apply(s, { t: 'start' });
+      else if (s.phase === 'sellPick') apply(s, { t: 'sellPick', id: s.def.deposito[0] });
       else break;
     }
     check?.(s);
@@ -289,5 +302,6 @@ export function playRun(cfg: RunConfig, policy: Policy, botSeed: number, K = 8, 
   return {
     win: s.won, rintocco: s.rintocco, where, lumi: s.lumi, history: s.history, picks: bot.picks, offered: bot.offered,
     gaps: bot.gaps, patti: s.stats.patti, bossKills: s.stats.bossKills, deck: s.deck.length, actions: n, errors,
+    sp: s.sp, owned: ownedIds(s),
   };
 }

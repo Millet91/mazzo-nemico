@@ -38,7 +38,9 @@ export type Action =
   | { t: 'event'; choice: string; arg?: string | number }
   | { t: 'forestiero'; keep: string; give: string; slot?: number }
   | { t: 'exilePick'; uid: number }
-  | { t: 'exileDone' };
+  | { t: 'exileDone' }
+  | { t: 'sellPick'; id: string }
+  | { t: 'shopAffina'; id: string };
 
 export class RuleError extends Error {}
 /** "La Gazza" → "la Gazza" dentro una frase */
@@ -97,11 +99,15 @@ export function basamentoCost(s: RunState): number {
 
 export function visibleQueue(s: RunState): number {
   let v = s.cfg.sigillo >= 7 ? 1 : P.VISIBLE_QUEUE;
-  if (s.cfg.baro === 'notaio') v = Math.max(v, 4);
+  if (s.cfg.baro === 'notaio') v = Math.max(v, s.def.trucchi.includes('oracolo') ? 99 : 4);
   if (s.def.trucchi.includes('oracolo')) v = Math.max(v, s.def.plus.includes('oracolo') ? 6 : 4);
   if (s.intel.studia) v = Math.max(v, 5);
   if (s.intel.fullOrder) v = 99;
   return v;
+}
+
+export function pattiMax(s: RunState) {
+  return s.act >= 3 ? P.PATTI_MAX_A3 : P.PATTI_MAX;
 }
 
 export function lealtaStart(s: RunState) {
@@ -117,7 +123,7 @@ export function newRun(cfg: RunConfig): RunState {
   const r: Record<string, RngState> = {};
   for (const st of STREAMS) r[st] = seedRng(`${cfg.seed}/${st}`);
   const baro = BARI.find((b) => b.id === cfg.baro) ?? BARI[0];
-  const lumi = cfg.sigillo >= 6 ? 30 : P.LUMI;
+  const lumi = cfg.sigillo >= 6 ? P.LUMI - 5 : P.LUMI;
   const s: RunState = {
     cfg, rng: r, uidc: 0, phase: 'map', act: 1, level: 0, map: [], node: null, rintocco: 0, wavesInAct: 0,
     lumi, maxLumi: lumi, sp: 0, deck: [],
@@ -170,13 +176,13 @@ function genMap(s: RunState): MapNode[][] {
 
 // ------------------------------------------------------------------ ondate
 export function nightBonus(s: RunState): number {
-  return (P.ACT_BONUS[s.act] ?? 0) + (s.cfg.sigillo >= 8 && s.act === 1 ? 1 : 0);
+  return (P.ACT_BONUS[s.act] ?? 0) + (s.cfg.sigillo >= 8 ? 1 : 0);
 }
 
 function baseSpec(s: RunState, kind: WaveSpec['kind'], draws: number): WaveSpec {
   return {
     kind, act: s.act, rintocco: s.rintocco, draws, L: 5, corrente: 0, contro: [], bossRito: null, bossRitoBonus: 0,
-    extraDraw: 0, carry: [], carryBonus: 0, nightBonus: s.act === 0 ? 0 : nightBonus(s), eliteArmor: s.cfg.sigillo >= 1 ? 1 : 0,
+    extraDraw: 0, carry: [], carryBonus: 0, nightBonus: s.act === 0 ? 0 : nightBonus(s), eliteArmor: s.cfg.sigillo >= 1 ? 1 : 0, eliteForza: s.cfg.sigillo >= 1 ? P.SIGILLO1_ELITE_FORZA : 0,
     processione: false,
   };
 }
@@ -227,7 +233,31 @@ function isUnlocked(s: RunState, id: string) {
 }
 
 export function makeOffer(s: RunState, n: number, rarity: Rarity | null, source: RunState['offer'] extends infer O ? O extends { source: infer S } ? S : never : never, canSkip: boolean, stream = 'rewards', rarityMix?: [number, number, number]) {
-  return { ids: rollDefenses(s, n, rarity, stream, rarityMix), source, canSkip };
+  const ids = rollDefenses(s, n, rarity, stream, rarityMix);
+  if (source === 'ondata' && ids.length >= 3) maybeUpgradeOption(s, ids, stream);
+  return { ids, source, canSkip };
+}
+
+/** posti liberi della famiglia */
+export function familyFull(s: RunState, fam: string): boolean {
+  if (fam === 'segno') return s.def.segni.every((x, i) => x.length >= s.def.cap[i]);
+  if (fam === 'trucco') return s.def.trucchi.length >= s.def.tsock;
+  return !!s.def.rito;
+}
+
+/** Difese attive (in gioco) non ancora affinate. */
+export function affinabili(s: RunState): string[] {
+  const d = s.def;
+  return [...d.segni.flat(), ...d.trucchi, ...(d.rito ? [d.rito.id] : [])].filter((x) => !d.plus.includes(x));
+}
+
+/** SD-4: quando i posti della famiglia della terza difesa sono pieni, la terza opzione diventa "Affina una tua difesa". */
+function maybeUpgradeOption(s: RunState, ids: string[], stream: string) {
+  const last = ids[ids.length - 1];
+  if (!familyFull(s, DEFENSES[last].family)) return;
+  const cands = affinabili(s);
+  if (!cands.length) return;
+  ids[ids.length - 1] = `affina:${rng(s, stream).pick(cands)}`;
 }
 
 export function rollDefenses(s: RunState, n: number, rarity: Rarity | null, stream = 'rewards', mix?: [number, number, number]): string[] {
@@ -253,12 +283,27 @@ export function rollDefenses(s: RunState, n: number, rarity: Rarity | null, stre
     if (DEFENSES[pick].rarity === 'R') gotRare = true;
     out.push(pick);
   }
-  if (!rarity && !mix) s.pity = gotRare ? 0 : s.pity + P.PITY_STEP;
+  // CD-3: una terna ha almeno due famiglie diverse
+  if (out.length >= 3 && new Set(out.map((x) => DEFENSES[x].family)).size === 1) {
+    const fam = DEFENSES[out[0]].family;
+    const last = out[out.length - 1];
+    const sameR = (pool[DEFENSES[last].rarity] ?? []).filter((x) => DEFENSES[x].family !== fam && !out.includes(x));
+    const any = [...pool.C, ...pool.NC, ...pool.R].filter((x) => DEFENSES[x].family !== fam && !out.includes(x) && (!rarity || DEFENSES[x].rarity === rarity));
+    const alt = sameR.length ? sameR : any;
+    if (alt.length) out[out.length - 1] = r.pick(alt);
+  }
+  if (!rarity && !mix && stream === 'rewards') s.pity = gotRare ? 0 : s.pity + P.PITY_STEP;
   return out;
 }
 
 /** Piazza una difesa appena ottenuta. */
 export function gainDefense(s: RunState, id: string, slot?: number, seme?: Seme, replace?: number) {
+  if (id.startsWith('affina:')) {
+    const t = id.slice(7);
+    if (!ownedIds(s).includes(t) || s.def.plus.includes(t)) fail('Difesa non affinabile');
+    s.def.plus.push(t);
+    return;
+  }
   const d = DEFENSES[id];
   if (ownedIds(s).includes(id)) fail('Hai già questa difesa');
   if (d.family === 'segno') {
@@ -317,13 +362,15 @@ function setupBossPhase(s: RunState) {
   const spec = baseSpec(s, 'boss', draws);
   spec.phase = b.phase;
   const variant = s.cfg.sigillo >= 5;
-  const allRules = s.cfg.sigillo >= 10 && act === 3;
-  if (act === 1 || allRules) { spec.carry = b.carry.filter((u) => s.deck.some((x) => x.uid === u)); spec.carryBonus = variant ? 1 : 0; }
-  if (act === 2 || allRules) { spec.contro = [...b.contro]; spec.bossRito = b.bossRito; spec.extraDraw = b.extraDraw; spec.bossRitoBonus = variant && b.bossRito ? 1 : 0; }
+  if (s.cfg.sigillo >= 10 && act === 3 && b.extraRule === undefined) b.extraRule = 1 + rng(s, 'boss').int(2);
+  const r1 = s.cfg.sigillo >= 10 && act === 3 && b.extraRule === 1;
+  const r2 = s.cfg.sigillo >= 10 && act === 3 && b.extraRule === 2;
+  if (act === 1 || r1) { spec.carry = b.carry.filter((u) => s.deck.some((x) => x.uid === u)); spec.carryBonus = variant ? 1 : 0; }
+  if (act === 2 || r2) { spec.contro = [...b.contro]; spec.bossRito = b.bossRito; spec.extraDraw = b.extraDraw; spec.bossRitoBonus = variant && b.bossRito ? 1 : 0; }
   if (act === 3) { spec.L = 5 + b.phase; spec.corrente = variant ? 2 : 3; }
   if (b.phase === 2) spec.boss = BOSS_BY_ACT[act];
   s.wave = { spec, seed: rng(s, 'boss').fork() };
-  if (act === 2 || allRules) {
+  if (act === 2 || r2) {
     b.forestiero = { ids: rollDefenses(s, 3, null, 'boss'), keep: null, give: null, done: false };
     s.phase = 'forestiero';
   } else s.phase = 'prep';
@@ -357,6 +404,10 @@ export function resolveWave(s: RunState, asso: Asso | null = null): WaveOutcome 
 function afterWave(s: RunState, out: WaveOutcome, lumiBefore: number) {
   const spec = s.wave!.spec;
   if (!out.defeat && out.dmg === 0) { s.sp += P.CLEAN; out.gained += P.CLEAN; }
+  // Segni rubati da carte che non sono nel mazzo (Brigante, Copie): tornano dopo un rintocco (QA P1-1)
+  const back = s.def.stolen.filter((x) => x.holder === null && x.returnAt !== undefined && x.returnAt <= s.rintocco);
+  for (const x of back) { s.def.deposito.push(x.segno); out.returned = [...(out.returned ?? []), DEFENSES[x.segno].name]; }
+  s.def.stolen = s.def.stolen.filter((x) => !back.includes(x));
   const betrayed: string[] = [];
   if (spec.kind !== 'boss') betrayed.push(...lealtaTick(s, out.drawnUids, out.allyLoss));
   s.stats.dmgTaken += out.dmg;
@@ -375,6 +426,7 @@ function afterWave(s: RunState, out: WaveOutcome, lumiBefore: number) {
     rintocco: s.rintocco, act: s.act, kind: spec.kind === 'boss' ? `Mazziere, fase ${(spec.phase ?? 0) + 1}` : spec.kind,
     lumiBefore, lumiAfter: s.lumi, dmg: out.dmg, gained: out.gained, destroyed: out.destroyedNames, arrived: out.arrivedNames,
     stolen: out.stolen, mvp: out.mvp, dangerous: out.dangerous, ticks: out.ticks, betrayed, limit: out.limit,
+    chainCuts: out.chainCuts, allyHurt: out.allyHurt, returned: out.returned,
   };
   s.lastSummary = sum;
   s.history.push(sum);
@@ -394,11 +446,19 @@ function afterWave(s: RunState, out: WaveOutcome, lumiBefore: number) {
     b.dmgTot += out.dmg;
     b.drawnAll.push(...out.drawnUids);
     if (out.bossDead) b.bossDead = true;
+    b.allyLoss = b.allyLoss ?? {};
+    for (const [u, n] of Object.entries(out.allyLoss)) b.allyLoss[Number(u)] = (b.allyLoss[Number(u)] ?? 0) + n;
     b.carry = out.destroyedUids.filter((u) => s.deck.some((x) => x.uid === u && x.owner === 'fato' && ENEMIES[x.def].tier === 'n'));
   }
-  s.pattoCands = out.destroyedUids
+  // CD-4: al massimo 3 candidate, le più forti con id diversi
+  const cands = out.destroyedUids
     .map((u) => s.deck.find((x) => x.uid === u))
-    .filter((x): x is DeckCard => !!x && x.owner === 'fato' && ENEMIES[x.def].tier === 'n')
+    .filter((x): x is DeckCard => !!x && x.owner === 'fato' && ENEMIES[x.def].tier === 'n');
+  const byId = new Map<string, DeckCard>();
+  for (const x of cands) if (!byId.has(x.def)) byId.set(x.def, x);
+  s.pattoCands = [...byId.values()]
+    .sort((a, b) => ENEMIES[b.def].forza - ENEMIES[a.def].forza || a.uid - b.uid)
+    .slice(0, 3)
     .map((x) => ({ uid: x.uid, def: x.def }));
   s.phase = 'summary';
 }
@@ -433,12 +493,13 @@ function goMap(s: RunState) {
 
 function finishBoss(s: RunState) {
   const b = s.boss!;
-  lealtaTick(s, b.drawnAll, {});
+  lealtaTick(s, b.drawnAll, b.allyLoss ?? {});
   s.sp += P.BOSS_WIN;
   if (b.bossDead) s.stats.bossKills++;
   const bt = BOSS_TEXT[b.act];
   s.chronicle.push({ rintocco: s.rintocco, kind: 'boss', text: `${bt.name} si alzò dal tavolo: "${bt.defeat}"${b.bossDead ? ' La sua carta era stata stracciata.' : ''}` });
   s.pattoNext = 'map';
+  if (b.act >= 3) { s.pattoCands = null; afterPatto(s); return; } // dopo la Piena la notte finisce: niente Patto (SD-14)
   enterPatto(s, 'boss');
 }
 
@@ -455,9 +516,12 @@ function afterPatto(s: RunState) {
   s.pattoCands = null;
   if (s.boss) {
     const act = s.boss.act;
+    const dead = s.boss.bossDead;
     s.boss = null;
     s.offer = { ids: rollDefenses(s, 3, null, 'rewards', [0, 60, 40]), source: 'mazziere', canSkip: true };
     s.phase = 'offer';
+    // LD P0.3: distruggere la carta del Mazziere dà prima una difesa rara a scelta tra 2
+    if (dead && act < 3) s.offer = { ids: rollDefenses(s, 2, 'R'), source: 'trofeo', canSkip: false };
     if (act >= 3) {
       s.offer = null;
       s.phase = 'victory';
@@ -505,7 +569,7 @@ export function eventChoices(s: RunState): { id: string; label: string; enabled:
   if (e.step === 1 && e.id === 'pozzo') return [{ id: 'scegli', label: 'Stringi il Patto con una di queste carte', enabled: true, arg: 'cand' }];
   switch (e.id) {
     case 'comare': return [{ id: 'si', label: "Ascolta: vedi l'ordine esatto della prossima pescata, ma il Fato aggiunge una Nebbia", enabled: true }, { id: 'no', label: 'Tira dritto', enabled: true }];
-    case 'pozzo': return [{ id: 'getta', label: 'Getta 8 Spiccioli: 50% un Patto con una carta a scelta tra 3, 50% il Fato aggiunge una Bocca del Pozzo', enabled: s.sp >= 8 && allies(s).length < P.PATTI_MAX }, { id: 'no', label: 'Lascia stare', enabled: true }];
+    case 'pozzo': return [{ id: 'getta', label: 'Getta 8 Spiccioli: 50% un Patto con una carta a scelta tra 3, 50% il Fato aggiunge una Bocca del Pozzo', enabled: s.sp >= 8 && allies(s).length < pattiMax(s) }, { id: 'no', label: 'Lascia stare', enabled: true }];
     case 'prete': return [{ id: 'esilia', label: 'Esilia una carta a scelta, ma sciogli un tuo Patto', enabled: al, arg: 'ally' }, { id: 'no', label: 'Ringrazia e vai', enabled: true }];
     case 'cartaio': return [{ id: 'cedi', label: 'Cedi una tua difesa: esilia 2 carte a scelta', enabled: owned.length > 0, arg: 'defense' }, { id: 'no', label: 'Non oggi', enabled: true }];
     case 'pegni': return [{ id: 'basamento', label: '−5 Lumi massimi: un Basamento gratis', enabled: s.maxLumi > 10, arg: 'slot' }, { id: 'trucco', label: '−5 Lumi massimi: un terzo posto Trucco', enabled: s.maxLumi > 10 && s.def.tsock < 3 }, { id: 'no', label: 'Non impegni nulla', enabled: true }];
@@ -610,7 +674,7 @@ function doEvent(s: RunState, choice: string, arg?: string | number) {
 function makePatto(s: RunState, uid: number) {
   const x = s.deck.find((c) => c.uid === uid);
   if (!x || x.owner !== 'fato' || ENEMIES[x.def].tier !== 'n') fail('Carta non valida per un Patto');
-  if (allies(s).length >= P.PATTI_MAX) fail('Hai già 3 Patti');
+  if (allies(s).length >= pattiMax(s)) fail(`Hai già ${pattiMax(s)} Patti`);
   x.owner = 'baro';
   x.lealta = lealtaStart(s);
   x.rancore = 0;
@@ -658,6 +722,12 @@ export function step(prev: RunState, a: Action): RunState {
 
 /** Applica l'azione in place (per i bot e il simulatore). */
 export function apply(s: RunState, a: Action): WaveOutcome | null {
+  const out = apply0(s, a);
+  checkDeposito(s);
+  return out;
+}
+
+function apply0(s: RunState, a: Action): WaveOutcome | null {
   if (s.ended && a.t !== 'continue') fail('La run è finita');
   switch (a.t) {
     case 'map': {
@@ -695,6 +765,8 @@ export function apply(s: RunState, a: Action): WaveOutcome | null {
       s.offer = null;
       if ((s.phase as Phase) === 'exilePick') {
         s.exilePick!.back = o.source === 'ondata' || o.source === 'tutorial' ? 'prep' : o.source === 'mazziere' ? 'nextAct' : 'map';
+        // il trofeo del Mazziere è seguito dalla sua offerta: la mostriamo dopo l'esilio
+        if (o.source === 'trofeo') { s.exilePick!.back = 'offer'; s.offer = { ids: rollDefenses(s, 3, null, 'rewards', [0, 60, 40]), source: 'mazziere', canSkip: true }; }
         return null;
       }
       afterOffer(s, o.source);
@@ -734,6 +806,7 @@ export function apply(s: RunState, a: Action): WaveOutcome | null {
     case 'unplace': {
       prepOnly(s);
       const d = s.def;
+      if (d.deposito.length >= P.DEPOSITO_MAX) fail(`Il Deposito è pieno (${P.DEPOSITO_MAX})`);
       if (d.segni.some((x) => x.includes(a.id))) d.segni = d.segni.map((x) => x.filter((y) => y !== a.id));
       else if (d.trucchi.includes(a.id)) d.trucchi = d.trucchi.filter((x) => x !== a.id);
       else if (d.rito?.id === a.id) d.rito = null;
@@ -813,7 +886,7 @@ export function apply(s: RunState, a: Action): WaveOutcome | null {
       if (a.uid === null) s.sp += P.PATTO_RIFIUTO;
       else {
         if (!s.pattoCands?.some((c) => c.uid === a.uid)) fail('Carta non candidata');
-        if (allies(s).length >= P.PATTI_MAX) {
+        if (allies(s).length >= pattiMax(s)) {
           const d = s.deck.find((x) => x.uid === a.dissolve && x.owner === 'baro');
           if (!d) fail('Devi sciogliere un Patto per stringerne un quarto');
           s.deck = s.deck.filter((x) => x !== d);
@@ -828,7 +901,7 @@ export function apply(s: RunState, a: Action): WaveOutcome | null {
       return null;
     case 'rest': {
       if (s.phase !== 'rest') fail('Non sei al Focolare');
-      if (a.choice === 'cura') s.lumi = Math.min(s.maxLumi, s.lumi + Math.round(s.maxLumi * (s.cfg.sigillo >= 3 ? 0.2 : P.REST_HEAL)));
+      if (a.choice === 'cura') s.lumi = Math.min(s.maxLumi, s.lumi + restHeal(s));
       else if (a.choice === 'affina') {
         if (!a.id || !ownedIds(s).includes(a.id) || s.def.plus.includes(a.id)) fail('Difesa non affinabile');
         s.def.plus.push(a.id);
@@ -863,6 +936,18 @@ export function apply(s: RunState, a: Action): WaveOutcome | null {
       if (s.phase !== 'exilePick') fail('Niente da esiliare');
       endExilePick(s);
       return null;
+    case 'sellPick': {
+      if (s.phase !== 'sellPick' || !s.sellPick) fail('Niente da vendere');
+      if (!s.def.deposito.includes(a.id)) fail('Non è nel Deposito');
+      s.def.deposito = s.def.deposito.filter((x) => x !== a.id);
+      s.def.plus = s.def.plus.filter((x) => x !== a.id);
+      s.sp += sellValue(a.id);
+      if (s.def.deposito.length <= P.DEPOSITO_MAX) { s.phase = s.sellPick.back; s.sellPick = null; }
+      return null;
+    }
+    case 'shopAffina':
+      shopAction(s, a);
+      return null;
   }
   return null;
 }
@@ -876,9 +961,30 @@ function endExilePick(s: RunState) {
 }
 
 function afterOffer(s: RunState, source: string) {
+  if (source === 'trofeo') {
+    s.offer = { ids: rollDefenses(s, 3, null, 'rewards', [0, 60, 40]), source: 'mazziere', canSkip: true };
+    s.phase = 'offer';
+    return;
+  }
   if (source === 'ondata' || source === 'tutorial') s.phase = 'prep';
   else if (source === 'mazziere') nextAct(s);
   else goMap(s);
+}
+
+export function restHeal(s: RunState): number {
+  return Math.floor(s.maxLumi * (s.cfg.sigillo >= 3 ? 0.25 : P.REST_HEAL));
+}
+
+/** SD-4: il Deposito tiene al massimo 4 difese; oltre, va venduta una difesa a metà prezzo. */
+export function checkDeposito(s: RunState) {
+  if (s.def.deposito.length > P.DEPOSITO_MAX && s.phase !== 'sellPick' && !s.ended) {
+    s.sellPick = { back: s.phase };
+    s.phase = 'sellPick';
+  }
+}
+
+export function sellValue(id: string) {
+  return Math.floor(P.PRICE[DEFENSES[id].rarity] / 2);
 }
 
 function prepOnly(s: RunState) {
@@ -944,7 +1050,15 @@ function shopAction(s: RunState, a: Action) {
     case 'sell': {
       if (s.def.stolen.some((x) => x.segno === a.id)) fail('È rubato');
       removeDefense(s, a.id);
-      s.sp += Math.floor(P.PRICE[DEFENSES[a.id].rarity] / 2);
+      s.sp += sellValue(a.id);
+      return;
+    }
+    case 'shopAffina': {
+      if (sh.affinato) fail('Hai già affinato in questo negozio');
+      if (!ownedIds(s).includes(a.id) || s.def.plus.includes(a.id) || s.def.stolen.some((x) => x.segno === a.id)) fail('Difesa non affinabile');
+      pay(P.SHOP_AFFINA);
+      s.def.plus.push(a.id);
+      sh.affinato = true;
       return;
     }
     case 'leave':

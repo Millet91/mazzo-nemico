@@ -33,7 +33,7 @@ export interface Defenses {
   /** difese potenziate (Affinare) */
   plus: string[];
   /** Segni rubati: chi li ha (uid della carta del mazzo, oppure null se il ladro non era una carta del mazzo) */
-  stolen: { segno: string; holder: number | null }[];
+  stolen: { segno: string; holder: number | null; returnAt?: number }[];
   /** carte segnate con Segnare (uid) */
   marked: number[];
   /** Mazzo Truccato: uid da mandare in fondo, scelti dal giocatore (vuoto = automatico) */
@@ -71,6 +71,8 @@ export interface WaveSpec {
   carryBonus: number;
   nightBonus: number;
   eliteArmor: number;
+  /** Sigillo 1: Forza in più alle élite */
+  eliteForza?: number;
   /** evento Processione: +2 Denari e Spiccioli doppi per i Denari */
   processione: boolean;
   /** Sigillo 10: tutte le regole */
@@ -85,7 +87,7 @@ export interface Asso {
 
 export interface Offer {
   ids: string[];
-  source: 'ondata' | 'rara' | 'mazziere' | 'forestiero' | 'evento' | 'tutorial';
+  source: 'ondata' | 'rara' | 'mazziere' | 'forestiero' | 'evento' | 'tutorial' | 'trofeo';
   canSkip: boolean;
 }
 
@@ -93,6 +95,8 @@ export interface ShopState {
   items: { id: string; price: number; sold: boolean }[];
   exileCost: number;
   rerolls: number;
+  /** Affinare al Mercante già usato in questo negozio */
+  affinato?: boolean;
 }
 
 export interface BossState {
@@ -105,6 +109,10 @@ export interface BossState {
   bossDead: boolean;
   dmgTot: number;
   drawnAll: number[];
+  /** Lealtà persa in più (Esplosivo) sommata sulle tre fasi */
+  allyLoss?: Record<number, number>;
+  /** Sigillo 10: regola in più della Piena (1 = Sagrestano, 2 = Forestiero) */
+  extraRule?: number;
   /** Forestiero: terna corrente e stato della scelta */
   forestiero?: { ids: string[]; keep: string | null; give: string | null; done: boolean };
 }
@@ -136,6 +144,12 @@ export interface WaveSummary {
   ticks: number;
   betrayed: string[];
   limit: boolean;
+  chainCuts?: number;
+  allyHurt?: number;
+  /** Segni restituiti a fine ondata */
+  returned?: string[];
+  /** danno che avresti preso senza i tuoi trucchi (M4), calcolato dalla UI */
+  naked?: number;
 }
 
 export type Phase =
@@ -150,6 +164,7 @@ export type Phase =
   | 'bossPrep'
   | 'forestiero'
   | 'exilePick'
+  | 'sellPick'
   | 'victory'
   | 'defeat';
 
@@ -198,6 +213,8 @@ export interface RunState {
   pattoNext: Phase | null;
   /** quante carte esiliare a scelta (Rogo dell'Archivio, eventi) e dove tornare */
   exilePick: { n: number; back: Phase | 'nextAct'; reason: string } | null;
+  /** Deposito oltre il massimo: va venduta una difesa (SD-4) */
+  sellPick?: { back: Phase } | null;
   lastSummary: WaveSummary | null;
   history: WaveSummary[];
   chronicle: ChronicleEntry[];
@@ -237,6 +254,8 @@ export interface WC {
   allyRitornoUsed: boolean;
   why: string[];
   extraLealtaLoss: number;
+  /** tick in cui il Gelo l'ha tenuta ferma (la Corrente non la spinge) */
+  heldT?: number;
 }
 
 export interface SnapCard {
@@ -280,6 +299,9 @@ export interface Ev {
   to?: number;
   wid?: number;
   src?: string;
+  /** tipo della fonte (segno, trucco, rito, ally, burn, enemy) e Passo da cui agisce, per la linea di causa */
+  srcKind?: string;
+  srcSlot?: number;
   n?: number;
   important?: boolean;
   /** numero fluttuante: positivo = danno alla carta, ecc. */

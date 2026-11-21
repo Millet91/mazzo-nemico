@@ -11,22 +11,22 @@ export interface BaroDef {
 export const BARI: BaroDef[] = [
   { id: 'sottovento', name: 'Il Baro di Sottovento', kit: [{ id: 'brace', slot: 1 }, { id: 'taglio', slot: 2 }], passive: 'Il primo Basamento costa 0.', unlock: 'Iniziale' },
   { id: 'fattucchiera', name: 'La Fattucchiera', kit: [{ id: 'brace', slot: 2 }, { id: 'scartine' }, { id: 'esca' }], passive: '3 posti Trucco.', unlock: 'Supera il Vespro' },
-  { id: 'notaio', name: 'Il Notaio', kit: [{ id: 'spina', slot: 1 }, { id: 'taglio', slot: 3 }, { id: 'scala' }], passive: 'Vedi le prime 4 carte della Coda.', unlock: 'Supera la Mezzanotte' },
+  { id: 'notaio', name: 'Il Notaio', kit: [{ id: 'spina', slot: 1 }, { id: 'taglio', slot: 3 }, { id: 'scala' }], passive: 'Vedi le prime 4 carte della Coda; con l\'Oracolo vedi tutta la Coda.', unlock: 'Supera la Mezzanotte' },
   { id: 'bracconiera', name: 'La Bracconiera', kit: [{ id: 'brace', slot: 2 }, { id: 'gelo', slot: 1 }], passive: 'Inizia con un Patto (un Lupo); i Patti partono con Lealtà 5.', unlock: 'Vinci una run' },
 ];
 
 export const SIGILLI: string[] = [
   'Nessun Sigillo',
-  'Le élite hanno +1 Corazza',
+  'Le élite hanno +1 Corazza e +2 Forza',
   'Il Fato annuncia 1 carta in più a ogni rintocco',
-  'Il Riposo cura il 20% invece del 30%',
+  'Il Riposo cura il 25% invece del 30%',
   'Prezzi del negozio +20%',
   'I Mazzieri usano la loro variante',
-  'Lumi 30',
+  'Lumi −5',
   "Vedi solo 1 carta della Coda; l'Annuncio mostra solo il seme",
-  'Bonus della notte anche al Vespro (+1)',
+  'Bonus della notte +1 in tutti gli atti',
   "L'Esilio parte da 20 Spiccioli",
-  'La Notte Più Lunga: il Mazziere finale ha anche le regole degli altri due',
+  'La Notte Più Lunga: la Piena prende anche la regola di uno degli altri due Mazzieri, a caso',
 ];
 
 export interface BossText {

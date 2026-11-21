@@ -60,7 +60,7 @@ describe('Keyword nemiche (§4.5)', () => {
     const { out } = wave(r, ['topi']);
     expect(out.events.filter((e) => e.k === 'copy').length).toBe(1);
     expect(out.dmg).toBe(2);
-    expect(out.arrivedNames).toEqual(['I Topi del Granaio', 'Copia di I Topi del Granaio']);
+    expect(out.arrivedNames).toEqual(['I Topi del Granaio', 'Copia dei Topi del Granaio']);
   });
 
   it('Sciame: la Copia non dà Spiccioli quando muore', () => {
@@ -135,9 +135,10 @@ describe('Keyword nemiche (§4.5)', () => {
   it('Esplosivo: alla morte ferisce le carte adiacenti, all’Impatto +2', () => {
     const r = blankRun();
     const { out } = wave(r, ['barile']);
-    expect(out.dmg).toBe(4);
+    expect(out.dmg).toBe(5); // Forza 3 + Esplosivo 2
     const r2 = blankRun();
     r2.def.segni[2] = ['brace'];
+    r2.def.segni[1] = ['tagliola'];
     const o2 = wave(r2, ['lupo', 'barile']).out;
     expect(msgs(o2).some((m) => m.includes('esplode'))).toBe(true);
   });

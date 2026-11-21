@@ -127,7 +127,7 @@ export function Hud({ v }: { v: VistaBattaglia }) {
 
       {banner.value && <div class="banner" role="status" data-testid="banner" key={banner.value}>{banner.value}</div>}
 
-      {v.tocca === 'ia' && !v.esito && (
+      {v.iaPensa && !v.esito && (
         <div class="medita" data-testid="medita" role="status">{T.battaglia.medita}</div>
       )}
 

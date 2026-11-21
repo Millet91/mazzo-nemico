@@ -229,6 +229,10 @@ test('turno dell\'IA: i comandi spariscono e il capitano medita', async ({ page 
   await expect(page.getByTestId('medita')).toHaveText('Il capitano medita…');
   await expect(page.locator('.hud .tasto')).toHaveCount(0);
   await page.screenshot({ path: 'test-results/screenshot/hud-ia-20x9.png' });
+  // finito di pensare (mira, volo, risoluzione): la scritta sparisce, i comandi restano nascosti
+  await aggiorna(page, { iaPensa: false, fase: 'volo' });
+  await expect(page.getByTestId('medita')).toBeHidden();
+  await expect(page.locator('.hud .tasto')).toHaveCount(0);
   // in fase di volo, anche nel turno umano, niente comandi
   await aggiorna(page, { tocca: 'umano', squadraDiTurno: 0, iaPensa: false, fase: 'volo' });
   await expect(page.locator('.hud .tasto')).toHaveCount(0);

@@ -1,7 +1,7 @@
 // Impostazioni → Diagnostica (piano QA F2 e §4): "Rigioca replay" e "Prova 60 fps".
 // I replay d'oro stanno in tests/replay/*.json e entrano nella build. Il rigiocatore è `rigiocaReplay` della
 // sim (A, battaglia/sim/replay.ts); la prova è `provaFps` del ciclo di gioco (B). Si caricano con
-// import.meta.glob: finché quei file non esistono la build passa e il pulsante dice "non ancora disponibile".
+// import.meta.glob (B: battaglia/partita/diagnostica.ts): finché quei file non esistono la build passa e il pulsante dice "non ancora disponibile".
 import { signal } from '@preact/signals';
 import type { MappaGenerata, Replay } from '../core/tipi';
 import { T } from '../testi/it';
@@ -12,7 +12,7 @@ type ModuloFps = { provaFps?: () => Promise<Record<string, number>> };
 
 const REPLAY = import.meta.glob<Replay>('../../tests/replay/*.json', { import: 'default' });
 const MODULI_REPLAY = import.meta.glob<ModuloReplay>('../battaglia/sim/replay.ts');
-const MODULI_FPS = import.meta.glob<ModuloFps>(['../battaglia/partita/*.ts', '../render/*.ts']);
+const MODULI_FPS = import.meta.glob<ModuloFps>('../battaglia/partita/diagnostica.ts');
 
 interface RigaReplay { nome: string; ok: boolean | null }
 const righe = signal<RigaReplay[]>([]);

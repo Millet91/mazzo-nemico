@@ -2,7 +2,7 @@
 // misure e bordi (tasti ≥ 64, FUOCO 80, 56 px dal bordo corto, 16 dal basso, 12 tra i tasti), griglia armi,
 // pausa, esito, mancini, turno dell'IA, multitouch (caso 22) e tasto indietro (caso 23).
 // Finché il ciclo di gioco (B) non è unito, la battaglia si guida da qui con una VistaBattaglia finta sul bus
-// (gancio ?prova di ui/App.tsx). Gli screenshot a seme fisso al tick 0 e 600 arrivano dopo l'unione di A, B e C.
+// (gancio ?prova di ui/App.tsx), che all'azione 'esci' si svuota come fa B. Gli screenshot a seme fisso al tick 0 e 600 arrivano dopo l'unione di A, B e C.
 import { test, expect, type Page } from '@playwright/test';
 
 const FORMATI = [
@@ -33,6 +33,10 @@ async function entraInBattaglia(page: Page, v = vista()) {
     w.registro = { comandi: [], azioni: [] };
     w.__kaboom.bus.comandi.ascolta((c: unknown) => w.registro.comandi.push(c));
     w.__kaboom.bus.azioni.ascolta((a: unknown) => w.registro.azioni.push(a));
+    // come fa il ciclo di gioco (B): all'uscita svuota la battaglia
+    w.__kaboom.bus.azioni.ascolta((a: { t: string }) => {
+      if (a.t === 'esci') { w.__kaboom.bus.battaglia.value = null; w.__kaboom.bus.richiestaBattaglia.value = null; }
+    });
     w.__kaboom.bus.battaglia.value = v;
   }, v);
   await expect(page.getByTestId('hud')).toBeVisible();
@@ -278,7 +282,8 @@ test('esito: pergamena con superstiti e turni, Rigioca e Menu', async ({ page })
   expect(dopo.seme).not.toBe(prima);
   expect((await registro(page)).azioni.at(-1)).toEqual({ t: 'esci' });
 
-  await aggiorna(page, { esito: { vincitore: 1, motivo: 'tempo', superstiti: [1, 2], pvTotali: [30, 90], turni: 18, annegati: [0, 0] } });
+  await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; },
+    vista({ fase: 'fine', esito: { vincitore: 1, motivo: 'tempo', superstiti: [1, 2], pvTotali: [30, 90], turni: 18, annegati: [0, 0] } }));
   await expect(page.getByTestId('esito')).toContainText('Sconfitta');
   await page.locator('#menu').click();
   await expect(page.locator('#schermaglia')).toBeVisible();

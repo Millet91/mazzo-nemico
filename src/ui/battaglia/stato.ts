@@ -15,8 +15,9 @@ export const banner = signal('');
 const codaBanner: string[] = [];
 let timerBanner: ReturnType<typeof setTimeout> | undefined;
 
+/** C'è una battaglia da mostrare: chiesta dal menu, oppure già pubblicata dal ciclo di gioco (es. la prova FPS). */
 export function inBattaglia(): boolean {
-  return bus.richiestaBattaglia.value !== null;
+  return bus.richiestaBattaglia.value !== null || bus.battaglia.value !== null;
 }
 
 export function invia(c: Comando): void {

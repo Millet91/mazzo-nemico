@@ -166,6 +166,7 @@ export function App() {
       </main>
       )}
       {!battaglia && <PannelloImpostazioni />}
+      {battaglia && provaAttiva.value && <div class="avviso" role="status">{statoFps.value}</div>}
       {avviso.value && <div class="avviso" role="status">{avviso.value}</div>}
     </>
   );

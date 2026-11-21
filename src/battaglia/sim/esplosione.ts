@@ -55,13 +55,13 @@ export function effettoEsplosione(
  * `ciurma` = ciurma di chi ha sparato (per il tratto del Teschio); null per la lapide.
  */
 export function esplodi(
-  s: StatoBattaglia, x: number, y: number, arma: IdArma | 'lapide', ciurma: IdCiurma | null, eventi: EventoBattaglia[],
+  s: StatoBattaglia, x: number, y: number, arma: IdArma | 'lapide' | 'cassa', ciurma: IdCiurma | null, eventi: EventoBattaglia[],
   parametri?: { raggio: number; danno: number },
 ): void {
-  const p = parametri ?? parametriEsplosione(arma);
+  const p = parametri ?? (arma === 'cassa' ? BIL.casse.esplosione : parametriEsplosione(arma));
   const raggio = p.raggio;
   const base = p.danno;
-  const danno = parametri || arma === 'lapide' || arma === 'barile' || !ciurma ? base : dannoArma(arma, ciurma);
+  const danno = parametri || arma === 'lapide' || arma === 'cassa' || arma === 'barile' || !ciurma ? base : dannoArma(arma, ciurma);
   const spinta = base * BIL.fisica.spintaPerDanno;
   eventi.push({ t: 'esplosione', x, y, raggio, arma });
   scavaCratere(s.terreno, x, y, raggio, eventi);

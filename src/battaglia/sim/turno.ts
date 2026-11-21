@@ -164,7 +164,7 @@ function ciurmaDi(s: StatoBattaglia, pr: Proiettile) {
 function scoppia(s: StatoBattaglia, pr: Proiettile, x: number, y: number, eventi: EventoBattaglia[]): void {
   if (pr.tipo === 'cassa') {
     const c = centroOggetto(pr);
-    esplodi(s, c.x, c.y, 'lapide', null, eventi, BIL.casse.esplosione);
+    esplodi(s, c.x, c.y, 'cassa', null, eventi, BIL.casse.esplosione);
   } else if (pr.tipo === 'barile') {
     const c = centroOggetto(pr);
     esplodi(s, c.x, c.y, 'barile', null, eventi);
@@ -186,7 +186,7 @@ function aggiornaProiettili(s: StatoBattaglia, eventi: EventoBattaglia[]): void 
       if (pr.tickEsplosione < 0) {
         const r = scendiCassa(s.terreno, s.terreno.mare, s.vento, pr);
         if (r === 'mare') { eventi.push({ t: 'splash', x: pr.x, y: s.terreno.mare, grande: false }); tolti.add(pr.id); continue; }
-        if (apriCassa(s, pr, eventi, (x, y) => { esplodi(s, x, y, 'lapide', null, eventi, BIL.casse.trappola); dopoEsplosione(s); })) {
+        if (apriCassa(s, pr, eventi, (x, y) => { esplodi(s, x, y, 'cassa', null, eventi, BIL.casse.trappola); dopoEsplosione(s); })) {
           tolti.add(pr.id); continue;
         }
       }

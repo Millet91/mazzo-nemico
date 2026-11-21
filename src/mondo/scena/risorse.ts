@@ -4,6 +4,8 @@
 import { Assets, type Texture } from 'pixi.js';
 import type { IdIsola } from '../../core/carriera';
 import type { Indici } from './logica';
+import { urlPezzoMondo, urlPremio, urlTipoPremio } from '../../ui/kit/risorse';
+import type { DefIsola } from '../../core/carriera';
 
 const BASE = './assets/mondo/';
 
@@ -22,7 +24,10 @@ export interface TextureMondo {
   pedinaGrigia: Texture;
   cartello: Texture;
   bandierina: Texture;
+  /** icona generica per tipo di premio (kit di Arte UI) */
   premi: Record<'arma' | 'mossa' | 'recluta' | 'bandiera', Texture>;
+  /** icona del primo premio di ogni isola (rampino, ancora, mossa…) */
+  premiIsola: Map<IdIsola, Texture>;
   boccale: Texture;
   nebbia: Texture;
   veliero: Texture;
@@ -49,14 +54,19 @@ async function leggiIndici(m: Manifesto): Promise<Indici | null> {
   }
 }
 
-export async function caricaTextureMondo(isole: IdIsola[], righe: number, colonne: number): Promise<TextureMondo> {
+// pedine, cartello, bandierina e premi vengono dal kit dipinto di Arte UI (public/assets/ui/, a 3×)
+const KIT_MONDO = ['ui_mondo_pedina_rossa', 'ui_mondo_pedina_grigia', 'ui_mondo_cartello_marina', 'ui_mondo_bandierina'] as const;
+const TIPI_PREMIO = ['arma', 'mossa', 'recluta', 'bandiera'] as const;
+
+export async function caricaTextureMondo(isole: IdIsola[], righe: number, colonne: number, defs: DefIsola[] = []): Promise<TextureMondo> {
   const manifesto = (await (await fetch(`${BASE}mondo.json`)).json()) as Manifesto;
-  const nomi: string[] = ['tavolo.webp', 'onde-a.png', 'onde-b.png', 'pedina-rossa.webp', 'pedina-grigia.webp', 'cartello.webp',
-    'bandierina.webp', 'premio-arma.webp', 'premio-mossa.webp', 'premio-recluta.webp', 'premio-bandiera.webp', 'boccale.webp',
-    'nebbia.png', 'veliero.webp'];
+  const nomi: string[] = ['tavolo.webp', 'onde-a.png', 'onde-b.png', 'boccale.webp', 'nebbia.png', 'veliero.webp'];
   for (let r = 0; r < righe; r++) for (let c = 0; c < colonne; c++) nomi.push(`carta-${r}-${c}.webp`);
   for (const id of isole) nomi.push(`isola-${id}.webp`, `onda-${id}.png`);
-  const [tex, indici] = await Promise.all([Assets.load<Texture>(nomi.map((n) => BASE + n)), leggiIndici(manifesto)]);
+  const premiIsola = defs.filter((d) => d.premi.length).map((d) => [d.id, './' + urlPremio(d.premi[0])] as const);
+  const kit = [...KIT_MONDO.map((k) => './' + urlPezzoMondo(k)), ...TIPI_PREMIO.map((t) => './' + urlTipoPremio(t)), ...premiIsola.map(([, u]) => u)];
+  const [tex, indici] = await Promise.all([Assets.load<Texture>([...nomi.map((n) => BASE + n), ...kit]), leggiIndici(manifesto)]);
+  const k = (id: (typeof KIT_MONDO)[number]) => tex['./' + urlPezzoMondo(id)];
   const t = (n: string) => tex[BASE + n];
   const carta: Texture[][] = [];
   for (let r = 0; r < righe; r++) { carta.push([]); for (let c = 0; c < colonne; c++) carta[r].push(t(`carta-${r}-${c}.webp`)); }
@@ -68,11 +78,12 @@ export async function caricaTextureMondo(isole: IdIsola[], righe: number, colonn
     ondeB: t('onde-b.png'),
     isole: new Map(isole.map((id) => [id, t(`isola-${id}.webp`)])),
     onde: new Map(isole.map((id) => [id, t(`onda-${id}.png`)])),
-    pedinaRossa: t('pedina-rossa.webp'),
-    pedinaGrigia: t('pedina-grigia.webp'),
-    cartello: t('cartello.webp'),
-    bandierina: t('bandierina.webp'),
-    premi: { arma: t('premio-arma.webp'), mossa: t('premio-mossa.webp'), recluta: t('premio-recluta.webp'), bandiera: t('premio-bandiera.webp') },
+    pedinaRossa: k('ui_mondo_pedina_rossa'),
+    pedinaGrigia: k('ui_mondo_pedina_grigia'),
+    cartello: k('ui_mondo_cartello_marina'),
+    bandierina: k('ui_mondo_bandierina'),
+    premi: Object.fromEntries(TIPI_PREMIO.map((tp) => [tp, tex['./' + urlTipoPremio(tp)]])) as TextureMondo['premi'],
+    premiIsola: new Map(premiIsola.map(([id, u]) => [id, tex[u]])),
     boccale: t('boccale.webp'),
     nebbia: t('nebbia.png'),
     veliero: t('veliero.webp'),

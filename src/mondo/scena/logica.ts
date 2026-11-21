@@ -101,10 +101,10 @@ export function scalaSegni(scala: number): number {
  * Pappagallo (capitolo 0) non si mette nebbia.
  */
 export function sbuffiNebbia(isole: IsolaMappa[], w: number, h: number, passo = 210, vicino = 300, seme = 7):
-  { x: number; y: number; capitolo: number; s: number; r: number }[] {
+  { x: number; y: number; capitolo: number; s: number; r: number; alfa: number }[] {
   let a = seme >>> 0;
   const caso = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
-  const out: { x: number; y: number; capitolo: number; s: number; r: number }[] = [];
+  const out: { x: number; y: number; capitolo: number; s: number; r: number; alfa: number }[] = [];
   for (let y = passo / 2; y < h + passo / 2; y += passo) {
     for (let x = passo / 2; x < w + passo / 2; x += passo) {
       const px = x + (caso() - 0.5) * passo * 0.6, py = y + (caso() - 0.5) * passo * 0.6;
@@ -117,7 +117,9 @@ export function sbuffiNebbia(isole: IsolaMappa[], w: number, h: number, passo = 
       const cala = isole.find((i) => i.capitolo === 0);
       if (cala && Math.hypot(px - cala.x, py - cala.y) < cala.raggio + 170) continue;
       if (capitolo === 0) capitolo = 99;
-      out.push({ x: px, y: py, capitolo, s: 1.7 + caso() * 0.9, r: caso() * Math.PI * 2 });
+      // la nebbia del mondo lontano è più leggera sul bordo delle isole già aperte (si leggono coste e Cala)
+      const bordo = capitolo === 99 ? Math.min(1, Math.max(0, (dMin - vicino) / 500)) : 1;
+      out.push({ x: px, y: py, capitolo, s: 1.7 + caso() * 0.9, r: caso() * Math.PI * 2, alfa: 0.92 * (0.45 + 0.55 * bordo) });
     }
   }
   return out;

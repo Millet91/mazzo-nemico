@@ -36,7 +36,7 @@ export function montaScenaMondo(app: Application, mare: { radice: Container }): 
     if (caricamento) return;
     const righe = Math.ceil(MONDO_H / 512), colonne = Math.ceil(MONDO_W / 512);
     const isole = [...CAPITOLO_1.isole.map((i) => i.id), CALA_PAPPAGALLO.id];
-    caricamento = caricaTextureMondo(isole, righe, colonne).then((tex) => {
+    caricamento = caricaTextureMondo(isole, righe, colonne, CAPITOLO_1.isole).then((tex) => {
       const s = new ScenaMondo(app, tex);
       scena = s;
       app.stage.addChildAt(s.radice, Math.min(1, app.stage.children.length));

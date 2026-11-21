@@ -69,6 +69,14 @@ export const DATI: DatiMappaFatta = {
   "gradino": {
    "x": 338,
    "y": 822
+  },
+  "marinaioCannone": {
+   "x": 846,
+   "y": 833
+  },
+  "marinaioSciabola": {
+   "x": 90,
+   "y": 880
   }
  },
  "decorazioni": [

@@ -43,6 +43,9 @@ const segnaposti: Record<string, Punto> = {
   veliero: { x: MOLO.x0 - 8, y: MARE },           // ormeggiato a sinistra del molo: lo disegna il Render
   cartello: { x: MOLO.x1 - 14, y: MOLO.piano },    // "Vietato sbarcare" (16 §3), all'attacco del molo
   gradino: { x: GRADINO.x0, y: sup[GRADINO.x0 + 4] },
+  // i due marinai col nome del copione (10 §2): il primo si colpisce col cannone (0:45), il secondo si butta in mare (2:30)
+  marinaioCannone: marinaio2,
+  marinaioSciabola: marinaio1,
 };
 const decorazioni: Decorazione[] = ([
   ['palma', 612, 1.1, false], ['masso', 652, 0.8, true], ['palma', 1912, 1, true], ['cespuglio', 758, 0.8, false],

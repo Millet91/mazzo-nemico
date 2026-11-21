@@ -49,6 +49,8 @@ export async function avviaGrafica(contenitore: HTMLElement): Promise<Grafica> {
   void import('../battaglia/partita/regista')
     .then(({ Regista }) => new Regista(app, scena))
     .catch((e) => { console.error(e); bus.erroreGrafica.value = T.errori.avvioGrafica; });
+  // mappa del mondo (Tavolo del Timone, P2): un pezzo separato; le immagini si caricano la prima volta che serve
+  void import('../mondo/scena').then(({ montaScenaMondo }) => montaScenaMondo(app, scena)).catch((e) => console.error(e));
 
   return {
     pausa() { app.ticker.stop(); },

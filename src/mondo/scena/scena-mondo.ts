@@ -11,7 +11,7 @@ import { COLORI_CIURMA, hex } from '../../core/palette';
 import { CALA_PAPPAGALLO, CAPITOLO_1, MONDO_H, MONDO_W } from '../../contenuti/capitolo-1';
 import { CameraMondo, type Riquadro } from './camera-mondo';
 import {
-  capitoliAperti, capitoliBloccati, isolaInPunto, isoleBloccate, rotte, sbuffiNebbia, scalaSegni, viaggioInCoda,
+  animazioneParallela, capitoliAperti, capitoliBloccati, isolaInPunto, isoleBloccate, rotte, sbuffiNebbia, scalaSegni, viaggioInCoda,
   vistaDaStato, type IsolaMappa, type VistaIsola,
 } from './logica';
 import { PEZZI_MONDO } from '../../ui/kit/risorse';
@@ -248,7 +248,7 @@ export class ScenaMondo {
   /** Riporta allo stato salvato tutto ciò che nessuna animazione sta "tenendo". */
   allinea(): void {
     const coda = this.attiva ? [this.attiva, ...this.coda] : this.coda;
-    const bloccate = isoleBloccate(coda);
+    const bloccate = isoleBloccate([...coda, ...this.paralleli]);
     for (const [id, i] of this.isole) {
       if (bloccate.has(id)) continue;
       if (i.m.capitolo === 0) this.mostraCala(i);
@@ -413,7 +413,16 @@ export class ScenaMondo {
   /** Numero di animazioni ancora da finire (compresa quella in corso). */
   get occupata(): number { return this.coda.length + (this.attiva ? 1 : 0); }
 
+  /** animazioni parallele in corso ('pirati', 'centra') e, per isola, l'ultima in fila (una alla volta per isola) */
+  private paralleli: AnimazioneMondo[] = [];
+  private filaIsola = new Map<IdIsola, Promise<void>>();
+
+  /**
+   * Esegue un'animazione. 'pirati' e 'centra' partono subito, in parallelo alla coda, e non chiamano `fine`
+   * (non tengono la mappa occupata). Le altre vanno in coda e `fine` arriva quando la coda è vuota.
+   */
   accoda(a: AnimazioneMondo, fine: () => void): void {
+    if (animazioneParallela(a)) { this.inParallelo(a); return; }
     this.coda.push(a);
     if (this.attiva) return;
     void (async () => {
@@ -425,6 +434,18 @@ export class ScenaMondo {
       }
       fine();
     })();
+  }
+
+  private inParallelo(a: AnimazioneMondo): void {
+    this.paralleli.push(a);
+    const chiave = a.t === 'pirati' ? a.isola : '·camera';
+    const prima = this.filaIsola.get(chiave) ?? Promise.resolve();
+    const questa = prima.then(() => this.esegui(a)).catch((e) => console.error('animazione del mondo', e)).then(() => {
+      this.paralleli.splice(this.paralleli.indexOf(a), 1);
+      if (this.filaIsola.get(chiave) === questa) this.filaIsola.delete(chiave);
+      if (a.t === 'pirati' && !this.paralleli.some((x) => x.t === 'pirati' && x.isola === a.isola)) this.allinea();
+    });
+    this.filaIsola.set(chiave, questa);
   }
 
   private anima(durata: number, f: (t: number) => void): Promise<void> {

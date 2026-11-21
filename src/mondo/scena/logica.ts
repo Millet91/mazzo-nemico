@@ -44,6 +44,14 @@ export function isolaInPunto(p: Punto, isole: IsolaMappa[], scala: number, indic
   return meglio;
 }
 
+/**
+ * Animazioni solo grafiche che non fermano i comandi: vanno in parallelo alla coda e non accendono
+ * bus.mondoOccupato (chi piazza rinforzi tocca in fretta). Le altre sono bloccanti e vanno in coda.
+ */
+export function animazioneParallela(a: AnimazioneMondo): boolean {
+  return a.t === 'pirati' || a.t === 'centra';
+}
+
 /** Isole il cui aspetto è "prenotato" da un'animazione non ancora finita: la scena non le riallinea allo stato. */
 export function isoleBloccate(anim: readonly AnimazioneMondo[]): Set<IdIsola> {
   const s = new Set<IdIsola>();

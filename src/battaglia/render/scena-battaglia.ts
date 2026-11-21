@@ -13,10 +13,18 @@ import { Effetti } from './effetti';
 import { Forme, sprite, type IdForma } from './forme';
 import { TerrenoRender } from './terreno';
 
+function mescola(a: string, b: string, t: number): number {
+  const ca = hex(a), cb = hex(b);
+  const ch = (k: number) => Math.round(((ca >> k) & 255) * (1 - t) + ((cb >> k) & 255) * t);
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
 const MEZZA_CAPSULA = BIL.pirata.capsulaAltezza / 2;
 /** durata della morte del segnaposto: 10 f a 12 fps (11 §5) */
 const MORTE_MS = 833;
 const PUNTI_TRAIETTORIA = 60;
+/** sotto questa scala (px CSS per px di mondo) i nomi dei pirati non si scrivono */
+const SCALA_MIN_NOMI = 0.9;
 
 interface VisPirata {
   id: number;
@@ -28,6 +36,7 @@ interface VisPirata {
   etichetta: Container;
   barra: Graphics;
   pv: Text;
+  nome: Text;
   ultimaVita: number;
   ultimoX: number;
   /** ms dall'ultimo colpo (lampo + tremolio), −1 = niente */
@@ -50,8 +59,16 @@ export interface OpzioniDisegno {
 export class ScenaBattaglia {
   /** contenitore del mondo: lo trasforma la camera */
   readonly mondo = new Container();
+  /** cielo in px CSS, dietro al mondo (sostituisce lo sfondo del menu durante la battaglia) */
+  readonly cielo = new Container();
   /** contenitore in px CSS sopra il mondo */
   readonly schermo = new Container();
+  private readonly gradiente = new Graphics();
+  private readonly nuvole: Sprite[] = [];
+  /** mare lontano dietro al terreno, alla quota del mare: dai buchi sotto il livello del mare si vede l'acqua */
+  private readonly mareDietro = new Graphics();
+  private cieloW = 0;
+  private cieloH = 0;
   readonly terreno: TerrenoRender;
   readonly effetti: Effetti;
   private readonly forme: Forme;
@@ -59,6 +76,7 @@ export class ScenaBattaglia {
     decorazioni: new Container(), pirati: new Container(), proiettili: new Container(), traiettoria: new Container(),
   };
   private readonly acqua = new Graphics();
+  private readonly decorazioni: Sprite[] = [];
   private readonly pirati = new Map<number, VisPirata>();
   private readonly proiettili = new Map<number, Sprite>();
   private readonly puntini: Sprite[] = [];
@@ -66,6 +84,7 @@ export class ScenaBattaglia {
   private readonly freccia: Sprite;
   private readonly anelloMira = new Graphics();
   private tempo = 0;
+  private scala = 1;
   private chiaveTraiettoria = '';
   private mareDisegnato = -1;
 
@@ -73,13 +92,21 @@ export class ScenaBattaglia {
     this.forme = new Forme(renderer);
     this.terreno = new TerrenoRender(s.terreno);
     this.effetti = new Effetti(this.forme);
-    this.mondo.addChild(this.strato.decorazioni, this.terreno.radice);
+    this.mondo.addChild(this.mareDietro, this.strato.decorazioni, this.terreno.radice);
+    this.cielo.addChild(this.gradiente);
+    for (let i = 0; i < 4; i++) {
+      const n = sprite(this.forme.get('nuvola'));
+      n.alpha = 0.9;
+      this.nuvole.push(n);
+      this.cielo.addChild(n);
+    }
 
     for (const d of mappa.decorazioni) {
       const sp = sprite(this.forme.get(d.tipo as IdForma));
       sp.position.set(d.x, d.y);
       sp.scale.set(d.specchio ? -d.scala : d.scala, d.scala);
       this.strato.decorazioni.addChild(sp);
+      this.decorazioni.push(sp);
     }
 
     this.anelloTerra = sprite(this.forme.get('anello'));
@@ -136,7 +163,7 @@ export class ScenaBattaglia {
     this.schermo.addChildAt(etichetta, 0);
 
     const v: VisPirata = {
-      id: p.id, radice, corpo, lampo, braccio, etichetta, barra, pv,
+      id: p.id, radice, corpo, lampo, braccio, etichetta, barra, pv, nome,
       ultimaVita: -1, ultimoX: p.x, colpito: -1, atterrato: -1, morte: -1, annegato: false, passo: 0,
     };
     this.pirati.set(p.id, v);
@@ -158,7 +185,7 @@ export class ScenaBattaglia {
   eventi(ev: readonly EventoBattaglia[]): void {
     for (const e of ev) {
       switch (e.t) {
-        case 'cratere': this.terreno.cratere(e.x, e.y, e.raggio); break;
+        case 'cratere': this.terreno.cratere(e.x, e.y, e.raggio); this.decorazioniSenzaTerra(e.x, e.y, e.raggio); break;
         case 'esplosione': this.effetti.esplosione(e.x, e.y, e.raggio); break;
         case 'splash': this.effetti.splash(e.x, e.y, e.grande); break;
         case 'colpoPistola': this.effetti.lineaPistola(e.da.x, e.da.y, e.a.x, e.a.y); break;
@@ -186,17 +213,33 @@ export class ScenaBattaglia {
     }
   }
 
+  /** Una decorazione che ha perso il terreno sotto i piedi sparisce (sono solo grafiche, non cadono). */
+  private decorazioniSenzaTerra(x: number, y: number, r: number): void {
+    const { w, h, maschera } = this.s.terreno;
+    for (const d of this.decorazioni) {
+      if (!d.visible || Math.abs(d.x - x) > r + 20 || Math.abs(d.y - y) > r + 20) continue;
+      let appoggi = 0;
+      for (const dx of [-6, 0, 6]) {
+        const px = Math.round(d.x + dx), py = Math.round(d.y + 2);
+        if (px >= 0 && px < w && py >= 0 && py < h && maschera[py * w + px] !== 0) appoggi++;
+      }
+      if (appoggi < 2) d.visible = false;
+    }
+  }
+
   /** Aggiorna il disegno. Va chiamata una volta per frame, dopo `eventi`. */
   aggiorna(deltaMS: number, camera: Camera, o: OpzioniDisegno): void {
     this.tempo += deltaMS;
     const s = this.s;
     // camera → contenitore del mondo
     const k = camera.scala;
+    this.scala = k;
     this.mondo.scale.set(k);
     this.mondo.position.set(camera.w / 2 - camera.x * k, camera.h / 2 - camera.y * k);
     const aSchermo = (x: number, y: number) => camera.schermoDaMondo(x, y);
 
     this.terreno.aggiorna();
+    this.disegnaCielo(camera, deltaMS);
     this.disegnaAcqua(camera);
 
     const t = s.turno;
@@ -249,6 +292,18 @@ export class ScenaBattaglia {
       return;
     }
 
+    // a 0 PV il pirata resta 'vivo' e a terra fino alla lapide di fine risoluzione (README della sim)
+    if (p.vita <= 0) {
+      v.braccio.visible = false;
+      v.lampo.alpha = 0;
+      v.corpo.scale.set(p.verso, 1);
+      v.corpo.rotation = -p.verso * (Math.PI / 2);
+      v.corpo.position.set(0, -2);
+      const e = aSchermo(p.x, piedi - 20);
+      v.etichetta.position.set(Math.round(e.x), Math.round(e.y));
+      return;
+    }
+
     // verso (l'occhio guarda dove va il pirata)
     let sx = p.verso, sy = 1, rot = 0, dy = 0;
     // idle: respiro 1 → 0,97 in 1 s
@@ -287,7 +342,8 @@ export class ScenaBattaglia {
       v.braccio.scale.y = coseno(a) < 0 ? -1 : 1;
     }
 
-    // etichetta (nome, barra e PV) sopra la testa, in px CSS
+    // etichetta (nome, barra e PV) sopra la testa, in px CSS; da lontano il nome si nasconde (si sovrapporrebbe)
+    v.nome.visible = this.scala >= SCALA_MIN_NOMI;
     const e = aSchermo(p.x, piedi - BIL.pirata.altezzaSprite - 4);
     v.etichetta.position.set(Math.round(e.x), Math.round(e.y));
   }
@@ -332,6 +388,28 @@ export class ScenaBattaglia {
     }
   }
 
+  private disegnaCielo(camera: Camera, deltaMS: number): void {
+    if (camera.w !== this.cieloW || camera.h !== this.cieloH) {
+      this.cieloW = camera.w; this.cieloH = camera.h;
+      const g = this.gradiente.clear();
+      const fasce = 24;
+      for (let i = 0; i < fasce; i++) {
+        const y0 = Math.floor((camera.h * i) / fasce), y1 = Math.ceil((camera.h * (i + 1)) / fasce);
+        g.rect(0, y0, camera.w, y1 - y0 + 1).fill(mescola(PALETTE.cieloAlto, PALETTE.cieloOrizzonte, i / (fasce - 1)));
+      }
+      // sole basso a sinistra (luce da sinistra in alto, 03 §1)
+      g.circle(camera.w * 0.18, camera.h * 0.55, camera.h * 0.16).fill({ color: hex(PALETTE.sole), alpha: 0.25 })
+        .circle(camera.w * 0.18, camera.h * 0.55, camera.h * 0.09).fill(hex(PALETTE.sole));
+      this.nuvole.forEach((n, i) => { n.position.set((camera.w * (i + 0.3)) / 4, camera.h * (0.12 + 0.08 * (i % 3))); n.scale.set(camera.h / 400); });
+    }
+    // nuvole: scorrono piano e si spostano un poco con la camera (parallasse)
+    this.nuvole.forEach((n, i) => {
+      n.x += ((6 + 4 * (i % 3)) * deltaMS) / 1000;
+      const largo = 160 * n.scale.x;
+      if (n.x - largo > camera.w) n.x = -largo;
+    });
+  }
+
   private disegnaAcqua(camera: Camera): void {
     // acqua davanti al terreno, dal livello del mare in giù; si ridisegna solo quando il mare sale
     const mare = this.s.terreno.mare;
@@ -349,6 +427,8 @@ export class ScenaBattaglia {
       g.stroke({ width: 3, color: hex(PALETTE.schiuma), alpha: 0.8 });
       g.rect(-w, 24, largo, fondo - mare).fill({ color: hex(PALETTE.mareFondo), alpha: 0.5 });
       this.acqua.y = mare;
+      this.mareDietro.clear().rect(-w, mare, w * 3, fondo - mare).fill(hex(PALETTE.mareMedio))
+        .rect(-w, mare + 60, w * 3, fondo - mare).fill(hex(PALETTE.mareFondo));
     }
     // onde: scorrono di lato (periodo 40·2π px) e respirano
     this.acqua.x = ((this.tempo / 1000) * 18) % (Math.PI * 80);
@@ -359,6 +439,7 @@ export class ScenaBattaglia {
   distruggi(): void {
     this.terreno.distruggi();
     this.effetti.distruggi();
+    this.cielo.destroy({ children: true });
     this.mondo.destroy({ children: true });
     this.schermo.destroy({ children: true });
     this.forme.distruggi();

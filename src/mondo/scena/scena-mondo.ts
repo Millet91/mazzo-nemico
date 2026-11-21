@@ -14,7 +14,15 @@ import {
   capitoliAperti, capitoliBloccati, isolaInPunto, isoleBloccate, rotte, sbuffiNebbia, scalaSegni, viaggioInCoda,
   vistaDaStato, type IsolaMappa, type VistaIsola,
 } from './logica';
+import { PEZZI_MONDO } from '../../ui/kit/risorse';
 import type { TextureMondo } from './risorse';
+
+/** pedine, cartelli, bandierine e premi del kit di Arte UI sono a 3×: 1/3 di px d'immagine per px logico */
+const P = 1 / 3;
+const anc = (id: keyof typeof PEZZI_MONDO): [number, number] => {
+  const q = PEZZI_MONDO[id];
+  return [q.ancora[0] / q.w, q.ancora[1] / q.h];
+};
 
 const ROSSO = hex(COLORI_CIURMA.teschio.colore);
 const GRIGIO = hex(COLORI_CIURMA.marina.colore);
@@ -167,23 +175,23 @@ export class ScenaMondo {
 
     const base = { x: m.x + m.raggio * 0.05, y: m.y - m.raggio * 0.05 };
     const cartello = new Sprite(t.cartello);
-    cartello.anchor.set(0.5, 0.95); cartello.position.set(base.x, base.y); cartello.zIndex = base.y;
+    cartello.anchor.set(...anc('ui_mondo_cartello_marina')); cartello.position.set(base.x, base.y); cartello.zIndex = base.y;
     const bandierina = new Sprite(t.bandierina);
-    bandierina.anchor.set(8 / 50, 0.95); bandierina.position.set(base.x, base.y); bandierina.zIndex = base.y;
+    bandierina.anchor.set(...anc('ui_mondo_bandierina')); bandierina.position.set(base.x, base.y); bandierina.zIndex = base.y;
     const pedina = new Container();
     const pedinaSprite = new Sprite(t.pedinaGrigia);
-    pedinaSprite.anchor.set(0.5); pedinaSprite.scale.set(0.5);
+    pedinaSprite.anchor.set(...anc('ui_mondo_pedina_rossa')); pedinaSprite.scale.set(P);
     const numero = new Text({
       text: '0',
       style: { fontFamily: 'Lilita One', fontSize: 20, fill: 0xfff7e8, stroke: { color: SCURO, width: 4 } },
       resolution: 3,
     });
-    numero.anchor.set(0.5, 0.55); numero.position.set(0, -4);
+    numero.anchor.set(0.5, 0.55); numero.position.set(0, 0);
     pedina.addChild(pedinaSprite, numero);
     pedina.position.set(m.x + m.raggio * 0.62, m.y + m.raggio * 0.5);
     pedina.zIndex = pedina.y;
     const premio = new Sprite(t.premi.arma);
-    premio.anchor.set(0.5, 1); premio.scale.set(0.5);
+    premio.anchor.set(0.5, 1); premio.scale.set(P);
     premio.position.set(m.x - m.raggio * 0.35, m.y - m.raggio * 0.55);
     premio.zIndex = premio.y;
     strati.segni.addChild(cartello, bandierina, pedina, premio);
@@ -195,7 +203,7 @@ export class ScenaMondo {
     for (const b of sbuffiNebbia(this.mappa, MONDO_W, MONDO_H)) {
       const s = new Sprite(this.tex.nebbia);
       s.anchor.set(0.5); s.scale.set(b.s); s.rotation = b.r; s.position.set(b.x, b.y);
-      const base = 0.92;
+      const base = b.alfa;
       s.alpha = base;
       c.addChild(s);
       this.sbuffi.push({ s, x: b.x, y: b.y, capitolo: b.capitolo, base, fase: b.r * 10 });
@@ -281,7 +289,7 @@ export class ScenaMondo {
     i.pedinaSprite.texture = mio ? this.tex.pedinaRossa : this.tex.pedinaGrigia;
     i.numero.text = String(v.pirati);
     i.premio.visible = v.premio !== null;
-    if (v.premio) i.premio.texture = this.tex.premi[v.premio];
+    if (v.premio) i.premio.texture = this.tex.premiIsola.get(i.m.id) ?? this.tex.premi[v.premio];
     this.coloraOnda(i, mio ? ROSSO : GRIGIO);
   }
 
@@ -358,13 +366,13 @@ export class ScenaMondo {
     if (Math.abs(k - this.scalaSegniUltima) > 0.001) {
       this.scalaSegniUltima = k;
       for (const i of this.isole.values()) {
-        i.cartello.scale.set(0.5 * k); i.bandierina.scale.set(0.5 * k); i.pedina.scale.set(k);
+        i.cartello.scale.set(P * k); i.bandierina.scale.set(P * k); i.pedina.scale.set(k);
       }
     }
     const respiro = Math.sin(this.t / 700);
     for (const i of this.isole.values()) {
       i.onda.scale.set(0.5 * (1 + 0.012 * respiro));
-      i.premio.scale.set(0.5 * k);
+      i.premio.scale.set(P * k);
       // il premio galleggia a sinistra del cartello: le distanze crescono coi segnaposti, così non si coprono
       i.premio.position.set(i.m.x + i.m.raggio * 0.05 - 36 * k, i.m.y - i.m.raggio * 0.05 - (30 + 4 * Math.sin(this.t / 380 + i.m.x)) * k);
       // la bandierina sventola
@@ -534,8 +542,8 @@ export class ScenaMondo {
     await this.inVista([{ x: i.m.x, y: i.m.y, r: i.m.raggio * 1.6 }]);
     const y0 = i.cartello.y;
     // il cartello trema, si stacca e vola via
-    await this.anima(260, (t) => { i.cartello.rotation = Math.sin(t * 40) * 0.12 * (1 - t); i.cartello.scale.y = 0.5 * this.scalaSegniUltima * (1 - 0.15 * Math.sin(t * Math.PI)); });
-    i.cartello.scale.y = 0.5 * this.scalaSegniUltima;
+    await this.anima(260, (t) => { i.cartello.rotation = Math.sin(t * 40) * 0.12 * (1 - t); i.cartello.scale.y = P * this.scalaSegniUltima * (1 - 0.15 * Math.sin(t * Math.PI)); });
+    i.cartello.scale.y = P * this.scalaSegniUltima;
     await this.anima(650, (t) => {
       i.cartello.y = y0 - 160 * morbido(t);
       i.cartello.x = i.m.x + i.m.raggio * 0.05 + 70 * t;

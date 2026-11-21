@@ -44,13 +44,36 @@ export function isoleDaDipingere(): IsolaDaDipingere[] {
   return lista;
 }
 
-/** Sagome lontane dipinte nella carta (isole dei capitoli futuri: si intravedono sotto la nebbia). */
+/**
+ * Sagome lontane dipinte nella carta (isole dei capitoli futuri: si intravedono sotto la nebbia). Si scelgono
+ * da una griglia di candidati lontani dalle isole del capitolo, dalle rotte e dalla rosa dei venti: se si
+ * spostano le isole nei dati, basta ridipingere la carta.
+ */
 function sagomeLontane(): { x: number; y: number; r: number; s: Sagoma }[] {
-  const pos = [
-    [2550, 330, 80], [2820, 620, 95], [2420, 820, 70], [2700, 1050, 85], [2900, 1380, 75], [2420, 1500, 90],
-    [420, 300, 75], [260, 760, 85], [470, 1130, 70], [150, 1450, 60], [1650, 230, 65], [2150, 380, 80],
-  ];
-  return pos.map(([x, y, r], i) => ({ x, y, r, s: sagoma(`lontana-${i}`, r) }));
+  const isole = isoleDaDipingere();
+  const segmenti: [number, number, number, number][] = [];
+  for (const i of CAPITOLO_1.isole) for (const a of i.adiacenti) {
+    const b = CAPITOLO_1.isole.find((x) => x.id === a);
+    if (b && i.id < a) segmenti.push([i.pos.x, i.pos.y, b.pos.x, b.pos.y]);
+  }
+  const daSegmento = (x: number, y: number, [ax, ay, bx, by]: [number, number, number, number]) => {
+    const vx = bx - ax, vy = by - ay;
+    const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy)));
+    return Math.hypot(x - ax - vx * t, y - ay - vy * t);
+  };
+  const r = rng(61);
+  const out: { x: number; y: number; r: number; s: Sagoma }[] = [];
+  for (let gy = 0; gy < 5; gy++) {
+    for (let gx = 0; gx < 9; gx++) {
+      const x = 230 + gx * 330 + (r() - 0.5) * 120, y = 230 + gy * 320 + (r() - 0.5) * 100, rr = 55 + r() * 40;
+      if (x > MONDO_W - 200 || y > MONDO_H - 200) continue;
+      if (Math.hypot(x - 330, y - 1330) < 260) continue; // rosa dei venti
+      if (isole.some((i) => Math.hypot(x - i.x, y - i.y) - i.raggio - rr < 300)) continue;
+      if (segmenti.some((sg) => daSegmento(x, y, sg) < rr + 140)) continue;
+      out.push({ x, y, r: rr, s: sagoma(`lontana-${gx}-${gy}`, rr) });
+    }
+  }
+  return out;
 }
 
 /** Colori del terreno per bioma: [sabbia, prato, prato scuro, roccia, cima] */
@@ -602,8 +625,9 @@ type Dipinto = { nome: string; c: HTMLCanvasElement; formato: 'webp' | 'png' };
 
 /** Elenco dei file da dipingere (nome senza estensione). Lo usa dipingi.ts per chiederli uno alla volta. */
 export function elenco(): string[] {
-  const nomi = ['tavolo', 'carta', 'indici', 'onde-a', 'onde-b', 'pedina-rossa', 'pedina-grigia', 'cartello', 'bandierina',
-    'premio-arma', 'premio-mossa', 'premio-recluta', 'premio-bandiera', 'boccale', 'nebbia', 'veliero'];
+  // pedine, cartello, bandierina e premi definitivi sono del kit di Arte UI (public/assets/ui/): i segnaposto qui
+  // sotto restano dipingibili a richiesta (es. `dipingi.ts pedina-rossa`) ma non si salvano più di serie
+  const nomi = ['tavolo', 'carta', 'indici', 'onde-a', 'onde-b', 'boccale', 'nebbia', 'veliero'];
   for (const i of isoleDaDipingere()) nomi.push(`isola-${i.id}`, `onda-${i.id}`);
   return nomi;
 }

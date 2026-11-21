@@ -16,6 +16,8 @@ export interface Corpo {
 
 const P = BIL.pirata;
 const G = BIL.fisica.gravita;
+/** fino a questa velocità orizzontale (quella del salto) chi sale contro una parete le resta accostato */
+const SALTO_ACCOSTATO = Math.abs(P.saltoAvanti.vx) + 1e-9;
 
 /** Danno da caduta per un dislivello in px (00 §1.2: oltre 90 px, 1 PV ogni 4 px oltre la soglia, massimo 25). */
 export function dannoCaduta(dislivello: number): number {
@@ -94,6 +96,13 @@ export function vola(t: Terreno, c: Corpo): number {
     }
     const bloccoY = dy !== 0 && capsulaUrta(t, c.x, ny);
     const bloccoX = dx !== 0 && capsulaUrta(t, nx, c.y);
+    if (bloccoX && !bloccoY && dy < 0 && Math.abs(c.vx) <= SALTO_ACCOSTATO) {
+      // salto contro un muretto o uno scalino: il pirata sale accostato alla parete invece di rimbalzare indietro,
+      // e appena i piedi superano lo spigolo passa oltre (uno scalino di 24 px si supera con un salto)
+      c.y = ny;
+      if (c.y < c.yInizioCaduta) c.yInizioCaduta = c.y;
+      continue;
+    }
     if (bloccoY || !bloccoX) {
       if (dy > 0) {
         contattoSotto = true;

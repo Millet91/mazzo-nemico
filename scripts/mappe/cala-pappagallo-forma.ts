@@ -76,11 +76,22 @@ export const GROTTE = [
   { x: 720, y: 694, rx: 44, ry: 28 },
   { x: 1328, y: 694, rx: 44, ry: 28 },
 ];
-/** Ponti di legno: dalla Mesa al balcone della Rocca. */
+/**
+ * Ponti di legno: dalla Mesa al balcone della Rocca. Il ponte finisce a filo del bordo del balcone (x 912 e 1136,
+ * y 544): prima arrivava 15-20 px più in basso e dal ponte non si saliva sul balcone, né alla liana del Nido
+ * (QA studio v2 §2.2, "la liana non si raggiunge").
+ */
 export const PONTI = [
-  { x0: 794, x1: 930, y0: 608, y1: 544, spessore: 14 },
-  { x0: 1118, x1: 1254, y0: 544, y1: 608, spessore: 14 },
+  { x0: 794, x1: 912, y0: 608, y1: 544, spessore: 14 },
+  { x0: 1136, x1: 1254, y0: 544, y1: 608, spessore: 14 },
 ];
+/** quanto si incurva in giù il tavolato a metà ponte */
+export const PONTE_FRECCIA = 10;
+/** quota del piano del ponte nella colonna x (la usa anche il rattoppo della pittura) */
+export function quotaPonte(p: { x0: number; x1: number; y0: number; y1: number }, x: number, freccia = PONTE_FRECCIA): number {
+  const t = (x - p.x0) / (p.x1 - p.x0);
+  return Math.round(p.y0 + (p.y1 - p.y0) * t + Math.sin(Math.PI * t) * freccia);
+}
 /** Balconi di roccia sui fianchi della Rocca, dove arrivano i ponti. */
 export const BALCONI = [
   { x0: 912, x1: 962, y: 544, spessore: 26 },
@@ -105,18 +116,37 @@ export const CESPUGLI = [
 ];
 /** Nido: cengia scavata nel fianco della Rocca, sopra i balconi (si sale con la liana). x0 è il bordo verso il balcone. */
 export const NIDO = { x0: 938, x1: 978, y: 430 };
-/** Appigli per la scalata (contratto della Fisica: segmento verticale in aria, x = asse, yAlto = suolo in cima). */
+/**
+ * Appigli per la scalata (contratto della Fisica: segmento verticale in aria, x = asse, yAlto = suolo in cima).
+ * L'asse sta ad almeno 8 px dal muro: la capsula del pirata è larga 12, a meno di 7 px dal muro si incastra
+ * (bug "la scalata si ferma a metà" del 21/11: le scale grandi erano a 428 e 1618, a 5 px dal labbro della parete;
+ * le liane erano a 930 e 1118, a 3 px dal fianco della Rocca).
+ * yBasso qui è solo indicativo: `appigliDi` lo porta sul suolo vero della variante (nel Prologo c'è il molo, più in basso).
+ */
 export const APPIGLI: { tipo: 'scala' | 'liana'; x: number; yAlto: number; yBasso: number }[] = [
   // parete tra Terrazza bassa e Terrazza media
-  { tipo: 'scala', x: 428, yAlto: 765, yBasso: 851 },
-  { tipo: 'scala', x: 1618, yAlto: 765, yBasso: 852 },
+  { tipo: 'scala', x: 424, yAlto: 765, yBasso: 848 },
+  { tipo: 'scala', x: 1624, yAlto: 765, yBasso: 848 },
   // dal balcone al Nido sul fianco della Rocca
-  { tipo: 'liana', x: 930, yAlto: NIDO.y, yBasso: 544 },
-  { tipo: 'liana', x: 1118, yAlto: NIDO.y, yBasso: 544 },
-  // torri di vedetta (lato verso il mare)
-  { tipo: 'scala', x: 202, yAlto: 726, yBasso: 826 },
-  { tipo: 'scala', x: 1846, yAlto: 726, yBasso: 848 },
+  { tipo: 'liana', x: 926, yAlto: NIDO.y, yBasso: 544 },
+  { tipo: 'liana', x: 1122, yAlto: NIDO.y, yBasso: 544 },
+  // Le torri di vedetta NON hanno più la scala (studio v2, Fase 0). Stava dal lato del mare (x 202 e 1846), dietro i
+  // pali pieni della torre: dagli spawn non ci arrivava nessuno (test di raggiungibilità). Dal lato di terra non c'è
+  // posto: starebbe a meno di 40 px dagli spawn della Terrazza bassa. La torre con la sua scala torna con Cala v3 (Fase 2).
 ];
+/** Gli appigli con il piede sul suolo vero della maschera (primo pixel pieno sotto l'asse). */
+export function appigliDi(m: Uint8Array): typeof APPIGLI {
+  return APPIGLI.map((a) => {
+    let y = a.yAlto + 1;
+    while (y < FONDALE && m[y * W + a.x] === MATERIALE.aria) y++;
+    return { ...a, yBasso: y };
+  });
+}
+/**
+ * Barili di polvere, messi a mano e pari sui due lati: sui due balconi ai piedi delle liane e in cima alla Rocca.
+ * (Fino al 21/11 li sceglieva un seme: spostando i ponti sarebbero finiti tutti a sinistra.)
+ */
+export const BARILI_X = [917, 1052, 1131];
 /** Etichette per il pittore (canale verde della PNG dei materiali). */
 export const TAG = { foglie: 1, edificio: 2, rovina: 3, ponte: 4, molo: 5 } as const;
 
@@ -166,7 +196,7 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
   }
   // ponti di legno (assi spesse 14 px, appena incurvate)
   for (const p of PONTI) for (let x = p.x0; x <= p.x1; x++) {
-    const t = (x - p.x0) / (p.x1 - p.x0), y = Math.round(p.y0 + (p.y1 - p.y0) * t + Math.sin(Math.PI * t) * 14);
+    const y = quotaPonte(p, x);
     for (let k = 0; k < p.spessore; k++) if (!m[(y + k) * W + x]) { metti(x, y + k, MATERIALE.legno); tag[(y + k) * W + x] = TAG.ponte; }
   }
   // arco
@@ -221,7 +251,7 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
   for (const t of TORRI) {
     for (const px of [t.x0 + 4, t.x1 - 12]) for (let x = px; x < px + 8; x++) for (let y = t.piano; y < t.base + 4; y++) legno(x, y);
     for (let x = t.x0 - 4; x <= t.x1 + 4; x++) for (let y = t.piano; y < t.piano + 10; y++) legno(x, y);
-    // parapetto solo sul lato verso il centro (riparo); dal lato della scala si entra
+    // parapetto solo sul lato verso il centro (riparo)
     const px = t.x0 < W / 2 ? t.x1 - 2 : t.x0 - 4;
     for (let x = px; x < px + 6; x++) for (let y = t.piano - 28; y < t.piano; y++) legno(x, y);
     const cx = (t.x0 + t.x1) / 2;

@@ -3,8 +3,10 @@
 // [II] [PV + emblema A]   ⏱ timer  ~vento~   [PV + emblema B]
 //                                                      [⌖] (solo col pirata fuori schermo)
 //
+//  (suggerimento)
+//                                             [armi in fila: solo quelle che ho]
 //      [salta]                                              [miccia] [ARMA]
-//   [◀]       [▶]  [sali][scendi]               45° · 60%           [FUOCO]
+//   [◀]       [▶]  [sali][scendi]      ⚠ avviso · 45° · 60%         [FUOCO]
 //
 // Comandi v3 (21/11, il proprietario ha bocciato i joystick: coprivano la visuale): niente joystick. Si mira
 // trascinando il mirino oro attaccato al pirata, che è disegnato e toccato sul canvas (render/mirino.ts,
@@ -138,6 +140,15 @@ function IconaSalto() {
   );
 }
 
+/** Un pirata sta sotto i tasti di quel gruppo (PIANO §2 n.10): il gruppo diventa quasi trasparente e lo lascia vedere. */
+function sottoTasti(v: VistaBattaglia, gruppo: 'muovi' | 'tiro'): boolean {
+  const s = v.pirataSottoTasti;
+  if (!s) return false;
+  if (s === 'entrambi') return true;
+  // di norma il movimento sta a sinistra e il tiro a destra; coi mancini si scambiano
+  return (s === 'sx') === ((gruppo === 'muovi') !== mancini.value);
+}
+
 /**
  * Movimento (comandi v3): ◀ ▶ piccole e trasparenti, salto sopra; vicino a una scala o liana compaiono sali e
  * scendi. `accesa` = la sim accetta il movimento (azione e fuga); spente restano a schermo e ricordano il dito.
@@ -162,10 +173,11 @@ function PadMovimento({ v, accesa }: { v: VistaBattaglia; accesa: boolean }) {
   }, [accesa]);
   const scala = (v.arrampicata ?? 'libero') !== 'libero';
   useEffect(() => { if (!scala) arrampica(0); }, [scala]);
+  const coperto = sottoTasti(v, 'muovi');
   // se il turno finisce col dito sopra, il pirata si ferma
   useEffect(() => () => { frecce.attiva(false); salto.annulla(); arrampica(0); }, []);
   return (
-    <div class={`pad-muovi ${accesa ? '' : 'spento'} ${scala ? 'con-scala' : ''}`} data-testid="pad-muovi">
+    <div class={`pad-muovi ${accesa ? '' : 'spento'} ${scala ? 'con-scala' : ''} ${coperto ? 'sopra-pirata' : ''}`} data-testid="pad-muovi">
       <Tasto id="tasto-sinistra" label={T.battaglia.sinistra} cls="mini" giu={() => frecce.premi(-1)} su={() => frecce.rilascia(-1)}>
         <span class="disco"><Icona d={ICONE.sinistra} /></span>
       </Tasto>
@@ -193,7 +205,7 @@ function PadMovimento({ v, accesa }: { v: VistaBattaglia; accesa: boolean }) {
  * FUOCO (comandi v3): spara al rilascio del dito dentro il tasto (scivolando fuori si annulla) e una volta sola
  * per turno. Con la tastiera (Invio o Spazio) spara subito.
  */
-function TastoFuoco({ turno }: { turno: number }) {
+function TastoFuoco({ turno, avviso }: { turno: number; avviso?: 'vicino' | 'danno' }) {
   const [premuto, setPremuto] = useState(false);
   const g = useMemo(() => creaGrilletto(() => invia({ t: 'fuoco' })), []);
   const dentro = (e: PointerEvent): boolean => {
@@ -201,8 +213,8 @@ function TastoFuoco({ turno }: { turno: number }) {
     return Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)) <= r.width / 2 + 10;
   };
   return (
-    <button type="button" id="tasto-fuoco" data-testid="tasto-fuoco" class={`tasto fuoco testo ${premuto ? 'premuto' : ''}`}
-      aria-label={T.battaglia.fuoco}
+    <button type="button" id="tasto-fuoco" data-testid="tasto-fuoco" class={`tasto fuoco testo ${premuto ? 'premuto' : ''} ${avviso ? `avviso-${avviso}` : ''}`}
+      aria-label={avviso ? `${T.battaglia.fuoco}. ${T.battaglia.avvisoTiro[avviso]}` : T.battaglia.fuoco}
       onPointerDown={(e) => {
         e.preventDefault();
         try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* puntatore sintetico */ }
@@ -282,15 +294,18 @@ export function Hud({ v }: { v: VistaBattaglia }) {
       )}
 
       {vedi && <div class={`mira-info ${comandiClassici.value ? '' : 'v3'}`} data-testid="mira">{T.battaglia.mira(alzo(v.miraGradi), Math.round(v.potenza))}</div>}
+      {mira && v.avvisoTiro && !grigliaAperta.value && (
+        <div class={`avviso-tiro ${v.avvisoTiro} ${comandiClassici.value ? '' : 'v3'}`} data-testid="avviso-tiro" role="status">{T.battaglia.avvisoTiro[v.avvisoTiro]}</div>
+      )}
 
       {mioTurno && !comandiClassici.value && (
         <>
           <PadMovimento v={v} accesa={vedi} />
           {mira && (
-            <div class="pad-tiro" data-testid="pad-tiro">
+            <div class={`pad-tiro ${sottoTasti(v, 'tiro') ? 'sopra-pirata' : ''}`} data-testid="pad-tiro">
               {conMiccia && <ChipMiccia v={v} attivo={mira} />}
               <TastoArma v={v} attivo={mira} />
-              <TastoFuoco turno={v.numeroTurno} />
+              <TastoFuoco turno={v.numeroTurno} avviso={v.avvisoTiro} />
             </div>
           )}
           {mira && !mirinoUsato.value && v.arma !== 'sciabola' && !grigliaAperta.value && (
@@ -316,7 +331,7 @@ export function Hud({ v }: { v: VistaBattaglia }) {
             </div>
             <div class="colonna">
               <TastoArma v={v} attivo={mira} />
-              <Tasto id="tasto-fuoco" label={T.battaglia.fuoco} cls="fuoco testo" disabilitato={!mira}
+              <Tasto id="tasto-fuoco" label={T.battaglia.fuoco} cls={`fuoco testo ${v.avvisoTiro ? `avviso-${v.avvisoTiro}` : ''}`} disabilitato={!mira}
                 giu={() => t.fuoco.tocca(v.numeroTurno)}>{T.battaglia.fuoco}</Tasto>
             </div>
           </div>

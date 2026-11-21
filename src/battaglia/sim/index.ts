@@ -29,7 +29,7 @@ import { avanza, iniziaTurno, miraIniziale, pirataDelTurno, ritirata } from './t
 import { hashDi } from './hash';
 import { creaBarili } from './oggetti';
 import { creaAppigli } from './appigli';
-import { simulaColpo as simula, traiettoria as linea } from './simula';
+import { avvisoTiro as avviso, simulaColpo as simula, traiettoria as linea } from './simula';
 
 /** Crea lo stato iniziale. La mappa arriva dal generatore (battaglia/gen). Il turno 1 parte in fase 'inquadra'. */
 export function creaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata): StatoBattaglia {
@@ -178,6 +178,11 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
  */
 export function traiettoria(s: StatoBattaglia, maxPunti = 60, maxRimbalzi?: number): Punto[] {
   return linea(s, maxPunti, maxRimbalzi);
+}
+
+/** Avviso prima del fuoco: 'danno' = chi spara si farebbe male, 'vicino' = il colpo scoppierebbe a meno di 60 px da lui. Non muta `s`. */
+export function avvisoTiro(s: StatoBattaglia): 'vicino' | 'danno' | null {
+  return avviso(s);
 }
 
 /** Il pirata attivo (o undefined a battaglia finita). */

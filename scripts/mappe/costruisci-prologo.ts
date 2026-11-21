@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { MATERIALE, type Decorazione, type Punto } from '../../src/core/tipi';
 import { superficie } from '../../src/battaglia/gen/analisi';
 import { codificaMaschera } from '../../src/battaglia/mappe/rle';
-import { costruisciMaschera, W, H, MARE, FONDALE, APPIGLI, MOLO, GRADINO } from './cala-pappagallo-forma';
+import { costruisciMaschera, W, H, MARE, FONDALE, appigliDi, MOLO, GRADINO } from './cala-pappagallo-forma';
 import { leggiPng, scriviPng } from './png';
 
 const ID = 'cala-pappagallo-prologo';
@@ -37,7 +37,7 @@ const marinaio2 = { x: 846, y: suolo(846, 700) };
 const spawn: [Punto[], Punto[]] = [[scarlatta, pirata], [marinaio2, marinaio1]];
 // niente barili (il copione non li usa) e niente appigli a destra
 const barili: Punto[] = [];
-const appigli = APPIGLI.filter((a) => a.x < W / 2);
+const appigli = appigliDi(m).filter((a) => a.x < W / 2);
 const segnaposti: Record<string, Punto> = {
   cassa,
   veliero: { x: MOLO.x0 - 8, y: MARE },           // ormeggiato a sinistra del molo: lo disegna il Render

@@ -33,6 +33,19 @@ export function postoBarile(sup: Int32Array, mare: number, x: number): number {
   return lo;
 }
 
+/** Spiana la base di un barile in x alla quota sup[x] (scava sopra, riempie di sabbia sotto): modifica `m` e `sup`. */
+export function spianaBarile(m: Uint8Array, sup: Int32Array, x: number): Punto {
+  const y = sup[x];
+  for (let c = x - SPIANATA; c <= x + SPIANATA; c++) {
+    for (let yy = sup[c]; yy < y; yy++) m[yy * W + c] = MATERIALE.aria;
+    for (let yy = y; yy < sup[c]; yy++) m[yy * W + c] = MATERIALE.sabbia;
+    // base piena per 8 px anche sopra una grotta o un incavo
+    for (let yy = y; yy < y + 8; yy++) if (m[yy * W + c] === MATERIALE.aria) m[yy * W + c] = MATERIALE.sabbia;
+    sup[c] = y;
+  }
+  return { x, y };
+}
+
 /**
  * Piazza i barili. Dove il suolo non è piano ma quasi, spiana un gradino sotto il barile (scava sopra la quota
  * della base, riempie di sabbia sotto): modifica `m` e `sup`. Niente barili entro `lontano` px dalle x in `vieta`. Restituisce i barili in ordine di x.
@@ -52,13 +65,7 @@ export function piazzaBarili(s: ConRng, m: Uint8Array, sup: Int32Array, mare: nu
     let ok = true;
     for (let c = x - SPIANATA; c <= x + SPIANATA && ok; c++) if (Math.abs(sup[c] - y) > BARILE_SPIANA_MAX) ok = false;
     if (!ok) continue;
-    for (let c = x - SPIANATA; c <= x + SPIANATA; c++) {
-      for (let yy = sup[c]; yy < y; yy++) m[yy * W + c] = MATERIALE.aria;
-      for (let yy = y; yy < sup[c]; yy++) m[yy * W + c] = MATERIALE.sabbia;
-      // base piena per 8 px anche sopra una grotta o un incavo
-      for (let yy = y; yy < y + 8; yy++) if (m[yy * W + c] === MATERIALE.aria) m[yy * W + c] = MATERIALE.sabbia;
-      sup[c] = y;
-    }
+    spianaBarile(m, sup, x);
     out.push(p);
   }
   return out.sort((a, b) => a.x - b.x);

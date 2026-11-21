@@ -70,6 +70,12 @@ export const BIL = {
     spintaPerDanno: 7 / S,
     /** al massimo 5 tick per frame (13 caso 6) */
     tickMaxPerFrame: 5,
+    /**
+     * Tiro vicino (studio v2, Fase 0): se un colpo diretto (cannone) scoppia sul terreno a meno di tanti px da chi
+     * l'ha sparato e non raggiunge nessun altro, chi ha sparato non si fa male e non viene spinto ("pendio vicino").
+     * Sotto la stessa distanza l'HUD avvisa prima del fuoco.
+     */
+    tiroVicinoPx: 60,
     /** bordo bruciato dei crateri (03 §2) */
     bordoBruciato: 3,
     /** moltiplicatore del cratere per materiale, indice = valore della maschera (00 §1.2) */
@@ -112,6 +118,10 @@ export const BIL = {
     presa: 8,
     /** un pezzo di appiglio più corto di così sparisce */
     pezzoMinimo: 10,
+    /** in cima il pirata passa dalla scala al piano accanto (e dal piano alla scala, con "scendi") fino a questa distanza dall'asse */
+    passaggioCima: 20,
+    /** "scendi" dall'alto: i piedi stanno sul piano in cima, al più tanto sopra o sotto la cima dell'appiglio */
+    piediCima: 12,
   },
 
   /** barili di polvere già piazzati dal generatore (m1-ritmo §9; 06 §2 Porto e §7.4) */

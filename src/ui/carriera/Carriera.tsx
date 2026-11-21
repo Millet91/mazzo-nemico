@@ -11,6 +11,7 @@ import { CAMPAGNA } from '../../contenuti/campagna';
 import * as R from '../../mondo/carriera/regole';
 import { CartaDiProva, cartaDiProva } from './CartaDiProva';
 import { iconaPremio, testoPremio } from './premi';
+import { PannelloNuovo, PergamenaScena, urlPremio } from '../kit';
 import {
   annullaPreparazione, avantiScena, avvisi, banner, CAP, cambiaImbarco, chiudiAvviso, chiudiScheda, confermaRinforzi, defIsola,
   difendi, fineTurno, lanciaAttacco, nomeIsola, partenzeAperte, preparazione, riprovaCapitolo, rigaScena, schedaIsola,
@@ -195,37 +196,20 @@ function Avvisi() {
   if (a.t === 'premio') {
     const battuta = C.battutePremio[a.isola];
     return (
-      <div class="scrim" onClick={chiudiAvviso}>
-        <section class="car-pergamena car-nuovo" role="dialog" aria-modal="true" data-testid="car-premio">
-          <h2>{C.nuovo}</h2>
-          {a.premi.map((p, i) => (
-            <p key={i} class="car-premio grande">
-              <span class="car-icona">{iconaPremio(p)}</span> {testoPremio(p)}
-            </p>
-          ))}
-          {a.premi.some((p) => p.t === 'mossa' || p.t === 'arma') && <p class="car-nota">{C.premi.prestoInBattaglia}</p>}
-          {battuta && <p class="car-battuta"><b>{C.personaggi[battuta.chi]}:</b> «{battuta.testo}»</p>}
-          <footer><Bottone tipo="primario" id="car-premio-ok" onClick={chiudiAvviso}>{C.avanti}</Bottone></footer>
-        </section>
-      </div>
+      <PannelloNuovo
+        premi={a.premi.map((p) => ({ icona: p.t === 'arma' ? p.arma : urlPremio(p), titolo: testoPremio(p) }))}
+        nota={a.premi.some((p) => p.t === 'mossa' || p.t === 'arma') ? C.premi.prestoInBattaglia : undefined}
+        battuta={battuta ? { chi: C.personaggi[battuta.chi], testo: `«${battuta.testo}»` } : undefined}
+        etichettaPulsante={C.avanti} onChiudi={chiudiAvviso} />
     );
   }
   const righe = C.scene[a.chiave] ?? [];
   const r = righe[rigaScena.value];
   if (!r) return null;
   return (
-    <div class="scrim car-scena-fondo" onClick={avantiScena}>
-      <section class="car-scena" role="dialog" aria-modal="true" data-testid="car-scena">
-        <div class={`car-ritratto r-${r.chi}`} aria-hidden="true">{(C.personaggi[r.chi] ?? '?').replace(/^(Mastro|Sergente|Cadetto) /, '').charAt(0)}</div>
-        <div class="car-fumetto">
-          <b>{C.personaggi[r.chi]}</b>
-          <p>{r.testo}</p>
-        </div>
-        <footer>
-          <Bottone id="car-salta" onClick={chiudiAvviso}>{C.salta}</Bottone>
-          <Bottone tipo="primario" id="car-avanti" onClick={avantiScena}>{C.avanti}</Bottone>
-        </footer>
-      </section>
+    <div class="scrim car-scena-fondo">
+      <PergamenaScena ritratto={r.chi} nome={C.personaggi[r.chi]} testo={r.testo}
+        onAvanti={avantiScena} onSalta={chiudiAvviso} etichette={{ avanti: C.avanti, salta: C.salta }} />
     </div>
   );
 }

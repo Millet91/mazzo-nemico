@@ -70,6 +70,12 @@ export const BIL = {
     spintaPerDanno: 7 / S,
     /** al massimo 5 tick per frame (13 caso 6) */
     tickMaxPerFrame: 5,
+    /**
+     * Tiro vicino (studio v2, Fase 0): se un colpo diretto (cannone) scoppia sul terreno a meno di tanti px da chi
+     * l'ha sparato e non raggiunge nessun altro, chi ha sparato non si fa male e non viene spinto ("pendio vicino").
+     * Sotto la stessa distanza l'HUD avvisa prima del fuoco.
+     */
+    tiroVicinoPx: 60,
     /** bordo bruciato dei crateri (03 §2) */
     bordoBruciato: 3,
     /** moltiplicatore del cratere per materiale, indice = valore della maschera (00 §1.2) */

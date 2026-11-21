@@ -39,6 +39,13 @@ export interface VistaBattaglia {
   arrampicata?: 'libero' | 'vicino' | 'appeso';
   /** il pirata attivo è fuori dallo schermo (camera spostata a mano): l'HUD mostra il tasto per ricentrare */
   pirataFuoriVista?: boolean;
+  /** un pirata vivo sta sotto i tasti di un angolo in basso (sinistro / destro): l'HUD li rende quasi trasparenti */
+  pirataSottoTasti?: 'sx' | 'dx' | 'entrambi';
+  /**
+   * avviso sul colpo che partirebbe ora (solo nel turno del giocatore, mentre mira): 'danno' = chi spara si
+   * farebbe male, 'vicino' = il colpo scoppierebbe a un passo da lui senza ferirlo (colpo sprecato)
+   */
+  avvisoTiro?: 'vicino' | 'danno';
   esito: EsitoBattaglia | null;
 }
 

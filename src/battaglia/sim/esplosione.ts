@@ -54,10 +54,13 @@ export function effettoEsplosione(
 /**
  * Fa esplodere `arma` in (x, y): cratere, danni e spinte a tutti i pirati in campo (anche a chi ha sparato).
  * `ciurma` = ciurma di chi ha sparato (per il tratto del Teschio); null per la lapide.
+ * `risparmia` = id del pirata che non prende danno né spinta SE l'esplosione non raggiunge nessun altro pirata
+ * (tiro vicino, vedi `tiroVicino`); −1 = nessuno.
  */
 export function esplodi(
   s: StatoBattaglia, x: number, y: number, arma: IdArma | 'lapide' | 'cassa', ciurma: IdCiurma | null, eventi: EventoBattaglia[],
   parametri?: { raggio: number; danno: number },
+  risparmia = -1,
 ): void {
   const p = parametri ?? (arma === 'cassa' ? BIL.casse.esplosione : parametriEsplosione(arma));
   const raggio = p.raggio;
@@ -66,8 +69,11 @@ export function esplodi(
   const spinta = base * BIL.fisica.spintaPerDanno;
   eventi.push({ t: 'esplosione', x, y, raggio, arma });
   scavaCratere(s.terreno, x, y, raggio, eventi);
+  // tiro vicino: `risparmia` = id di chi ha sparato contro il terreno lì accanto; si salva solo se il colpo è sprecato
+  const salvo = risparmia >= 0 && !s.pirati.some((q) => q.stato === 'vivo' && q.id !== risparmia && effettoEsplosione(x, y, raggio, danno, spinta, q.x, q.y))
+    ? risparmia : -1;
   for (const q of s.pirati) {
-    if (q.stato !== 'vivo') continue;
+    if (q.stato !== 'vivo' || q.id === salvo) continue;
     const e = effettoEsplosione(x, y, raggio, danno, spinta, q.x, q.y);
     if (!e) continue;
     staccaPirata(q, eventi);
@@ -83,4 +89,15 @@ export function parametriEsplosione(arma: IdArma | 'lapide'): { raggio: number; 
   if (arma === 'lapide') return { raggio: BIL.lapide.raggio, danno: BIL.lapide.danno };
   if (arma === 'barile') return { raggio: BIL.barili.raggio, danno: BIL.barili.danno };
   return { raggio: ARMA[arma].raggio, danno: ARMA[arma].danno };
+}
+
+/**
+ * Tiro vicino (studio v2, Fase 0; BIL.fisica.tiroVicinoPx): un colpo diretto senza miccia che scoppia sul TERRENO
+ * a meno di 60 px dal centro di chi l'ha sparato. Restituisce true se vale la regola; chi spara si salva solo se
+ * l'esplosione non raggiunge nessun altro (lo decide `esplodi`). Un colpo che gli ricade addosso non conta.
+ */
+export function tiroVicino(arma: IdArma | 'lapide', px: number, py: number, x: number, y: number): boolean {
+  if (arma === 'lapide' || ARMA[arma].tipo !== 'balistica') return false;
+  const dx = x - px, dy = y - py, r = BIL.fisica.tiroVicinoPx;
+  return dx * dx + dy * dy < r * r;
 }

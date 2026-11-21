@@ -266,6 +266,7 @@ export class Regista {
 
     const vista = creaVista(pa.s, pa.iaPensa);
     vista.pirataFuoriVista = this.pirataFuoriVista();
+    vista.pirataSottoTasti = this.pirataSottoTasti();
     if (!visteUguali(bus.battaglia.value, vista)) bus.battaglia.value = vista;
 
     if (this.prova) this.contaProva(deltaGrezzo);
@@ -279,6 +280,26 @@ export class Regista {
     if (!p) return false;
     const q = cam.schermoDaMondo(p.x, p.y);
     return q.x < -8 || q.x > cam.w + 8 || q.y < -8 || q.y > cam.h + 8;
+  }
+
+  /**
+   * Un pirata vivo sta sotto i tasti di un angolo in basso (solo nel turno del giocatore, quando i tasti ci sono):
+   * l'HUD li rende quasi trasparenti (PIANO §2 n.10). I riquadri sono quelli che la camera già tiene liberi per chi tira.
+   */
+  private pirataSottoTasti(): 'sx' | 'dx' | 'entrambi' | undefined {
+    const pa = this.partita!, s = pa.s, cam = this.camera;
+    if (s.esito || pa.toccaIa || s.turno.fase === 'fine') return undefined;
+    const yTasti = cam.h - INQUADRA.levaAlta;
+    let sx = false, dx = false;
+    for (const p of s.pirati) {
+      if (p.stato !== 'vivo') continue;
+      // la figura va dai piedi (y + 11) al nome sopra la testa: basta che una parte finisca sotto i tasti
+      const q = cam.schermoDaMondo(p.x, p.y + 11);
+      if (q.y < yTasti || q.y - 40 * cam.scala > cam.h) continue;
+      if (q.x > -12 && q.x < INQUADRA.levaLarga) sx = true;
+      else if (q.x < cam.w + 12 && q.x > cam.w - INQUADRA.levaLarga) dx = true;
+    }
+    return sx && dx ? 'entrambi' : sx ? 'sx' : dx ? 'dx' : undefined;
   }
 
   private opzioniDisegno() {

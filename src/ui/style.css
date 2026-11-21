@@ -302,9 +302,27 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 .hud.mancini .pad-tiro { right: auto; left: var(--bordo-corto); }
 .hud.mancini .pad-tiro #chip-miccia { right: auto; left: 76px; }
 .hud.mancini .mira-info.v3 { right: auto; left: calc(var(--bordo-corto) + 76px); }
-/* la prima volta: una riga in basso al centro spiega il mirino; sparisce per sempre alla prima mira */
+/* avviso sul colpo (Fase 0, sicurezza del tiro): sopra "45° · 60%", e un anello sul tasto FUOCO */
+.avviso-tiro {
+  position: absolute; right: var(--bordo-corto); bottom: calc(var(--sicura-b) + 208px); pointer-events: none; white-space: nowrap;
+  padding: 3px 8px; border-radius: 12px; font-weight: 900; font-size: 13px; color: var(--inchiostro); background: var(--oro);
+}
+.avviso-tiro.v3 { right: calc(var(--bordo-corto) + 76px); bottom: calc(var(--sicura-b) + 46px); }
+.avviso-tiro.danno { background: #FF5A4D; color: #fff; }
+.hud.mancini .avviso-tiro { right: auto; left: var(--bordo-corto); }
+.hud.mancini .avviso-tiro.v3 { right: auto; left: calc(var(--bordo-corto) + 76px); }
+.tasto.fuoco.avviso-vicino { box-shadow: 0 0 0 3px var(--oro); }
+.tasto.fuoco.avviso-danno { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #FF5A4D; }
+/* un pirata sotto i tasti (PIANO §2 n.10): i tasti restano dove sono ma quasi trasparenti; tornano pieni al tocco */
+.pad-muovi .disco, .pad-tiro .tasto { transition: opacity 120ms linear, background 80ms linear, border-color 80ms linear; }
+.pad-muovi.sopra-pirata .tasto:not(.premuto) .disco { opacity: .25; }
+.pad-tiro.sopra-pirata #tasto-fuoco:not(.premuto) { opacity: .4; }
+.pad-tiro.sopra-pirata #tasto-arma:not(.premuto) .cerchio-arma { opacity: .4; }
+/* la prima volta: una riga in alto a sinistra, sotto i PV, spiega il mirino; sparisce per sempre alla prima mira */
 .suggerimento-mirino {
-  position: absolute; left: 50%; bottom: calc(var(--sicura-b) + 8px); transform: translateX(-50%); white-space: nowrap;
+  position: absolute; left: var(--bordo-corto); top: calc(var(--sicura-a) + 56px); pointer-events: none;
+  /* sta a sinistra del timer e della scritta del turno: se è lunga va a capo */
+  max-width: calc(50% - var(--bordo-corto) - 84px); line-height: 1.2;
   padding: 6px 14px; border-radius: 14px; background: rgba(19, 41, 58, .8); border: 1px solid rgba(255, 200, 61, .6);
   color: var(--oro); font-weight: 900; font-size: 14px; animation: respira 1.6s ease-in-out infinite;
 }
@@ -322,20 +340,22 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 .contatore .etichetta { flex: 1; font-weight: 900; font-size: 16px; }
 .contatore .numero { min-width: 32px; text-align: center; font: 400 28px var(--font-titolo); font-variant-numeric: tabular-nums; }
 
-/* la griglia parte sotto la barra alta: timer e vento restano visibili (il timer non si ferma, 00 §3) */
-.scrim-griglia {
-  position: absolute; inset: calc(var(--sicura-a) + 68px) 0 0; pointer-events: auto; background: rgba(14, 27, 38, .4);
-  display: flex; justify-content: center; align-items: center; padding-bottom: var(--sicura-b);
-}
+/* Armi in fila (studio v2, UX §3.6): solo le armi che ho, in basso accanto ad ARMA; il campo resta libero e
+   non si scurisce. Il velo trasparente sotto la barra alta serve solo a chiudere toccando fuori.
+   A 800×360 con 4 armi la fila è 376×76 px: il 10% del campo (QA: meno del 35%). */
+.scrim-griglia { position: absolute; inset: calc(var(--sicura-a) + 68px) 0 0; pointer-events: auto; }
 .griglia-armi {
-  display: grid; grid-template-columns: repeat(4, 88px); grid-auto-rows: 64px; gap: 6px; padding: 10px;
-  border-radius: 16px; background: rgba(19, 41, 58, .85); border: 1px solid #FFFFFF22; animation: entra var(--rapida) var(--curva);
+  position: absolute; right: calc(var(--bordo-corto) + 76px); bottom: calc(var(--sicura-b) + 70px);
+  display: grid; grid-template-columns: repeat(var(--colonne, 4), 88px); grid-auto-rows: 64px; gap: 4px; padding: 6px;
+  border-radius: 16px; background: rgba(19, 41, 58, .88); border: 1px solid #FFFFFF22; animation: entra var(--rapida) var(--curva);
+}
+.hud.mancini .griglia-armi { right: auto; left: calc(var(--bordo-corto) + 76px); }
+.armi-bloccate {
+  position: absolute; right: 8px; top: -22px; padding: 2px 8px; border-radius: 10px; background: rgba(19, 41, 58, .88);
+  font-weight: 900; font-size: 12px; color: var(--testo-dim);
 }
 @media (max-height: 420px) {
-  .griglia-armi { grid-auto-rows: 56px; gap: 4px; padding: 6px; }
-  .cella-arma { padding: 2px 4px; gap: 1px; }
-  .cella-arma .icona { font-size: 17px; height: 18px; overflow: hidden; }
-  .cella-arma .nome { line-height: 1.05; }
+  .griglia-armi { grid-auto-rows: 60px; }
 }
 .cella-arma {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -348,7 +368,6 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 }
 .cella-arma .munizioni { position: absolute; top: 2px; right: 6px; font-weight: 900; font-size: 12px; color: var(--oro); }
 .cella-arma.scelta { border-color: var(--oro); background: #FFC83D22; }
-.cella-arma.bloccata { background: #FFFFFF08; color: var(--testo-dim); cursor: default; filter: grayscale(1); opacity: .6; }
 
 .scrim-battaglia {
   position: absolute; inset: 0; pointer-events: auto; display: grid; place-items: center;

@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { BIL } from '../../src/contenuti/bilanciamento';
 import { MATERIALE } from '../../src/core/tipi';
 import type { StatoBattaglia } from '../../src/core/tipi';
-import { creaBattaglia, eseguiComando } from '../../src/battaglia/sim';
+import { avvisoTiro, creaBattaglia, eseguiComando, hashStato, simulaColpo } from '../../src/battaglia/sim';
 import { avanza, avanzaFinche, battagliaPiatta, config, eventiDi, inAzione, mappa, pirata, rettangolo, SUOLO, terrenoPiatto } from './aiuti';
 
 const MEZZA = BIL.pirata.capsulaAltezza / 2;
@@ -114,5 +114,72 @@ describe('Fase 0 · raggiungibilità', () => {
     eseguiComando(s, { t: 'muovi', dir: p.x < 530 ? 1 : -1 });
     avanza(s, 90);
     expect(Math.abs(pirata(s).x - x0)).toBeCloseTo(90 * BIL.pirata.camminata, 6);
+  });
+});
+
+describe('Fase 0 · sicurezza del tiro', () => {
+  /** pendio di roccia che sale a destra del pirata: parete da x 540 in poi, alta 200 px */
+  function conPendio(nemicoX = 1600): StatoBattaglia {
+    const t = terrenoPiatto();
+    rettangolo(t, 540, SUOLO - 200, 700, SUOLO, MATERIALE.roccia);
+    return battagliaPiatta([500], [nemicoX], { terreno: t });
+  }
+
+  it('cannonata contro il pendio vicino: chi spara non si fa male e non viene spinto', () => {
+    const s = conPendio();
+    inAzione(s);
+    const p = pirata(s);
+    eseguiComando(s, { t: 'mira', mezziGradi: 2 * 37, potenza: 73 });
+    expect(avvisoTiro(s)).toBe('vicino');
+    eseguiComando(s, { t: 'fuoco' });
+    const ev = avanzaFinche(s, (x) => x.turno.fase === 'fuga' || x.turno.fase === 'risoluzione', 600);
+    expect(eventiDi(ev, 'esplosione')).toHaveLength(1);
+    expect(p.vita).toBe(BIL.pirata.pv);
+    expect(eventiDi(ev, 'danno')).toHaveLength(0);
+    expect(p.aTerra).toBe(true);
+  });
+
+  it('se la stessa cannonata raggiunge anche un nemico, vale per tutti e due (niente colpi sicuri a bruciapelo)', () => {
+    const s = conPendio(530);
+    inAzione(s);
+    const p = pirata(s), nemico = s.pirati.find((q) => q.squadra !== p.squadra)!;
+    nemico.y = p.y; // accanto, ai piedi del pendio
+    eseguiComando(s, { t: 'mira', mezziGradi: 2 * 37, potenza: 73 }); // lo stesso tiro contro il pendio
+    expect(avvisoTiro(s)).toBe('danno');
+    eseguiComando(s, { t: 'fuoco' });
+    avanzaFinche(s, (x) => x.turno.fase === 'fuga' || x.turno.fase === 'risoluzione', 600);
+    expect(nemico.vita).toBeLessThan(nemico.vitaMax);
+    expect(p.vita).toBeLessThan(BIL.pirata.pv);
+  });
+
+  it('la granata ai propri piedi fa male come prima, e l\'HUD avvisa', () => {
+    const s = battagliaPiatta([500], [1600]);
+    inAzione(s);
+    const p = pirata(s);
+    eseguiComando(s, { t: 'arma', arma: 'granata' });
+    eseguiComando(s, { t: 'miccia', secondi: 1 });
+    eseguiComando(s, { t: 'mira', mezziGradi: 2 * 80, potenza: 5 });
+    expect(avvisoTiro(s)).toBe('danno');
+    eseguiComando(s, { t: 'fuoco' });
+    avanzaFinche(s, (x) => x.turno.fase === 'fuga' || x.turno.fase === 'risoluzione', 600);
+    expect(p.vita).toBeLessThan(BIL.pirata.pv);
+  });
+
+  it('un tiro lontano non dà nessun avviso, e l\'anteprima non cambia lo stato', () => {
+    const s = battagliaPiatta([500], [1600]);
+    inAzione(s);
+    eseguiComando(s, { t: 'mira', mezziGradi: 2 * 45, potenza: 70 });
+    const prima = hashStato(s);
+    expect(avvisoTiro(s)).toBeNull();
+    expect(hashStato(s)).toBe(prima);
+  });
+
+  it('simulaColpo (IA e anteprima) segue la stessa regola della battaglia', () => {
+    const s = conPendio();
+    inAzione(s);
+    const p = pirata(s);
+    const e = simulaColpo(s, { pirata: p.id, arma: 'cannone', mezziGradi: 2 * 37, potenza: 73 });
+    expect(e.impatto).not.toBeNull();
+    expect(e.danni[p.id] ?? 0).toBe(0);
   });
 });

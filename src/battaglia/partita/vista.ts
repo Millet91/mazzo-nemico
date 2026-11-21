@@ -4,6 +4,23 @@ import type { StatoBattaglia } from '../../core/tipi';
 import { inGradi } from '../../core/trig';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { appiglioSotto, appiglioVicino } from '../sim/appigli';
+import { avvisoTiro } from '../sim';
+
+// L'avviso sul tiro costa una simulazione del colpo: si ricalcola solo quando cambia qualcosa che lo decide.
+let chiaveAvviso = '';
+let ultimoAvviso: 'vicino' | 'danno' | null = null;
+function avviso(s: StatoBattaglia): 'vicino' | 'danno' | undefined {
+  const t = s.turno;
+  const p = s.pirati.find((x) => x.id === t.pirata);
+  if (!p || s.esito || t.fase !== 'azione' || s.squadre[t.squadra].controllo !== 'umano') return undefined;
+  // mentre si mira il terreno e gli altri pirati non cambiano: bastano il turno, la mira e dove sta chi tira
+  const chiave = `${s.config.seme}|${t.numero}|${t.arma}|${t.mira.mezziGradi}|${t.mira.potenza}|${t.miccia}|${s.vento}|${Math.floor(p.x)}|${Math.floor(p.y)}|${p.aTerra}`;
+  if (chiave !== chiaveAvviso) {
+    chiaveAvviso = chiave;
+    ultimoAvviso = avvisoTiro(s);
+  }
+  return ultimoAvviso ?? undefined;
+}
 
 export function creaVista(s: StatoBattaglia, iaPensa: boolean): VistaBattaglia {
   const t = s.turno;
@@ -46,6 +63,7 @@ export function creaVista(s: StatoBattaglia, iaPensa: boolean): VistaBattaglia {
     iaPensa,
     puoArrendersi: umano >= 0 && s.squadre[umano].ruolo === 'attaccante' && t.numero >= BIL.battaglia.ritirataDalTurno && !s.esito,
     arrampicata,
+    avvisoTiro: avviso(s),
     esito: s.esito,
   };
 }

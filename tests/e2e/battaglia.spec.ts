@@ -166,16 +166,24 @@ for (const f of FORMATI) {
   });
 }
 
-test('griglia 4×4: 4 armi attive, tocco sceglie e chiude, tocco fuori chiude, il timer non si ferma', async ({ page }) => {
+test('armi in fila: solo le 4 che ho, meno del 35% del campo; tocco sceglie e chiude, tocco fuori ed Esc chiudono, il timer non si ferma', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 360 });
   await entraInBattaglia(page);
   await page.locator('#tasto-arma').click();
-  await expect(page.locator('.cella-arma')).toHaveCount(16);
+  await expect(page.locator('.cella-arma')).toHaveCount(4);
   await expect(page.locator('.cella-arma.attiva')).toHaveCount(4);
-  await expect(page.locator('.cella-arma.bloccata')).toHaveCount(12);
-  // tocco su un'arma bloccata: non succede niente
-  await page.locator('[data-arma="kraken"]').click({ force: true });
-  await expect(page.getByTestId('griglia-armi')).toBeVisible();
+  // le 12 armi da sbloccare non occupano caselle: una sola scritta
+  await expect(page.getByTestId('armi-bloccate')).toHaveText('+12 🔒');
+  await expect(page.locator('[data-arma="kraken"]')).toHaveCount(0);
+  // QA studio v2 §3.8: il menu armi copre meno del 35% del campo e nessuna casella è sotto i 44 px
+  const [g] = await rettangoli(page, '[data-testid="griglia-armi"]');
+  expect((g.w * g.h) / (800 * 360)).toBeLessThan(0.35);
+  for (const c of await rettangoli(page, '.cella-arma')) { expect(c.w).toBeGreaterThanOrEqual(44); expect(c.h).toBeGreaterThanOrEqual(44); }
+  // Esc (il tasto indietro del telefono) chiude solo il menu, senza aprire la pausa
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('griglia-armi')).toBeHidden();
+  expect(await page.evaluate(() => (window as any).__kaboom.bus.battagliaInPausa.value)).toBe(false);
+  await page.locator('#tasto-arma').click();
   await page.locator('[data-arma="granata"]').click();
   await expect(page.getByTestId('griglia-armi')).toBeHidden();
   expect((await registro(page)).comandi).toContainEqual({ t: 'arma', arma: 'granata' });
@@ -277,6 +285,44 @@ async function centro(page: Page, testid: string) {
   const b = (await page.getByTestId(testid).boundingBox())!;
   return { x: b.x + b.width / 2, y: b.y + b.height / 2, w: b.width };
 }
+
+test('Fase 0: avviso sul tiro vicino, tasti trasparenti sopra un pirata, suggerimento in alto a sinistra', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 360 });
+  await entraInBattaglia(page, vista(), false);
+  // suggerimento del mirino: in alto a sinistra sotto i PV, non più in basso al centro sopra i pirati
+  const [sugg] = await rettangoli(page, '[data-testid="suggerimento-mirino"]');
+  expect(sugg.x).toBeLessThan(120);
+  expect(sugg.y + sugg.h).toBeLessThan(120);
+  // nessun avviso: FUOCO normale
+  await expect(page.getByTestId('avviso-tiro')).toHaveCount(0);
+  await aggiorna(page, { avvisoTiro: 'vicino' });
+  await expect(page.getByTestId('avviso-tiro')).toHaveText('⚠ Troppo vicino');
+  await expect(page.locator('#tasto-fuoco')).toHaveClass(/avviso-vicino/);
+  await aggiorna(page, { avvisoTiro: 'danno' });
+  await expect(page.getByTestId('avviso-tiro')).toHaveText('⚠ Ti fai male!');
+  await expect(page.locator('#tasto-fuoco')).toHaveClass(/avviso-danno/);
+  // l'avviso non copre né FUOCO né "45° · 60%"
+  const [avv] = await rettangoli(page, '[data-testid="avviso-tiro"]');
+  const [mira] = await rettangoli(page, '[data-testid="mira"]');
+  const [fuoco] = await rettangoli(page, '#tasto-fuoco');
+  expect(avv.y + avv.h).toBeLessThanOrEqual(mira.y);
+  expect(avv.x + avv.w).toBeLessThanOrEqual(fuoco.x);
+  await page.screenshot({ path: 'test-results/screenshot/avviso-tiro.png' });
+  await aggiorna(page, { avvisoTiro: undefined });
+
+  // un pirata sotto le frecce: i dischi diventano quasi trasparenti, FUOCO resta pieno
+  const opacita = (sel: string) => page.locator(sel).first().evaluate((e) => Number(getComputedStyle(e).opacity));
+  await aggiorna(page, { pirataSottoTasti: 'sx' });
+  await expect.poll(() => opacita('#tasto-sinistra .disco')).toBeCloseTo(0.25, 2);
+  expect(await opacita('#tasto-fuoco')).toBeGreaterThan(0.9);
+  await aggiorna(page, { pirataSottoTasti: 'dx' });
+  await expect.poll(() => opacita('#tasto-fuoco')).toBeCloseTo(0.4, 2);
+  await expect.poll(() => opacita('#tasto-sinistra .disco')).toBe(1);
+  // mancini: i lati si scambiano
+  await page.evaluate(() => ((window as any).__kaboom.preferenze.mancini.value = true));
+  await expect.poll(() => opacita('#tasto-sinistra .disco')).toBeCloseTo(0.25, 2);
+  await page.evaluate(() => ((window as any).__kaboom.preferenze.mancini.value = false));
+});
 
 test('comandi v3: niente joystick, frecce salto e FUOCO piccoli ai bordi; ARMA nel colore della ciurma', async ({ page }) => {
   for (const f of FORMATI) {

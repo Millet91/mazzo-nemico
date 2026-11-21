@@ -75,6 +75,9 @@ export const it = {
     arma: 'ARMA',
     armaAiuto: 'Scegli l\'arma',
     fuoco: 'FUOCO',
+    avvisoTiro: { danno: '⚠ Ti fai male!', vicino: '⚠ Troppo vicino' },
+    armiBloccate: (n: number) => `+${n} 🔒`,
+    armiBloccateAiuto: (n: number) => `Altre ${n} armi da sbloccare`,
     miccia: (s: number) => `${s} s`,
     micciaAiuto: 'Durata della miccia',
     mira: (gradi: number, potenza: number) => `${gradi}° · ${potenza}%`,
@@ -93,7 +96,6 @@ export const it = {
     veloce: 'Turno dell\'IA più veloce',
     velocita: (f: number) => `×${f}`,
     griglia: 'Armi',
-    bloccata: 'Non disponibile',
     infinite: '∞',
   },
   pausa: {

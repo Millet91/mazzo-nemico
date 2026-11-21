@@ -18,7 +18,7 @@ function stato(p: Partial<StatoCarriera> = {}): StatoCarriera {
   for (const i of CAPITOLO_1.isole) isole[i.id] = { padrone: i.padroneIniziale, pirati: i.piratiIniziali, presa: i.padroneIniziale === 'giocatore' };
   return {
     versione: 1, capitolo: 1, round: 1, fase: 'rinforzi', isole, rinforzi: 0, attacco: null, armi: [], mosse: [], reclute: [],
-    bandiere: [], stelle: {}, sceneViste: [], completo: false, piratiPersi: 0, battaglieGiocate: 0, ...p,
+    bandiere: [], stelle: {}, sceneViste: [], completo: false, usate: [], conquisteRound: [], piratiPersi: 0, perditeSfide: 0, battaglieGiocate: 0, ...p,
   };
 }
 
@@ -79,8 +79,8 @@ describe('camera del mondo', () => {
 
 describe('tocchi sulle isole', () => {
   it('senza immagine a indici: dentro il raggio si prende l\'isola, in mare aperto niente', () => {
-    expect(isolaInPunto({ x: 1300, y: 540 }, mappa, 0.5, null)).toBe('1C');
-    expect(isolaInPunto({ x: 2600, y: 300 }, mappa, 0.5, null)).toBeNull();
+    expect(isolaInPunto(CAPITOLO_1.isole.find((i) => i.id === '1C')!.pos, mappa, 0.5, null)).toBe('1C');
+    expect(isolaInPunto({ x: 2900, y: 150 }, mappa, 0.5, null)).toBeNull();
   });
 
   it('a vista lontana il tocco vale almeno 28 px CSS dal centro (diametro ≥ 56 px)', () => {

@@ -70,7 +70,8 @@ function violazioni(cartelle: string[], divieti: Divieto[]): string[] {
 const SIM = ['src/battaglia/sim'];
 const GEN = ['src/battaglia/gen'];
 const IA = ['src/battaglia/ia'];
-const PURE = ['src/core', ...SIM, ...GEN, ...IA, 'src/mondo', 'src/contenuti'];
+// src/mondo/scena è la scena Pixi della mappa del mondo (P2): non è pura. Pure sono le regole della carriera.
+const PURE = ['src/core', ...SIM, ...GEN, ...IA, 'src/mondo/carriera', 'src/contenuti'];
 
 describe('QA · determinismo della battaglia', () => {
   it('sim, generatore e core non usano casualità o tempo reale', () => {

@@ -64,7 +64,8 @@ export function decidiCon(s: StatoBattaglia, livello: LivelloIa, simula: Simulat
   const versoNemico = (dir: number) => (dir >= 0 ? 90 : 270); // 45° nel verso indicato
   if (!io) return { arma: 'cannone', mezziGradi: versoNemico(1), potenza: BIL.mira.potenzaIniziale, fuga: 0, punteggio: 0 };
 
-  const nemici = s.pirati.filter((p) => p.squadra !== io.squadra && p.stato === 'vivo');
+  // un pirata a 0 PV resta 'vivo' fino alla lapide (sim di A): non è più un bersaglio
+  const nemici = s.pirati.filter((p) => p.squadra !== io.squadra && p.stato === 'vivo' && p.vita > 0);
   if (nemici.length === 0) return { arma: 'cannone', mezziGradi: versoNemico(io.verso), potenza: BIL.mira.potenzaIniziale, fuga: 0, punteggio: 0 };
 
   const armi = armiUsabili(s, io.squadra, par);
@@ -175,7 +176,7 @@ export function punteggio(s: StatoBattaglia, io: Pirata, e: EsitoColpo): number 
   const P = BIL.ia.punteggio;
   let punti = 0;
   for (const p of s.pirati) {
-    if (p.stato !== 'vivo') continue;
+    if (p.stato !== 'vivo' || p.vita <= 0) continue;
     const danno = Math.min(e.danni[p.id] ?? 0, p.vita);
     const annegato = e.annegati.includes(p.id);
     const ucciso = e.uccisi.includes(p.id);

@@ -105,8 +105,9 @@ export const BIL = {
 
   /** scale e liane distruttibili (richiesta del proprietario, 21/11/2026) */
   arrampicata: {
-    /** px/tick in salita e discesa */
-    velocita: { scala: 1.2, liana: 0.9 },
+    /** px/tick: 40 px/s in su, 60 px/s in giù, uguale per scala e liana (design/comandi/scale-e-liane.md) */
+    velocitaSu: 40 / S,
+    velocitaGiu: 60 / S,
     /** ci si aggrappa entro questi px dal centro del pirata all'appiglio */
     presa: 8,
     /** un pezzo di appiglio più corto di così sparisce */

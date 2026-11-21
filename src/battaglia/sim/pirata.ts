@@ -189,6 +189,7 @@ export function danneggia(p: Pirata, quanto: number, eventi: EventoBattaglia[]):
 /** Annega il pirata (muore subito, nessuna lapide): i PV che aveva contano come danno inflitto. */
 export function annega(p: Pirata, eventi: EventoBattaglia[]): void {
   if (p.stato !== 'vivo') return;
+  if (p.appeso >= 0) { p.appeso = -1; eventi.push({ t: 'staccato', pirata: p.id }); }
   p.dannoNelTurno += p.vita;
   p.vita = 0;
   p.stato = 'annegato';
@@ -209,7 +210,7 @@ export function aggiornaPirata(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, ev
   if (p.appeso >= 0) {
     if (espelli(t, p)) p.yInizioCaduta = p.y;
     if (aggiornaAppeso(s, p, su, eventi)) {
-      if (inAcqua(p, t.mare)) { p.appeso = -1; annega(p, eventi); }
+      if (inAcqua(p, t.mare)) annega(p, eventi);
       return;
     }
     if (inAcqua(p, t.mare)) annega(p, eventi);

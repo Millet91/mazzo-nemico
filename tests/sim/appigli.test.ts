@@ -5,6 +5,7 @@ import { MATERIALE } from '../../src/core/tipi';
 import type { StatoBattaglia, TipoAppiglio } from '../../src/core/tipi';
 import { creaBattaglia, eseguiComando, hashStato, simulaColpo } from '../../src/battaglia/sim';
 import { esplodi } from '../../src/battaglia/sim/esplosione';
+import { annega } from '../../src/battaglia/sim/pirata';
 import { avanza, avanzaFinche, config, eventiDi, inAzione, mappa, pirata, rettangolo, SUOLO, terrenoPiatto } from './aiuti';
 
 /** Torre di roccia da x 900 a 1100, cima a quota 480; scala 10 px a sinistra del bordo, dalla cima al suolo. */
@@ -214,5 +215,20 @@ describe('Scale e liane', () => {
     const atterrato = eventiDi(ev, 'atterrato')[0];
     expect(atterrato.dannoCaduta).toBe(Math.min(BIL.pirata.cadutaMax, Math.floor((salito - BIL.pirata.cadutaSoglia) / BIL.pirata.cadutaPxPerPv)));
     expect(atterrato.dannoCaduta).toBeGreaterThan(0);
+  });
+
+  it('chi annega da appeso (il mare sale) non resta attaccato all\'appiglio', () => {
+    const s = conScala(882);
+    inAzione(s);
+    eseguiComando(s, { t: 'arrampica', dir: -1 });
+    avanza(s, 20);
+    const p = pirata(s, 0);
+    expect(p.appeso).toBeGreaterThan(0);
+    const ev: Parameters<typeof esplodi>[5] = [];
+    s.terreno.mare = p.y; // come la salita del mare a fine turno
+    annega(p, ev);
+    expect(p.stato).toBe('annegato');
+    expect(p.appeso).toBe(-1);
+    expect(eventiDi(ev, 'staccato')).toEqual([{ t: 'staccato', pirata: 0 }]);
   });
 });

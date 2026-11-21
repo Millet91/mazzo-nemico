@@ -20,7 +20,10 @@
 @keyframes car-pulsa { from { stroke-width: 18; } to { stroke-width: 34; } }
 
 .car-ui { z-index: 1; }
-.car-ui section, .car-ui header { pointer-events: auto; }
+.car-ui section { pointer-events: auto; }
+.car-barra { pointer-events: none; }
+.car-barra > * { pointer-events: auto; }
+.car-round { pointer-events: none !important; }
 .car-barra {
   position: absolute; top: var(--sicura-a); left: var(--bordo-corto); right: var(--bordo-corto);
   display: flex; align-items: center; gap: 12px;

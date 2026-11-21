@@ -89,7 +89,8 @@ export function entraInCarriera(): void {
   bus.schermata.value = 'mondo';
   imposta(s);
   if (nuova) bus.animaMondo.invia({ t: 'nebbia', capitolo: CAP.id });
-  bus.animaMondo.invia({ t: 'centra', isola: '1A' });
+  // zoom 1 = tutto il capitolo
+  bus.animaMondo.invia({ t: 'centra', isola: '1A', zoom: 1 });
   mostraScena('c1.inizio');
 }
 
@@ -102,7 +103,7 @@ export function tornaAlMenu(): void {
 export function riprovaCapitolo(): void {
   azzeraUi();
   imposta(R.nuovaCarriera(CAP, bus.carriera.value));
-  bus.animaMondo.invia({ t: 'centra', isola: '1A' });
+  bus.animaMondo.invia({ t: 'centra', isola: '1A', zoom: 1 });
 }
 
 /** Cancella tutto (prove): la prossima Carriera parte da zero. */

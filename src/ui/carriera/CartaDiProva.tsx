@@ -1,6 +1,6 @@
-// Carta di PROVA del cap. 1 in SVG: serve finché la scena Pixi del Tavolo del Timone (agente Mondo e mappa,
-// src/mondo/scena/) non c'è. Legge le stesse cose della scena vera (bus.carriera, bus.evidenzaMondo) e manda gli
-// stessi tocchi (bus.isolaToccata). La scena vera la spegne con `cartaDiProva.value = false` quando parte.
+// Carta di PROVA del cap. 1 in SVG, per provare le regole senza la scena Pixi del Tavolo del Timone
+// (src/mondo/scena/). Spenta di norma: si accende con ?cartaProva nell'indirizzo. Legge le stesse cose della scena
+// vera (bus.carriera, bus.evidenzaMondo) e manda gli stessi tocchi (bus.isolaToccata).
 import { signal } from '@preact/signals';
 import { bus } from '../../core/bus';
 import { CALA_PAPPAGALLO, MONDO_H, MONDO_W } from '../../contenuti/capitolo-1';
@@ -8,7 +8,7 @@ import { T } from '../../testi/it';
 import { CAP, nomeIsola } from './stato';
 import { iconaPremio } from './premi';
 
-export const cartaDiProva = signal(true);
+export const cartaDiProva = signal(typeof location !== 'undefined' && new URLSearchParams(location.search).has('cartaProva'));
 
 /** raggio del bersaglio di tocco in px logici (≥ 56 px CSS a 800 px di larghezza: 110 × 800/3072 × 2 ≈ 57) */
 const RAGGIO_TOCCO = 110;

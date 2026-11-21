@@ -23,7 +23,18 @@ async function chiudiAvvisi(page: Page) {
   }
 }
 
-const tocca = (page: Page, id: string) => page.evaluate((id) => (window as unknown as { __kaboom: K }).__kaboom.bus.isolaToccata.invia(id), id);
+/** Tocco su un'isola (via bus), dopo che la scena del mondo ha finito di animare. */
+async function tocca(page: Page, id: string) {
+  await page.waitForFunction(() => !(window as unknown as { __kaboom: K }).__kaboom.bus.mondoOccupato.value, null, { timeout: 15_000 });
+  await page.evaluate((id) => (window as unknown as { __kaboom: K }).__kaboom.bus.isolaToccata.invia(id), id);
+}
+
+/** Tocco VERO sullo schermo al centro dell'isola (scena Pixi del mondo). */
+async function toccaSchermo(page: Page, id: string) {
+  await page.waitForFunction(() => !(window as unknown as { __kaboom: K }).__kaboom.bus.mondoOccupato.value, null, { timeout: 15_000 });
+  const p = await page.evaluate((id) => (window as unknown as { __kaboom: { mondo: { schermoDaIsola(id: string): { x: number; y: number } } } }).__kaboom.mondo.schermoDaIsola(id), id);
+  await page.mouse.click(p.x, p.y);
+}
 const stato = (page: Page) => page.evaluate(() => (window as unknown as { __kaboom: K }).__kaboom.bus.carriera.value);
 
 /** Finge la fine della battaglia in corso: esito sul bus e «Continua». */
@@ -127,4 +138,29 @@ test('i pannelli della carriera stanno nello schermo a 800×360', async ({ page 
     const b = await page.locator(id).boundingBox();
     expect(b!.height).toBeGreaterThanOrEqual(44);
   }
+});
+
+test('giro: menu → Carriera → attacco a 1D sulla mappa vera → vittoria → bandierina e «Nuovo!»', async ({ page }) => {
+  await apri(page);
+  await page.click('#carriera');
+  await chiudiAvvisi(page);
+  await expect(page.getByTestId('car-rinforzi')).toBeVisible();
+  await page.waitForFunction(() => !!(window as unknown as { __kaboom: { mondo?: unknown } }).__kaboom.mondo, null, { timeout: 20_000 });
+  const animazioni: { t: string; isola?: string }[] = [];
+  await page.exposeFunction('registraAnimazione', (a: { t: string; isola?: string }) => animazioni.push(a));
+  await page.evaluate(() => (window as unknown as { __kaboom: K }).__kaboom.bus.animaMondo.ascolta((a: unknown) => (window as unknown as { registraAnimazione(a: unknown): void }).registraAnimazione(a)));
+  // 3 rinforzi su Baia dei Corvi, toccando lo schermo
+  for (let n = 0; n < 3; n++) await toccaSchermo(page, '1B');
+  await expect(page.getByTestId('car-attacco')).toBeVisible();
+  expect((await stato(page)).isole['1B'].pirati).toBe(5);
+  await toccaSchermo(page, '1D');
+  await expect(page.getByTestId('car-pannello-attacco')).toBeVisible();
+  await page.click('#car-arrembaggio');
+  await finisciBattaglia(page, 0, [4, 0]);
+  await expect(page.getByTestId('car-premio')).toBeVisible();
+  const s = await stato(page);
+  expect(s.isole['1D']).toMatchObject({ padrone: 'giocatore', presa: true });
+  expect(s.mosse).toContain('saltoAppoggio');
+  await expect.poll(() => animazioni).toContainEqual({ t: 'conquista', isola: '1D' });
+  await page.screenshot({ path: 'test-results/carriera-nuovo.png' });
 });

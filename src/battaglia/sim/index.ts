@@ -28,6 +28,7 @@ import { inGioco, stacca } from './pirata';
 import { avanza, iniziaTurno, miraIniziale, pirataDelTurno, ritirata } from './turno';
 import { hashDi } from './hash';
 import { creaBarili } from './oggetti';
+import { creaAppigli } from './appigli';
 import { simulaColpo as simula, traiettoria as linea } from './simula';
 
 /** Crea lo stato iniziale. La mappa arriva dal generatore (battaglia/gen). Il turno 1 parte in fase 'inquadra'. */
@@ -74,6 +75,7 @@ export function creaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata): Stato
     esito: null,
   };
   creaBarili(s, mappa.barili);
+  creaAppigli(s, mappa.appigli);
   iniziaTurno(s, []); // gli eventi del turno 1 li ripete il primo avanzaTick
   return s;
 }
@@ -105,8 +107,12 @@ export function eseguiComando(s: StatoBattaglia, c: Comando): void {
       }
       break;
     }
+    case 'arrampica': {
+      t.arrampicata = c.dir === -1 || c.dir === 1 ? c.dir : 0; // si aggrappa o sale/scende al prossimo tick
+      break;
+    }
     case 'salta': {
-      if (!p.aTerra) break;
+      if (!p.aTerra && p.appeso < 0) break;
       const sa = c.indietro ? BIL.pirata.saltoIndietro : BIL.pirata.saltoAvanti;
       stacca(p);
       p.vx = sa.vx * p.verso; p.vy = sa.vy; // l'evento `salto` esce al prossimo tick (turno.ts)

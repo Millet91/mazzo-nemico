@@ -135,6 +135,7 @@ function creaLapidi(s: StatoBattaglia, eventi: EventoBattaglia[]): number {
   for (const p of s.pirati) {
     if (p.stato !== 'vivo' || p.vita > 0) continue;
     p.stato = 'morto';
+    p.appeso = -1;
     p.vx = 0; p.vy = 0;
     eventi.push({ t: 'morto', pirata: p.id, causa: 'pv' });
     const id = s.prossimoId++;

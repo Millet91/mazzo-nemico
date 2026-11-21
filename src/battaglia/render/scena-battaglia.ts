@@ -10,6 +10,7 @@ import { BIL } from '../../contenuti/bilanciamento';
 import { traiettoria } from '../sim';
 import type { Camera } from './camera';
 import { frecciaBordo } from './bordo';
+import { AppigliRender, puoAggrapparsi } from './appigli';
 import { Effetti } from './effetti';
 import { Forme, sprite, type IdForma } from './forme';
 import { TerrenoRender } from './terreno';
@@ -92,6 +93,11 @@ export class ScenaBattaglia {
     decorazioni: new Container(), pirati: new Container(), proiettili: new Container(), traiettoria: new Container(),
   };
   private readonly acqua = new Graphics();
+  /** scale e liane, sopra il terreno e sotto i pirati */
+  private readonly appigli = new AppigliRender();
+  /** maniglia sopra il pirata attivo: mano aperta (può aggrapparsi) o chiusa (appeso) */
+  private readonly manoAperta: Sprite;
+  private readonly manoChiusa: Sprite;
   private readonly decorazioni: Sprite[] = [];
   private readonly pirati = new Map<number, VisPirata>();
   private readonly proiettili = new Map<number, { sp: Sprite; paracadute: Sprite | null; scia: number }>();
@@ -155,7 +161,7 @@ export class ScenaBattaglia {
     this.anelloTerra = sprite(this.forme.get('anello'));
     this.anelloTerra.tint = hex(PALETTE.oro);
     this.freccia = sprite(this.forme.get('freccia'));
-    this.mondo.addChild(this.anelloTerra, this.strato.pirati, this.strato.proiettili, this.strato.traiettoria, this.effetti.mondo, this.acqua);
+    this.mondo.addChild(this.appigli.radice, this.anelloTerra, this.strato.pirati, this.strato.proiettili, this.strato.traiettoria, this.effetti.mondo, this.acqua);
 
     // la traiettoria sta nello strato schermo: misura costante a ogni zoom
     for (let i = 0; i < MAX_PUNTINI; i++) {
@@ -171,6 +177,9 @@ export class ScenaBattaglia {
     this.frecciaBordo.poly([0, 0, -18, -11, -13, 0, -18, 11]).fill(hex(PALETTE.pericolo)).stroke({ width: 2, color: hex('#2B1B10') });
     this.frecciaBordo.visible = false;
     this.contenitoreTraiettoria.addChild(this.frecciaBordo);
+    this.manoAperta = sprite(this.forme.get('manoAperta'));
+    this.manoChiusa = sprite(this.forme.get('manoChiusa'));
+    this.manoAperta.visible = this.manoChiusa.visible = false;
     for (const p of s.pirati) this.creaPirata(p);
 
     // freccia verso destra (angolo 0): asta da 22 a 44 px dal centro del pirata, punta fino a 56 px
@@ -179,7 +188,7 @@ export class ScenaBattaglia {
       .moveTo(22, 0).lineTo(46, 0).stroke({ width: 4, color: hex(PALETTE.oro), cap: 'round' })
       .poly([44, -8, 58, 0, 44, 8]).fill(hex(PALETTE.oro)).stroke({ width: 1.5, color: hex(PALETTE.oroOmbra) });
     this.frecciaMira.visible = false;
-    this.schermo.addChild(this.contenitoreTraiettoria, this.frecciaMira, this.freccia, this.effetti.schermo);
+    this.schermo.addChild(this.manoAperta, this.manoChiusa, this.contenitoreTraiettoria, this.frecciaMira, this.freccia, this.effetti.schermo);
   }
 
   private creaPirata(p: Pirata): void {
@@ -242,6 +251,7 @@ export class ScenaBattaglia {
   eventi(ev: readonly EventoBattaglia[]): void {
     for (const e of ev) {
       switch (e.t) {
+        case 'appiglioRotto': this.appigli.rotto(e.appiglio, e.x, e.yAlto, e.yBasso); break;
         case 'cratere':
           this.effetti.zolle(e.x, e.y, e.raggio, this.terreno.coloreOriginale(e.x, e.y, e.raggio));
           this.terreno.cratere(e.x, e.y, e.raggio); this.decorazioniSenzaTerra(e.x, e.y, e.raggio);
@@ -311,6 +321,7 @@ export class ScenaBattaglia {
     this.disegnaAcqua(camera);
     this.effetti.impostaMare(s.terreno.mare);
     this.animaDecorazioni();
+    this.appigli.aggiorna(s.appigli ?? [], deltaMS, this.tempo);
 
     const t = s.turno;
     const attivo = s.pirati.find((p) => p.id === t.pirata && p.stato === 'vivo');
@@ -326,6 +337,17 @@ export class ScenaBattaglia {
       this.anelloTerra.scale.set(1 + 0.06 * Math.sin(this.tempo / 160));
       const sopra = aSchermo(attivo.x, attivo.y - BIL.pirata.altezzaSprite + MEZZA_CAPSULA);
       this.freccia.position.set(sopra.x, sopra.y - 30 - 5 * Math.abs(Math.sin(this.tempo / 220)));
+    }
+    // maniglia: mano oro aperta se il pirata attivo può aggrapparsi, chiusa se è appeso
+    const appeso = !!attivo && mostraMarcatore && attivo.appeso >= 0;
+    const presa = !!attivo && mostraMarcatore && !appeso && puoAggrapparsi(attivo, s.appigli ?? []);
+    this.manoChiusa.visible = appeso;
+    this.manoAperta.visible = presa;
+    if (attivo && (appeso || presa)) {
+      const sopra = aSchermo(attivo.x, attivo.y - BIL.pirata.altezzaSprite + MEZZA_CAPSULA);
+      const m = appeso ? this.manoChiusa : this.manoAperta;
+      m.position.set(sopra.x + 28, sopra.y - 36);
+      m.scale.set(1.3 * (1 + 0.06 * Math.sin(this.tempo / 200)));
       this.freccia.scale.set(1.3);
     }
 

@@ -105,7 +105,7 @@ function braccio(r: Renderer): Forma {
 
 export type IdForma =
   | 'braccio' | 'lampo' | 'palla' | 'granata' | 'frammento' | 'barile' | 'mina' | 'lapide'
-  | 'cerchio' | 'nuvola' | 'anello' | 'cerchietto' | 'puntinoMira' | 'mirino' | 'cappello' | 'cassa' | 'paracadute' | 'freccia' | 'puntino' | 'palma' | 'masso' | 'rovina' | 'cespuglio' | 'segnaposto';
+  | 'cerchio' | 'nuvola' | 'anello' | 'cerchietto' | 'manoAperta' | 'manoChiusa' | 'puntinoMira' | 'mirino' | 'cappello' | 'cassa' | 'paracadute' | 'freccia' | 'puntino' | 'palma' | 'masso' | 'rovina' | 'cespuglio' | 'segnaposto';
 
 export class Forme {
   private readonly ciurme = new Map<IdCiurma, Forma>();
@@ -153,6 +153,18 @@ export class Forme {
       }
       return m.circle(0, 0, 2.5).fill(rosso);
     })()));
+    // maniglia delle scale e liane (24 px, oro): mano aperta = può aggrapparsi, chiusa = è appeso
+    {
+      const oro = hex(PALETTE.oro), bordo = hex(PALETTE.oroOmbra);
+      const aperta = g();
+      for (const [x, h] of [[-7, 9], [-2.5, 11], [2, 11], [6.5, 9]] as const) aperta.roundRect(x - 2, -4 - h, 4, h + 2, 2);
+      aperta.roundRect(-9, -5, 18, 14, 5).poly([-9, 0, -14, -6, -11, -8, -6, -3]);
+      aperta.fill(oro).stroke({ width: 1.5, color: bordo });
+      this.altre.set('manoAperta', forma(r, aperta));
+      const chiusa = g().roundRect(-9, -9, 18, 18, 6).fill(oro).stroke({ width: 1.5, color: bordo })
+        .moveTo(-4.5, -9).lineTo(-4.5, -3).moveTo(0, -9).lineTo(0, -3).moveTo(4.5, -9).lineTo(4.5, -3).stroke({ width: 1.5, color: bordo });
+      this.altre.set('manoChiusa', forma(r, chiusa));
+    }
     this.altre.set('cerchietto', forma(r, g().circle(0, 0, 7).stroke({ width: 2, color: BIANCO })));
     this.altre.set('mina', forma(r, g().ellipse(0, 0, 7, 4).fill(hex('#E8B4B8')).stroke({ width: 1, color: dark })));
     // lapide-barilotto con il cappello (00 §1.4)

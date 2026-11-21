@@ -5,6 +5,8 @@ export interface TutorialStep {
   add: string[];
   draws: number;
   offer: string[];
+  /** difese regalate (Segno sul Passo indicato) */
+  give?: { id: string; slot: number }[];
   hint: string;
 }
 
@@ -41,7 +43,8 @@ export const TUTORIAL: TutorialStep[] = [
     title: 'I Riti e la prima combo',
     add: ['lupo'],
     draws: 6,
-    offer: ['scala', 'taglio'],
-    hint: 'I Riti decidono l’ordine della Coda. Con la Scala entrano prima le carte deboli: il Taglio le distrugge appena hanno Forza 2 o meno. Prendi la Scala, poi in Preparazione metti il Taglio dove serve.',
+    offer: ['scala'],
+    give: [{ id: 'taglio', slot: 1 }],
+    hint: 'I Riti decidono l’ordine della Coda. Con la Scala entrano prima le carte deboli, e il Taglio (te l’ho messo nella Strada) le distrugge appena hanno Forza 2 o meno. Prendi la Scala e guarda la combo.',
   },
 ];

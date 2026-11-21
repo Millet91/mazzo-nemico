@@ -41,6 +41,10 @@ export type Action =
   | { t: 'exileDone' };
 
 export class RuleError extends Error {}
+/** "La Gazza" → "la Gazza" dentro una frase */
+export function lc(name: string) {
+  return /^(Il|Lo|La|I|Gli|Le|L')\b/.test(name) || name.startsWith("L'") ? name[0].toLowerCase() + name.slice(1) : name;
+}
 function fail(msg: string): never {
   throw new RuleError(msg);
 }
@@ -65,7 +69,7 @@ export function rng(s: RunState, stream: string): Rng {
 
 export function ownedIds(s: RunState): string[] {
   const d = s.def;
-  return [...d.segni.flat(), ...d.trucchi, ...(d.rito ? [d.rito.id] : []), ...d.deposito, ...d.stolen.map((x) => x.segno)];
+  return [...d.segni.flat(), ...d.trucchi, ...(d.rito ? [d.rito.id] : []), ...d.deposito, ...d.stolen.map((x) => x.segno), ...(d.consumed ?? [])];
 }
 
 export function allies(s: RunState): DeckCard[] {
@@ -117,7 +121,7 @@ export function newRun(cfg: RunConfig): RunState {
   const s: RunState = {
     cfg, rng: r, uidc: 0, phase: 'map', act: 1, level: 0, map: [], node: null, rintocco: 0, wavesInAct: 0,
     lumi, maxLumi: lumi, sp: 0, deck: [],
-    def: { segni: [[], [], [], [], []], cap: [1, 1, 1, 1, 1], trucchi: [], tsock: cfg.baro === 'fattucchiera' ? 3 : P.TSOCK, rito: null, deposito: [], plus: [], stolen: [], marked: [], truccato: null, ritoSeme: {} },
+    def: { segni: [[], [], [], [], []], cap: [1, 1, 1, 1, 1], trucchi: [], tsock: cfg.baro === 'fattucchiera' ? 3 : P.TSOCK, rito: null, deposito: [], plus: [], stolen: [], marked: [], truccato: null, ritoSeme: {}, consumed: [] },
     exiles: 0, pity: 0, freeRerolls: 1, basamentiComprati: 0, offer: null, announced: [], wave: null, boss: null, shop: null,
     event: null, pattoCands: null, pattoNext: null, exilePick: null, lastSummary: null, history: [], chronicle: [],
     intel: { fullOrder: 0, studia: 0, bambini: 0, extraShop: 0, processione: false },
@@ -269,8 +273,7 @@ export function gainDefense(s: RunState, id: string, slot?: number, seme?: Seme,
     s.def.segni[sl].push(id);
   } else if (d.family === 'trucco') {
     if (id === 'rogoArchivio') {
-      s.def.deposito.push(id); // resta come "posseduto" consumato
-      s.def.deposito = s.def.deposito.filter((x) => x !== id);
+      s.def.consumed = [...(s.def.consumed ?? []), id]; // consumato: non torna nelle offerte
       s.exilePick = { n: s.def.plus.includes('rogoArchivio') ? 3 : 2, back: s.phase, reason: "Rogo dell'Archivio" };
       s.phase = 'exilePick';
       s.chronicle.push({ rintocco: s.rintocco, kind: 'rogo', text: "Il Baro diede fuoco all'archivio del Fato." });
@@ -363,11 +366,11 @@ function afterWave(s: RunState, out: WaveOutcome, lumiBefore: number) {
   s.stats.maxCombo = Math.max(s.stats.maxCombo, out.maxCombo);
   if (!s.stats.firstImpact && out.firstImpact) {
     s.stats.firstImpact = out.firstImpact;
-    s.chronicle.push({ rintocco: s.rintocco, kind: 'impact', text: `Al rintocco ${s.rintocco} ${out.firstImpact} arrivò per prima alla Soglia.` });
+    s.chronicle.push({ rintocco: s.rintocco, kind: 'impact', text: `Al rintocco ${s.rintocco} la prima sventura alla Soglia fu ${lc(out.firstImpact)}.` });
   }
   for (const st of out.stolen) s.chronicle.push({ rintocco: s.rintocco, kind: 'steal', text: `Al rintocco ${s.rintocco} sparì il Segno ${st}.` });
   if (out.maxCombo >= 5) s.chronicle.push({ rintocco: s.rintocco, kind: 'combo', text: `Al rintocco ${s.rintocco} i trucchi del Baro scattarono ${out.maxCombo} volte in un solo battito.` });
-  for (const b of betrayed) s.chronicle.push({ rintocco: s.rintocco, kind: 'betray', text: `${b} ruppe il patto e tornò dal Fato.` });
+  for (const b of betrayed) s.chronicle.push({ rintocco: s.rintocco, kind: 'betray', text: `Il patto con ${lc(b)} si ruppe, e la carta tornò dal Fato.` });
   const sum: WaveSummary = {
     rintocco: s.rintocco, act: s.act, kind: spec.kind === 'boss' ? `Mazziere, fase ${(spec.phase ?? 0) + 1}` : spec.kind,
     lumiBefore, lumiAfter: s.lumi, dmg: out.dmg, gained: out.gained, destroyed: out.destroyedNames, arrived: out.arrivedNames,
@@ -523,7 +526,7 @@ function doEvent(s: RunState, choice: string, arg?: string | number) {
   const r = rng(s, 'events');
   const ev = EVENTS.find((x) => x.id === e.id)!;
   if (choice === 'no') { done(); return; }
-  s.chronicle.push({ rintocco: s.rintocco, kind: 'event', text: `Il Baro incontrò ${ev.who}.` });
+  if (e.step === 0) s.chronicle.push({ rintocco: s.rintocco, kind: 'event', text: `Il Baro incontrò ${ev.who}.` });
   switch (e.id) {
     case 'comare':
       s.intel.fullOrder = 1;
@@ -614,7 +617,7 @@ function makePatto(s: RunState, uid: number) {
   x.corrotto = false;
   if (x.bottino) { s.def.deposito.push(x.bottino); s.def.stolen = s.def.stolen.filter((y) => y.holder !== x.uid); x.bottino = null; }
   s.stats.patti++;
-  s.chronicle.push({ rintocco: s.rintocco, kind: 'patto', text: `Al rintocco ${s.rintocco} ${ENEMIES[x.def].name} passò dalla parte del Baro.` });
+  s.chronicle.push({ rintocco: s.rintocco, kind: 'patto', text: `Al rintocco ${s.rintocco} il Baro strinse un Patto con ${lc(ENEMIES[x.def].name)}.` });
 }
 
 export function removeDefense(s: RunState, id: string) {
@@ -961,6 +964,7 @@ function setupTutorial(s: RunState) {
   const spec = baseSpec(s, 'tutorial', t.draws);
   s.wave = { spec, seed: rng(s, 'draw').fork() };
   s.tutorialStep = k;
+  for (const g of t.give ?? []) if (!ownedIds(s).includes(g.id)) gainDefense(s, g.id, g.slot);
   if (t.offer.length) { s.offer = { ids: t.offer.filter((x) => !ownedIds(s).includes(x)), source: 'tutorial', canSkip: false }; s.phase = s.offer.ids.length ? 'offer' : 'prep'; }
   else { s.offer = null; s.phase = 'prep'; }
 }

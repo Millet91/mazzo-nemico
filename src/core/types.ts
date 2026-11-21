@@ -40,6 +40,8 @@ export interface Defenses {
   truccato: number[] | null;
   /** Riti: seme scelto per Avanguardia/Retroguardia, ricordato per id */
   ritoSeme: Record<string, Seme>;
+  /** difese a uso singolo già consumate (Rogo dell'Archivio) */
+  consumed?: string[];
 }
 
 export interface MapNode {

@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { ENEMIES, KEYWORDS, type Kw } from '../content/enemies';
+import { ENEMIES, KEYWORDS, girataFull, type Kw } from '../content/enemies';
 import { DEFENSES } from '../content/defenses';
 import { enemyArt, defenseArt, SEME_ASSET, sceneArt, type VisualAsset } from '../assets/registry';
 import type { SnapCard } from '../core/types';
@@ -154,7 +154,7 @@ export function EnemyDetails({ id, why }: { id: string; why?: string[] }) {
         <div class="kwline" key={k}><b>{KEYWORDS[k as Kw].icon} {KEYWORDS[k as Kw].name}{(n as number) > 1 ? ` ${n}` : ''}</b>: {KEYWORDS[k as Kw].text(n as number)}</div>
       ))}
       {!Object.keys(d.kw).length && <div class="kwline">Nessuna abilità.</div>}
-      {d.girataText && <div class="girata"><b>Se diventa tuo Patto (girata):</b> {d.girataText} All'Impatto ti cura 1 Lume.</div>}
+      {d.girataText && <div class="girata"><b>Se diventa tuo Patto (girata):</b> {girataFull(id)}</div>}
       {d.role && <div class="role">Ruolo: {d.role}</div>}
       {why && why.length > 0 && (
         <div class="why"><b>Perché?</b><ol>{why.map((w, i) => <li key={i}>{w}</li>)}</ol></div>

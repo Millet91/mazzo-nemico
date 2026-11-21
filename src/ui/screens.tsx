@@ -4,7 +4,7 @@ import { Art, Btn, DefChip, DefenseCard, DeckCardView } from './components';
 import { DeckList, TopBar, DeckPanel } from './board';
 import { allies, basamentoCost, eventChoices, ownedIds } from '../core/run';
 import { minDeck } from '../core/wave';
-import { ENEMIES } from '../content/enemies';
+import { ENEMIES, girataFull } from '../content/enemies';
 import { DEFENSES } from '../content/defenses';
 import { ACT_NAMES, P, slotNames } from '../content/config';
 import { BOSS_TEXT, DAWN_LINES, EVENTS } from '../content/meta';
@@ -110,7 +110,7 @@ export function PattoScreen() {
               <DeckCardView def={c.def} owner="baro" lealta={lealta} />
               <div class="cand-info">
                 <b>{d.name}</b>
-                <div><b>Girata:</b> {d.girataText} All’Impatto ti cura 1 Lume.</div>
+                <div><b>Girata:</b> {girataFull(c.def)}</div>
                 <div class="small-label">Se tradisce: torna nemica con Forza {d.forza + 2} (Corrotta).</div>
                 <Btn kind="gold" disabled={full && !dissolve} onClick={() => { sfx('patto'); act({ t: 'patto', uid: c.uid, dissolve: dissolve ?? undefined }); }}>Stringi il Patto</Btn>
               </div>

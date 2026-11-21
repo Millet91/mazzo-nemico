@@ -135,3 +135,11 @@ export function kwText(kw: Kw, n: number): string {
   const k = KEYWORDS[kw];
   return `${k.name}${n > 1 && ['corazza', 'esplosivo', 'sobilla', 'branco', 'esazione', 'corvi'].includes(kw) ? ' ' + n : ''}: ${k.text(n)}`;
 }
+
+/** Testo completo della girata: aggiunge la cura all'Impatto quando la girata non la sostituisce. */
+export function girataFull(id: string): string {
+  const d = ENEMIES[id];
+  if (!d?.girataText) return '';
+  const own = ['borseggio', 'creditori', 'esattore', 'lentoCura2', 'ritornoAlleato'].includes(d.girata);
+  return own ? d.girataText : `${d.girataText} All'Impatto ti cura 1 Lume.`;
+}

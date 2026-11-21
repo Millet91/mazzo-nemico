@@ -354,7 +354,7 @@ export class ScenaBattaglia {
       visti.add(pr.id);
       let sp = this.proiettili.get(pr.id);
       if (!sp) {
-        sp = sprite(this.forme.get(pr.tipo === 'lapide' ? 'lapide' : pr.tipo));
+        sp = sprite(this.forme.get(pr.tipo === 'cassa' ? 'barile' : pr.tipo /* segnaposto finché B non disegna la cassa */));
         this.proiettili.set(pr.id, sp);
         this.strato.proiettili.addChild(sp);
       }

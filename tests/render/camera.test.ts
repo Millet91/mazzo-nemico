@@ -51,12 +51,13 @@ describe('Camera della battaglia', () => {
     expect(basso.y).toBeCloseTo(BIL.mondo.altezza);
   });
 
-  it('il volo sul pirata dura 0,6 s', () => {
+  it("il volo sul pirata dura quanto l'inquadratura (BIL.camera.inquadraTick)", () => {
     const c = new Camera();
     c.impostaSchermo(914, 411);
     c.vola(600, 600, 0);
     c.vola(1200, 700);
-    for (let i = 0; i < 35; i++) c.aggiorna(1000 / 60);
+    const n = BIL.camera.inquadraTick;
+    for (let i = 0; i < n - 1; i++) c.aggiorna(1000 / 60);
     expect(c.inVolo).toBe(true);
     for (let i = 0; i < 2; i++) c.aggiorna(1000 / 60);
     expect(c.inVolo).toBe(false);

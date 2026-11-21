@@ -6,8 +6,14 @@ import { BIL } from '../../contenuti/bilanciamento';
 const C = BIL.camera;
 /** quanto cielo si può vedere sopra il bordo alto della maschera */
 export const CIELO_EXTRA = 320;
-/** curva del volo: parte e arriva piano */
-const morbido = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+/** curva del volo: parte subito e arriva piano (ease-out, m1-ritmo §3) */
+const morbido = (t: number) => 1 - (1 - t) ** 3;
+/** scossa del colpo (m1-ritmo §4): 250 ms, al massimo 10 px */
+export const SCOSSA_MS = 250;
+export const SCOSSA_MAX_PX = 10;
+/** zoom delle uccisioni: +8% per 300 ms */
+export const IMPULSO_ZOOM = 0.08;
+export const IMPULSO_ZOOM_MS = 300;
 
 export interface Volo { daX: number; daY: number; aX: number; aY: number; ms: number; durata: number }
 
@@ -20,6 +26,14 @@ export class Camera {
   w = 800;
   h = 360;
   private volo: Volo | null = null;
+  /** scossa in corso: ampiezza in px CSS e ms passati */
+  private scossa = { amp: 0, ms: SCOSSA_MS };
+  private impulso = { ms: IMPULSO_ZOOM_MS };
+  /** spostamento della scossa in px di mondo (solo grafico) */
+  ox = 0;
+  oy = 0;
+  /** moltiplicatore dello zoom dato dall'impulso delle uccisioni (solo grafico) */
+  zoomEffetto = 1;
 
   constructor(readonly mondoW: number = BIL.mondo.larghezza, readonly mondoH: number = BIL.mondo.altezza) {}
 
@@ -32,7 +46,16 @@ export class Camera {
   }
 
   /** px CSS per px di mondo */
-  get scala(): number { return this.scalaBase * this.zoom; }
+  get scala(): number { return this.scalaBase * this.zoom * this.zoomEffetto; }
+
+  /** Scossa del colpo: ampiezza in px CSS (si tiene la più forte tra quella in corso e la nuova). */
+  scuoti(ampiezzaPx: number): void {
+    const resto = this.scossa.amp * (1 - Math.min(1, this.scossa.ms / SCOSSA_MS));
+    this.scossa = { amp: Math.min(SCOSSA_MAX_PX, Math.max(resto, ampiezzaPx)), ms: 0 };
+  }
+
+  /** Zoom +8% per 300 ms (uccisioni). */
+  impulsoZoom(): void { this.impulso.ms = 0; }
 
   impostaSchermo(w: number, h: number): void {
     this.w = Math.max(1, w); this.h = Math.max(1, h);
@@ -41,12 +64,12 @@ export class Camera {
 
   schermoDaMondo(x: number, y: number): { x: number; y: number } {
     const k = this.scala;
-    return { x: (x - this.x) * k + this.w / 2, y: (y - this.y) * k + this.h / 2 };
+    return { x: (x - this.x - this.ox) * k + this.w / 2, y: (y - this.y - this.oy) * k + this.h / 2 };
   }
 
   mondoDaSchermo(x: number, y: number): { x: number; y: number } {
     const k = this.scala;
-    return { x: (x - this.w / 2) / k + this.x, y: (y - this.h / 2) / k + this.y };
+    return { x: (x - this.w / 2) / k + this.x + this.ox, y: (y - this.h / 2) / k + this.y + this.oy };
   }
 
   /** Trascinamento: sposta la vista di (dx, dy) px CSS (il mondo segue il dito). */
@@ -83,7 +106,20 @@ export class Camera {
 
   get inVolo(): boolean { return this.volo !== null; }
 
+  /** Scossa e impulso di zoom: solo grafici, non toccano il centro della camera. */
+  aggiornaEffetti(deltaMS: number): void {
+    const s = this.scossa;
+    s.ms = Math.min(SCOSSA_MS, s.ms + deltaMS);
+    const resto = s.amp * (1 - s.ms / SCOSSA_MS) ** 2;
+    const k = this.scalaBase * this.zoom;
+    this.ox = resto ? (Math.sin(s.ms * 0.11) * resto) / k : 0;
+    this.oy = resto ? (Math.cos(s.ms * 0.083) * resto) / k : 0;
+    this.impulso.ms = Math.min(IMPULSO_ZOOM_MS, this.impulso.ms + deltaMS);
+    this.zoomEffetto = 1 + IMPULSO_ZOOM * Math.sin((Math.PI * this.impulso.ms) / IMPULSO_ZOOM_MS);
+  }
+
   aggiorna(deltaMS: number): void {
+    this.aggiornaEffetti(deltaMS);
     const v = this.volo;
     if (!v) return;
     v.ms += deltaMS;

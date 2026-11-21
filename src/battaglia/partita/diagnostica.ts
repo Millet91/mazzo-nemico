@@ -3,7 +3,8 @@
 //   const { provaFps } = await import('../battaglia/partita/diagnostica');
 //   const r = await provaFps(); // ~60 s
 // Gioca da sola una battaglia 5 contro 5, IA contro IA, con lo zoom che va dal minimo al massimo,
-// e misura fps medio, fps del secondo peggiore, frame sopra 20 ms e ms di simulazione per tick.
+// e misura fps medio, fps del secondo peggiore (esclusi i secondi di caricamento), frame sopra 20 ms,
+// ms di simulazione per tick e frequenza dello schermo stimata (hzSchermo: 90 sul Pixel 6).
 import { registaAttivo, type RisultatoProvaFps } from './regista';
 
 export type { RisultatoProvaFps };

@@ -14,32 +14,21 @@ import { InputBattaglia } from '../render/input';
 import { ScenaBattaglia } from '../render/scena-battaglia';
 import { Partita } from './partita';
 import { creaVista, visteUguali } from './vista';
+import { calcolaRisultato, type RisultatoProvaFps } from './statistiche-prova';
+
+export type { RisultatoProvaFps };
 
 /** un frame lento non deve far saltare le animazioni */
 const DELTA_MASSIMO_MS = 100;
 
-export interface RisultatoProvaFps {
-  /** fps medio sull'intera prova */
-  fpsMedio: number;
-  /** fps del secondo peggiore */
-  fpsMinimo: number;
-  /** frame più lunghi di 20 ms */
-  frameLenti: number;
-  /** frame totali */
-  frame: number;
-  /** ms medi della simulazione per tick */
-  msSimPerTick: number;
-  /** durata reale della prova in secondi */
-  secondi: number;
-}
-
 interface Prova {
   fine: number;
   inizio: number;
-  frame: number;
-  lenti: number;
   /** frame per ogni secondo intero */
   perSecondo: number[];
+  /** secondi in cui è nata una battaglia (esclusi dal minimo) */
+  secondiAvvio: Set<number>;
+  delta: number[];
   msSim: number;
   tick: number;
   risolvi: (r: RisultatoProvaFps) => void;
@@ -212,7 +201,7 @@ export class Regista {
     return new Promise((risolvi) => {
       const seme = 20261121;
       const ora = performance.now();
-      this.prova = { inizio: ora, fine: ora + durataMs, frame: 0, lenti: 0, perSecondo: [], msSim: 0, tick: 0, risolvi, seme };
+      this.prova = { inizio: ora, fine: ora + durataMs, perSecondo: [], secondiAvvio: new Set([0]), delta: [], msSim: 0, tick: 0, risolvi, seme };
       bus.richiestaBattaglia.value = configProva(seme);
     });
   }
@@ -221,32 +210,26 @@ export class Regista {
     const pr = this.prova!;
     const pa = this.partita!;
     const ora = performance.now();
-    pr.frame++;
-    if (deltaMS > 20) pr.lenti++;
+    pr.delta.push(deltaMS);
     const sec = Math.floor((ora - pr.inizio) / 1000);
     pr.perSecondo[sec] = (pr.perSecondo[sec] ?? 0) + 1;
     // zoom dal minimo al massimo e ritorno, ogni 12 s: la camera si muove sempre (piano QA §4)
     const t = (ora - pr.inizio) / 12000;
     this.camera.zoomA(BIL.camera.zoomMin + (BIL.camera.zoomMax - BIL.camera.zoomMin) * (0.5 - 0.5 * Math.cos(t * Math.PI * 2)));
     if (pa.s.esito) {
-      // battaglia finita prima del tempo: se ne avvia un'altra e si continua a misurare
+      // battaglia finita prima del tempo: se ne avvia un'altra; il secondo del caricamento (e il successivo,
+      // dove cade il primo frame dopo) non conta per il minimo
       pr.msSim += pa.msSim; pr.tick += pa.tickSimulati;
       pr.seme++;
+      pr.secondiAvvio.add(sec); pr.secondiAvvio.add(sec + 1);
       bus.richiestaBattaglia.value = configProva(pr.seme);
       return;
     }
     if (ora < pr.fine) return;
-    const msSim = pr.msSim + pa.msSim, tick = pr.tick + pa.tickSimulati;
-    const secondi = (ora - pr.inizio) / 1000;
-    const completi = pr.perSecondo.slice(0, Math.floor(secondi));
-    const r: RisultatoProvaFps = {
-      fpsMedio: Math.round((pr.frame / secondi) * 10) / 10,
-      fpsMinimo: completi.length ? Math.min(...completi) : pr.frame,
-      frameLenti: pr.lenti,
-      frame: pr.frame,
-      msSimPerTick: tick ? Math.round((msSim / tick) * 1000) / 1000 : 0,
-      secondi: Math.round(secondi * 10) / 10,
-    };
+    const r = calcolaRisultato({
+      perSecondo: pr.perSecondo, secondiAvvio: pr.secondiAvvio, delta: pr.delta,
+      msSim: pr.msSim + pa.msSim, tick: pr.tick + pa.tickSimulati, durataMs: ora - pr.inizio,
+    });
     this.prova = null;
     this.termina();
     pr.risolvi(r);

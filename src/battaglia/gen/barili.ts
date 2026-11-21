@@ -35,19 +35,20 @@ export function postoBarile(sup: Int32Array, mare: number, x: number): number {
 
 /**
  * Piazza i barili. Dove il suolo non è piano ma quasi, spiana un gradino sotto il barile (scava sopra la quota
- * della base, riempie di sabbia sotto): modifica `m` e `sup`. Restituisce i barili in ordine di x.
+ * della base, riempie di sabbia sotto): modifica `m` e `sup`. Niente barili entro `lontano` px dalle x in `vieta`. Restituisce i barili in ordine di x.
  */
-export function piazzaBarili(s: ConRng, m: Uint8Array, sup: Int32Array, mare: number, spawn: Punto[]): Punto[] {
+export function piazzaBarili(s: ConRng, m: Uint8Array, sup: Int32Array, mare: number, spawn: Punto[], vieta: number[] = [], lontano = 0): Punto[] {
   const B = BIL.barili;
   const quanti = intero(s, B.min, B.max);
   const out: Punto[] = [];
-  for (let prove = 0; prove < 80 && out.length < quanti; prove++) {
+  for (let prove = 0; prove < 150 && out.length < quanti; prove++) {
     const x = intero(s, MONDO.bordo + SPIANATA, W - 1 - MONDO.bordo - SPIANATA);
     const y = sup[x];
     if (y > mare - BARILE_SOPRA_MARE) continue;
     const p = { x, y };
     if (spawn.some((q) => distanza(p, q) < B.distanzaMinimaSpawn)) continue;
     if (out.some((q) => distanza(p, q) < BARILE_DISTANZA_BARILI)) continue;
+    if (vieta.some((v) => Math.abs(v - x) < lontano)) continue;
     let ok = true;
     for (let c = x - SPIANATA; c <= x + SPIANATA && ok; c++) if (Math.abs(sup[c] - y) > BARILE_SPIANA_MAX) ok = false;
     if (!ok) continue;

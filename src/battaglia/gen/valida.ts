@@ -6,6 +6,7 @@ import { superficie } from './analisi';
 import { postoBarile } from './barili';
 import { BIL } from '../../contenuti/bilanciamento';
 import { ISOLA, MONDO, REGOLE } from './parametri';
+import { controllaAppiglio, distanzaAppiglio } from './appigli';
 import { controllaInsieme, controllaPosto, zona, type Posto } from './spawn';
 
 const { w: W, h: H } = MONDO;
@@ -101,6 +102,19 @@ export function validaMappa(mappa: MappaGenerata): string[] {
     if (postoBarile(sup, t.mare, b.x) !== b.y) err.push(`barile in (${b.x}, ${b.y}): non in piano sul suolo o troppo vicino al mare`);
     for (const p of [...mappa.spawn[0], ...mappa.spawn[1]]) {
       if (Math.sqrt((b.x - p.x) ** 2 + (b.y - p.y) ** 2) < BIL.barili.distanzaMinimaSpawn) err.push(`barile in (${b.x}, ${b.y}) a meno di ${BIL.barili.distanzaMinimaSpawn} px dallo spawn (${p.x}, ${p.y})`);
+    }
+  }
+  // scale e liane (design/comandi/scale-e-liane.md): il campo è facoltativo (le mappe fatte a mano possono non averle)
+  if (mappa.appigli) {
+    const R = REGOLE, ap = mappa.appigli;
+    if (ap.length < R.appigliMin || ap.length > R.appigliMaxFatte) err.push(`${ap.length} scale/liane invece di ${R.appigliMin}-${R.appigliMaxFatte}`);
+    const aSinistra = ap.filter((a) => a.x < W / 2).length;
+    if (aSinistra * 2 !== ap.length) err.push(`scale/liane non uguali per lato: ${aSinistra} a sinistra, ${ap.length - aSinistra} a destra`);
+    for (const a of ap) {
+      err.push(...controllaAppiglio(t.maschera, t.mare, a));
+      for (const p of [...mappa.spawn[0], ...mappa.spawn[1]]) {
+        if (distanzaAppiglio(a, p) < R.appiglioLontanoDaSpawn) err.push(`${a.tipo} in x ${a.x} a meno di ${R.appiglioLontanoDaSpawn} px dallo spawn (${p.x}, ${p.y})`);
+      }
     }
   }
   if (err.length) return err;

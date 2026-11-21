@@ -11,6 +11,7 @@ import type { ConfigBattaglia, EventoBattaglia } from '../../core/tipi';
 import { BIL } from '../../contenuti/bilanciamento';
 import { Camera, SCOSSA_MAX_PX } from '../render/camera';
 import { InputBattaglia } from '../render/input';
+import { caricaGuida, guidaAttiva, segnaTiroGuida } from '../render/guida';
 import { ScenaBattaglia } from '../render/scena-battaglia';
 import { Partita } from './partita';
 import { creaVista, visteUguali } from './vista';
@@ -23,6 +24,9 @@ const DELTA_MASSIMO_MS = 100;
 /** fermo immagine dei colpi forti (m1-ritmo §4) */
 const FERMO_MS = 70;
 const FERMO_DANNO = 30;
+/** l'anello di mira pulsa nei primi 2 s del turno; la mano resta 2 s dopo FUOCO senza fionda */
+const INVITO_MS = 2000;
+const MANO_DOPO_FUOCO_MS = 2000;
 
 interface Prova {
   fine: number;
@@ -51,6 +55,12 @@ export class Regista {
   private stacca: (() => void)[] = [];
   private segui: 'pirata' | 'proiettile' | 'libera' = 'pirata';
   private fiondaAttiva = false;
+  /** ms dall'inizio del turno del giocatore: l'anello pulsa nei primi 2 s */
+  private msTurno = 0;
+  /** il giocatore ha trascinato la fionda almeno una volta in questa sessione */
+  private haTrascinato = false;
+  /** ms in cui mostrare la mano dopo FUOCO senza aver mai trascinato */
+  private manoMs = 0;
   private eraInPausa = false;
   private prova: Prova | null = null;
   /** ms di fermo immagine rimasti */
@@ -59,6 +69,7 @@ export class Regista {
 
   constructor(private readonly app: Application, private readonly sfondo?: { radice: { visible: boolean } }) {
     attivo = this;
+    void caricaGuida();
     this.camera.impostaSchermo(app.screen.width, app.screen.height);
     app.renderer.on('resize', (w: number, h: number) => this.camera.impostaSchermo(w, h));
     this.stacca.push(effect(() => {
@@ -66,7 +77,11 @@ export class Regista {
       if (cfg && cfg !== this.config) this.avvia(cfg);
       else if (!cfg && this.config) this.termina();
     }));
-    this.stacca.push(bus.comandi.ascolta((c) => this.partita?.comandoUmano(c)));
+    this.stacca.push(bus.comandi.ascolta((c) => {
+      // FUOCO dal tasto senza aver mai usato la fionda: lo sparo parte e la mano mostra il gesto per 2 s
+      if (c.t === 'fuoco' && !this.haTrascinato && this.partita && !this.partita.toccaIa) this.manoMs = MANO_DOPO_FUOCO_MS;
+      this.partita?.comandoUmano(c);
+    }));
     this.stacca.push(bus.azioni.ascolta((a) => this.azione(a)));
     app.ticker.add(this.frame);
   }
@@ -91,7 +106,7 @@ export class Regista {
       mira: (m) => partita.comandoUmano({ t: 'mira', ...m }),
       miraAttuale: () => ({ ...partita.s.turno.mira }),
       fuoco: () => partita.comandoUmano({ t: 'fuoco' }),
-      fionda: (a) => { this.fiondaAttiva = a; },
+      fionda: (a) => { this.fiondaAttiva = a; if (a) { this.haTrascinato = true; this.manoMs = 0; } },
       ricentra: () => this.ricentra(),
       cameraManuale: () => { this.segui = 'libera'; },
     });
@@ -168,6 +183,8 @@ export class Regista {
       this.eventiCamera(eventi);
       bus.eventiBattaglia.value = eventi;
     }
+    this.msTurno += delta;
+    if (this.manoMs > 0) this.manoMs -= delta;
     this.muoviCamera(delta);
     scena.aggiorna(delta, this.camera, this.opzioniDisegno());
 
@@ -179,7 +196,12 @@ export class Regista {
 
   private opzioniDisegno() {
     const pa = this.partita!;
-    return { mira: !pa.toccaIa && pa.s.turno.fase === 'azione' && !pa.s.esito, fiondaAttiva: this.fiondaAttiva };
+    return {
+      mira: !pa.toccaIa && pa.s.turno.fase === 'azione' && !pa.s.esito,
+      fiondaAttiva: this.fiondaAttiva,
+      invito: this.msTurno < INVITO_MS,
+      guida: (guidaAttiva() || this.manoMs > 0) && !this.prova,
+    };
   }
 
   /**
@@ -204,7 +226,9 @@ export class Regista {
   private eventiCamera(eventi: readonly EventoBattaglia[]): void {
     const s = this.partita!.s;
     for (const e of eventi) {
+      if (e.t === 'sparo' && !this.partita!.toccaIa) segnaTiroGuida();
       if (e.t === 'turnoIniziato') {
+        this.msTurno = 0;
         const p = s.pirati.find((x) => x.id === e.pirata);
         this.segui = 'pirata';
         if (p) this.camera.vola(p.x, p.y);

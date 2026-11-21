@@ -9,6 +9,13 @@ import { dentroAnello, fiondaAMira } from './fionda';
 const DOPPIO_TOCCO_MS = 300;
 const TOCCO_MAX_PX = 12;
 const TOCCO_MAX_MS = 250;
+/**
+ * Zona di partenza della fionda: cerchio di 140 px CSS attorno al pirata (decisione del Lead design),
+ * più largo dell'anello disegnato (100 px). Il valore sta in BIL.mira.zonaFiondaPx; 140 finché non c'è.
+ */
+export function zonaFiondaPx(): number {
+  return (BIL.mira as { zonaFiondaPx?: number }).zonaFiondaPx ?? 140;
+}
 /** fionda che spara al rilascio (m1-ritmo §1): rilasciare entro 24 px dal centro dell'anello annulla */
 export const ANNULLA_PX = 24;
 /** sotto il 5% di potenza il rilascio non spara */
@@ -20,6 +27,17 @@ type Mira = { mezziGradi: number; potenza: number };
 let fiondaAlRilascio = true;
 export function impostaFiondaAlRilascio(attiva: boolean): void { fiondaAlRilascio = attiva; }
 export function fiondaSparaAlRilascio(): boolean { return fiondaAlRilascio; }
+
+/** l'input della battaglia in corso (uno solo alla volta) */
+let inputAttivo: InputBattaglia | null = null;
+
+/**
+ * Per l'HUD (zona del joystick): true se adesso c'è un pirata mirabile e il punto (coordinate del client,
+ * come PointerEvent.clientX/Y) cade nella presa della fionda. In quel caso il tocco è del canvas.
+ */
+export function toccoSullaFionda(clientX: number, clientY: number): boolean {
+  return inputAttivo ? inputAttivo.sullaFionda(clientX, clientY) : false;
+}
 
 /**
  * Cosa fa il rilascio della fionda: `annulla` se il dito torna entro 24 px dal centro dell'anello,
@@ -65,6 +83,7 @@ export class InputBattaglia {
   private readonly via: () => void;
 
   constructor(private readonly el: HTMLElement, private readonly g: GestoriInput, private readonly ora: () => number = () => performance.now()) {
+    inputAttivo = this;
     el.style.touchAction = 'none';
     const giu = (e: PointerEvent) => this.giu(e);
     const muovi = (e: PointerEvent) => this.muovi(e);
@@ -89,6 +108,13 @@ export class InputBattaglia {
     };
   }
 
+  sullaFionda(clientX: number, clientY: number): boolean {
+    const pirata = this.g.pirataMirabile();
+    if (!pirata) return false;
+    const p = this.punto({ clientX, clientY });
+    return dentroAnello(p.x, p.y, pirata.x, pirata.y, zonaFiondaPx());
+  }
+
   private punto(e: { clientX: number; clientY: number }): { x: number; y: number } {
     const r = this.el.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -99,7 +125,7 @@ export class InputBattaglia {
     this.dita.set(e.pointerId, { x: p.x, y: p.y, x0: p.x, y0: p.y, t0: this.ora() });
     if (this.dita.size === 1) {
       const pirata = this.g.pirataMirabile();
-      if (pirata && dentroAnello(p.x, p.y, pirata.x, pirata.y)) {
+      if (pirata && dentroAnello(p.x, p.y, pirata.x, pirata.y, zonaFiondaPx())) {
         this.modo = 'fionda'; this.ditoFionda = e.pointerId; this.ultimaMira = '';
         this.miraPrima = { ...this.g.miraAttuale() };
         this.centroAnello = { x: pirata.x, y: pirata.y };
@@ -171,6 +197,7 @@ export class InputBattaglia {
   }
 
   distruggi(): void {
+    if (inputAttivo === this) inputAttivo = null;
     if (this.ditoFionda >= 0) this.g.fionda(false);
     this.via();
   }

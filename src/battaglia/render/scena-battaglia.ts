@@ -9,6 +9,7 @@ import { coseno, seno } from '../../core/trig';
 import { BIL } from '../../contenuti/bilanciamento';
 import { traiettoria } from '../sim';
 import type { Camera } from './camera';
+import { posaMano } from './guida';
 import { Effetti } from './effetti';
 import { Forme, sprite, type IdForma } from './forme';
 import { TerrenoRender } from './terreno';
@@ -66,7 +67,14 @@ export interface OpzioniDisegno {
   mira: boolean;
   /** anello di mira acceso (il dito sta trascinando la fionda) */
   fiondaAttiva: boolean;
+  /** primi 2 s del turno del giocatore: l'anello pulsa */
+  invito?: boolean;
+  /** mostra la mano che insegna il gesto della fionda */
+  guida?: boolean;
 }
+
+/** anello di mira: oro pieno e spesso, pulsa finché il giocatore non inizia a mirare */
+const ANELLO_SPESSORE = 3;
 
 export class ScenaBattaglia {
   /** contenitore del mondo: lo trasforma la camera */
@@ -96,6 +104,8 @@ export class ScenaBattaglia {
   private readonly anelloTerra: Sprite;
   private readonly freccia: Sprite;
   private readonly anelloMira = new Graphics();
+  private readonly mano: Sprite;
+  private readonly impronta: Sprite;
   private tempo = 0;
   private scala = 1;
   private chiaveTraiettoria = '';
@@ -138,10 +148,16 @@ export class ScenaBattaglia {
     }
     for (const p of s.pirati) this.creaPirata(p);
 
-    this.anelloMira.circle(0, 0, BIL.mira.anelloPx).stroke({ width: 2, color: hex(PALETTE.oro), alpha: 0.55 })
-      .circle(0, 0, BIL.mira.anelloPx).fill({ color: hex(PALETTE.oro), alpha: 0.06 });
+    this.anelloMira.circle(0, 0, BIL.mira.anelloPx).fill({ color: hex(PALETTE.oro), alpha: 0.1 })
+      .circle(0, 0, BIL.mira.anelloPx).stroke({ width: ANELLO_SPESSORE + 3, color: hex(PALETTE.inchiostro), alpha: 0.35 })
+      .circle(0, 0, BIL.mira.anelloPx).stroke({ width: ANELLO_SPESSORE, color: hex(PALETTE.oro), alpha: 1 });
     this.anelloMira.visible = false;
-    this.schermo.addChild(this.anelloMira, this.freccia, this.effetti.schermo);
+    this.impronta = sprite(this.forme.get('cerchio'));
+    this.impronta.tint = hex(PALETTE.oro);
+    this.mano = sprite(this.forme.get('mano'));
+    this.mano.anchor.set(0.5, 0.06);
+    this.mano.visible = this.impronta.visible = false;
+    this.schermo.addChild(this.anelloMira, this.freccia, this.impronta, this.mano, this.effetti.schermo);
   }
 
   private creaPirata(p: Pirata): void {
@@ -295,7 +311,26 @@ export class ScenaBattaglia {
     if (attivo && o.mira) {
       const c = aSchermo(attivo.x, attivo.y);
       this.anelloMira.position.set(c.x, c.y);
-      this.anelloMira.alpha = o.fiondaAttiva ? 1 : 0.6;
+      if (o.fiondaAttiva) { this.anelloMira.alpha = 1; this.anelloMira.scale.set(1); }
+      else if (o.invito) {
+        // pulsa: "tocca qui"
+        const k = 0.5 + 0.5 * Math.sin(this.tempo / 180);
+        this.anelloMira.alpha = 0.7 + 0.3 * k;
+        this.anelloMira.scale.set(1 + 0.05 * k);
+      } else { this.anelloMira.alpha = 0.75; this.anelloMira.scale.set(1); }
+    }
+    // mano che mostra il gesto: dal pirata, trascina indietro e lascia
+    const guida = !!attivo && o.mira && !o.fiondaAttiva && !!o.guida;
+    this.mano.visible = this.impronta.visible = guida;
+    if (attivo && guida) {
+      const c = aSchermo(attivo.x, attivo.y);
+      const m = posaMano(this.tempo, attivo.verso >= 0 ? 1 : -1);
+      this.mano.position.set(c.x + m.x, c.y + m.y);
+      this.mano.alpha = m.alfa;
+      this.mano.scale.set(m.premuta ? 0.92 : 1.05);
+      this.impronta.position.set(c.x + m.x, c.y + m.y);
+      this.impronta.alpha = m.premuta ? 0.55 * m.alfa : 0;
+      this.impronta.scale.set(0.9);
     }
 
     this.aggiornaProiettili(deltaMS);

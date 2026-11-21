@@ -105,7 +105,7 @@ function braccio(r: Renderer): Forma {
 
 export type IdForma =
   | 'braccio' | 'lampo' | 'palla' | 'granata' | 'frammento' | 'barile' | 'mina' | 'lapide'
-  | 'cerchio' | 'nuvola' | 'anello' | 'cerchietto' | 'cappello' | 'cassa' | 'paracadute' | 'freccia' | 'puntino' | 'palma' | 'masso' | 'rovina' | 'cespuglio' | 'segnaposto';
+  | 'cerchio' | 'nuvola' | 'anello' | 'cerchietto' | 'mano' | 'cappello' | 'cassa' | 'paracadute' | 'freccia' | 'puntino' | 'palma' | 'masso' | 'rovina' | 'cespuglio' | 'segnaposto';
 
 export class Forme {
   private readonly ciurme = new Map<IdCiurma, Forma>();
@@ -141,6 +141,12 @@ export class Forme {
     })()));
     this.altre.set('cappello', forma(r, g()
       .ellipse(0, 0, 11, 3).fill(dark).poly([-7, 0, -5, -8, 5, -8, 7, 0]).fill(dark).circle(0, -4, 2).fill(BIANCO)));
+    // mano della guida della fionda: dito puntato in su, punta del dito in (0, 0)
+    this.altre.set('mano', forma(r, g()
+      .roundRect(-6, -2, 12, 30, 6).fill(BIANCO).stroke({ width: 2, color: dark })
+      .roundRect(-14, 18, 30, 26, 10).fill(BIANCO).stroke({ width: 2, color: dark })
+      .roundRect(-6, 10, 12, 14, 5).fill(BIANCO)
+      .moveTo(-2, 24).lineTo(-2, 30).moveTo(6, 24).lineTo(6, 30).stroke({ width: 1.5, color: dark })));
     this.altre.set('cerchietto', forma(r, g().circle(0, 0, 7).stroke({ width: 2, color: BIANCO })));
     this.altre.set('mina', forma(r, g().ellipse(0, 0, 7, 4).fill(hex('#E8B4B8')).stroke({ width: 1, color: dark })));
     // lapide-barilotto con il cappello (00 §1.4)

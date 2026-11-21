@@ -171,3 +171,19 @@ describe('VistaBattaglia', () => {
     expect(creaVista(p.s, false).puoArrendersi).toBe(true);
   });
 });
+
+describe('Partita · con la sim, le mappe e l\'IA vere', () => {
+  it('una battaglia 5v5 IA contro IA arriva alla fine, con spari a ogni turno', async () => {
+    const { configProva } = await import('../../src/battaglia/partita/statistiche-prova');
+    const p = new Partita(configProva(2));
+    let spari = 0, turni = 0, f = 0;
+    while (!p.s.esito && f < 60 * 60 * 5) {
+      for (const e of p.aggiorna(FRAME)) { if (e.t === 'sparo') spari++; if (e.t === 'turnoIniziato') turni++; }
+      if (++f % 10 === 0) await microtask();
+    }
+    p.chiudi();
+    expect(p.s.esito).not.toBeNull();
+    expect(spari).toBeGreaterThanOrEqual(turni - 1);
+    expect(p.replay.tickFinale).toBe(p.s.tick);
+  }, 60_000);
+});

@@ -3,6 +3,8 @@
 // contano per il minimo, si riportano a parte; la frequenza dello schermo si stima dal delta mediano
 // (il Pixel 6 va a 90 Hz, o a 60 in risparmio energetico); msSimPerTick è una somma su migliaia di tick.
 
+import type { ConfigBattaglia } from '../../core/tipi';
+
 export interface RisultatoProvaFps {
   /** fps medio sull'intera prova */
   fpsMedio: number;
@@ -63,5 +65,16 @@ export function calcolaRisultato(d: DatiProva): RisultatoProvaFps {
     secondi: Math.round(secondi * 10) / 10,
     hzSchermo,
     secondiCaricamento: [...d.secondiAvvio].filter((s) => s < completi).length,
+  };
+}
+
+/** Battaglia della prova: 5 contro 5, IA Mozzo contro IA Mozzo, seme fisso. */
+export function configProva(seme: number): ConfigBattaglia {
+  return {
+    versioneRegole: 1, seme, bioma: 'isola', timerSecondi: 20, traiettoriaCompleta: false,
+    squadre: [
+      { ciurma: 'teschio', ruolo: 'attaccante', controllo: 'ia', livelloIa: 'mozzo', pirati: 5 },
+      { ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: 5 },
+    ],
   };
 }

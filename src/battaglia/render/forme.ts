@@ -105,7 +105,7 @@ function braccio(r: Renderer): Forma {
 
 export type IdForma =
   | 'braccio' | 'lampo' | 'palla' | 'granata' | 'frammento' | 'barile' | 'mina' | 'lapide'
-  | 'cerchio' | 'anello' | 'freccia' | 'puntino' | 'palma' | 'masso' | 'rovina' | 'cespuglio' | 'segnaposto';
+  | 'cerchio' | 'nuvola' | 'anello' | 'freccia' | 'puntino' | 'palma' | 'masso' | 'rovina' | 'cespuglio' | 'segnaposto';
 
 export class Forme {
   private readonly ciurme = new Map<IdCiurma, Forma>();
@@ -128,6 +128,9 @@ export class Forme {
       .roundRect(-7, -14, 14, 14, 3).fill(hex(PALETTE.legno)).rect(-7, -10, 14, 2).rect(-7, -5, 14, 2).fill(hex(PALETTE.legnoScuro))
       .ellipse(0, -15, 9, 2.5).fill(dark).roundRect(-5, -21, 10, 6, 2).fill(dark)));
     this.altre.set('cerchio', forma(r, g().circle(0, 0, 16).fill(BIANCO)));
+    this.altre.set('nuvola', forma(r, g()
+      .ellipse(0, 14, 70, 18).fill(hex(PALETTE.nuvolaOmbra))
+      .circle(-32, 0, 26).circle(0, -10, 32).circle(32, 0, 24).fill(BIANCO)));
     this.altre.set('puntino', forma(r, g().circle(0, 0, 3).fill(BIANCO)));
     this.altre.set('anello', forma(r, g().ellipse(0, 0, 16, 5).stroke({ width: 2.5, color: BIANCO })));
     this.altre.set('freccia', forma(r, g().poly([-7, -9, 7, -9, 0, 0]).fill(hex(PALETTE.oro)).stroke({ width: 1.5, color: hex(PALETTE.oroOmbra) })));

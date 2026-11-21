@@ -14,7 +14,7 @@ import { InputBattaglia } from '../render/input';
 import { ScenaBattaglia } from '../render/scena-battaglia';
 import { Partita } from './partita';
 import { creaVista, visteUguali } from './vista';
-import { calcolaRisultato, type RisultatoProvaFps } from './statistiche-prova';
+import { calcolaRisultato, configProva, type RisultatoProvaFps } from './statistiche-prova';
 
 export type { RisultatoProvaFps };
 
@@ -73,7 +73,8 @@ export class Regista {
     this.partita = partita;
     const scena = new ScenaBattaglia(this.app.renderer, partita.s, partita.mappa);
     this.scena = scena;
-    this.app.stage.addChild(scena.mondo, scena.schermo);
+    this.app.stage.addChild(scena.cielo, scena.mondo, scena.schermo);
+    if (this.sfondo) this.sfondo.radice.visible = false;
     this.camera.zoom = BIL.camera.zoomPredefinito;
     this.segui = 'pirata';
     const p = partita.s.pirati.find((x) => x.id === partita.s.turno.pirata);
@@ -104,7 +105,7 @@ export class Regista {
   private chiudiPartita(): void {
     this.input?.distruggi();
     this.input = null;
-    if (this.scena) { this.app.stage.removeChild(this.scena.mondo, this.scena.schermo); this.scena.distruggi(); }
+    if (this.scena) { this.app.stage.removeChild(this.scena.cielo, this.scena.mondo, this.scena.schermo); this.scena.distruggi(); }
     this.scena = null;
     this.partita?.chiudi();
     this.partita = null;
@@ -241,14 +242,4 @@ export class Regista {
     for (const f of this.stacca) f();
     if (attivo === this) attivo = null;
   }
-}
-
-export function configProva(seme: number): ConfigBattaglia {
-  return {
-    versioneRegole: 1, seme, bioma: 'isola', timerSecondi: 20, traiettoriaCompleta: false,
-    squadre: [
-      { ciurma: 'teschio', ruolo: 'attaccante', controllo: 'ia', livelloIa: 'mozzo', pirati: 5 },
-      { ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: 5 },
-    ],
-  };
 }

@@ -116,7 +116,10 @@ export function Hud({ v }: { v: VistaBattaglia }) {
           onClick={() => { tocco(); apriPausa(); }}>II</button>
         <BarraSquadra sq={v.squadre[0]} lato={0} />
         <div class="centro-alto">
-          <Timer v={v} totale={cfg?.timerSecondi ?? 30} />
+          <div class="blocco-timer">
+            <Timer v={v} totale={cfg?.timerSecondi ?? 30} />
+            <span class="turno-piccolo" data-testid="turno">{T.battaglia.turno(v.numeroTurno, v.turnoLimite)}</span>
+          </div>
           <Vento v={v} />
         </div>
         <BarraSquadra sq={v.squadre[1]} lato={1} />

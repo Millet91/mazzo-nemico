@@ -59,6 +59,7 @@ export const it = {
     timer: 'Secondi rimasti',
     ciurmaPv: (nome: string, pv: number, vivi: number) => `${nome}: ${pv} PV, ${vivi} in piedi`,
     toccaATe: 'Tocca a te!',
+    turno: (n: number, limite: number) => `Turno ${n}/${limite}`,
     medita: 'Il capitano medita…',
     mareSale: 'Il mare sale!',
     ultimiTurni: 'Ultimi turni!',

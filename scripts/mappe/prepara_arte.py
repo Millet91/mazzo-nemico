@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prepara la grafica di una mappa fatta a mano dalle immagini di Magnific (sfondo verde #00FF00 = trasparente).
 
-  python3 scripts/mappe/prepara_arte.py <cartella-immagini> <id-mappa>
+  python3 scripts/mappe/prepara_arte.py <cartella-immagini> <id-mappa> [--pittore]
 
 Nella cartella: terreno.*, cielo.*, lontano.*, medio.*, oggetti.* (png/jpg/webp; quelli che mancano si saltano).
 Scrive public/assets/mappe/<id>/*.webp e /tmp/claude-0/<id>-terreno.png (RGBA 2048x1024 per costruisci.ts).
@@ -93,5 +93,28 @@ def main():
             salva(q.resize((max(1, round(alto * q.size[0] / q.size[1])), alto), Image.LANCZOS), os.path.join(dest, nome + '.webp'))
 
 
+
+
+def da_pittore(cartella, mid):
+    """Grafica già allineata (scripts/mappe/dipingi): solo conversione in WebP."""
+    dest = os.path.join('public', 'assets', 'mappe', mid)
+    os.makedirs(dest, exist_ok=True)
+    for f in sorted(glob.glob(os.path.join(cartella, '*.png'))):
+        nome = os.path.splitext(os.path.basename(f))[0]
+        if 'anteprima' in nome:
+            continue
+        im = Image.open(f)
+        if nome == 'cielo':
+            im = im.convert('RGB')
+        if nome == 'terreno':
+            im.save(os.path.join(dest, 'terreno.webp'), 'WEBP', lossless=True, method=6)   # alfa e colori esatti: alfa = maschera
+            print('terreno.webp', os.path.getsize(os.path.join(dest, 'terreno.webp')) // 1024, 'KB')
+        else:
+            salva(im, os.path.join(dest, nome + '.webp'), 86)
+
+
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) > 3 and sys.argv[3] == '--pittore':
+        da_pittore(sys.argv[1], sys.argv[2])
+    else:
+        main()

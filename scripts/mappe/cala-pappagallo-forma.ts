@@ -62,9 +62,13 @@ export function costruisciMaschera(): { m: Uint8Array; sup: Float64Array } {
     for (let y = FONDALE; y < H; y++) m[y * W + x] = MATERIALE.ferro;
   }
   // la Rocca è roccia viva già a 40 px sotto la superficie (sopra y 700)
-  for (let x = 880; x < 1240; x++) {
+  // (nucleo a ellisse, così il confine con la terra è morbido)
+  for (let x = 820; x < 1300; x++) {
     const s = Math.round(sup[x]);
-    for (let y = s + 40; y < 760; y++) if (m[y * W + x]) m[y * W + x] = MATERIALE.roccia;
+    for (let y = s + 40; y < 900; y++) {
+      const e = ((x - 1062) / 215) ** 2 + ((y - 560) / 330) ** 2;
+      if (e <= 1 && m[y * W + x]) m[y * W + x] = MATERIALE.roccia;
+    }
   }
   // arco
   const cx = (ARCO.x0 + ARCO.x1) / 2, rx = (ARCO.x1 - ARCO.x0) / 2, ry = ARCO.pavimento - ARCO.volta;
@@ -77,7 +81,7 @@ export function costruisciMaschera(): { m: Uint8Array; sup: Float64Array } {
   for (const g of GROTTE) for (let y = g.y - g.ry; y <= g.y + g.ry; y++) for (let x = g.x - g.rx; x <= g.x + g.rx; x++) {
     if (((x - g.x) / g.rx) ** 2 + ((y - g.y) / g.ry) ** 2 <= 1) m[y * W + x] = MATERIALE.aria;
   }
-  // relitto: scafo di legno inclinato e arenato sulla spiaggia (fasciame 12 px, dentro sabbia)
+  // relitto: scafo di legno inclinato e arenato sulla spiaggia
   const R = RELITTO;
   for (let x = R.x0; x <= R.x1; x++) {
     const t = (x - R.x0) / (R.x1 - R.x0);
@@ -87,8 +91,7 @@ export function costruisciMaschera(): { m: Uint8Array; sup: Float64Array } {
     for (let y = ponte; y < fondo && y < MARE + 20; y++) {
       const i = y * W + x;
       if (m[i] && m[i] !== MATERIALE.sabbia) continue;
-      const bordo = y - ponte < 12 || x - R.x0 < 10 || R.x1 - x < 10 || fondo - y < 8;
-      m[i] = bordo ? MATERIALE.legno : MATERIALE.sabbia;
+      m[i] = MATERIALE.legno;
     }
   }
   // rovina: muretto di roccia

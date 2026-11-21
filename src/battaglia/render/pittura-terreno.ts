@@ -159,7 +159,11 @@ export function dipingiRettangolo(
       if (mat === MATERIALE.aria) {
         // cavità chiusa: coperta da terreno sopra e con terreno (iniziale) sotto → fondo di terra scura
         if (y > cimaRiga[x - x0] && y < fondo[x]) {
-          if (arte && arte[i * 4 + 3]) {
+          if (arte && arte[i * 4 + 3] && arte[i * 4 + 3] < 255) {
+            // parete di fondo dipinta (grotte e archi della mappa: alfa < 255 nel quadro)
+            const a = i * 4;
+            buf[k] = arte[a]; buf[k + 1] = arte[a + 1]; buf[k + 2] = arte[a + 2]; buf[k + 3] = 240;
+          } else if (arte && arte[i * 4 + 3]) {
             // mappa dipinta: in fondo al buco si vede il terreno stesso, scuro e freddo (03 §1: ombre blu-viola)
             const a = i * 4;
             buf[k] = arte[a] * 0.3 + 14; buf[k + 1] = arte[a + 1] * 0.3 + 12; buf[k + 2] = arte[a + 2] * 0.36 + 26; buf[k + 3] = 235;
@@ -171,7 +175,7 @@ export function dipingiRettangolo(
       }
       let c = COLORI_MATERIALE[mat];
       let r = c[0], g = c[1], b = c[2];
-      if (arte && arte[i * 4 + 3] && !(scavi && mat !== MATERIALE.ferro && vicinoScavo[rigaScavi + x])) {
+      if (arte && arte[i * 4 + 3] === 255 && !(scavi && mat !== MATERIALE.ferro && vicinoScavo[rigaScavi + x])) {
         // mappa dipinta (battaglia/mappe): il colore è quello del quadro, erba e strati sono già disegnati
         const a = i * 4;
         buf[k] = arte[a]; buf[k + 1] = arte[a + 1]; buf[k + 2] = arte[a + 2]; buf[k + 3] = 255;

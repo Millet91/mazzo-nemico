@@ -105,4 +105,8 @@ for (let i = 0; i < W * H; i++) rgba.set(m[i] ? col[m[i]] : Math.floor(i / W) >=
 for (const p of [...spawn[0], ...spawn[1]]) for (let dy = -40; dy < 0; dy++) for (let dx = -6; dx <= 6; dx++) rgba.set(spawn[0].includes(p) ? [229, 72, 77, 255] : [34, 199, 217, 255], ((p.y + dy) * W + p.x + dx) * 4);
 for (const b of barili) for (let dy = -20; dy < 0; dy++) for (let dx = -10; dx <= 10; dx++) rgba.set([60, 30, 10, 255], ((b.y + dy) * W + b.x + dx) * 4);
 writeFileSync(`/tmp/claude-0/${ID}-maschera.png`, scriviPng(W, H, rgba));
+// materiali per il pittore (scripts/mappe/dipingi): R = materiale × 40, alfa = solido
+const mat = new Uint8Array(W * H * 4);
+for (let i = 0; i < W * H; i++) if (m[i]) mat.set([m[i] * 40, 0, 0, 255], i * 4);
+writeFileSync(`/tmp/claude-0/${ID}-materiali.png`, scriviPng(W, H, mat));
 console.log('ok');

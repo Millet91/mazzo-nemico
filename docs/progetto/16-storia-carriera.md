@@ -40,12 +40,17 @@ Nel cap. 7 Scarlatta deve tenere la Rotta dei Raggi perché il Timone giri, ment
 2. **Scarlatta**: «Uno è già nostro. Gli altri tre… li andiamo a prendere.»
 3. **Cadetto Rigidini** (scappando a nuoto): «Questo sarà verbalizzato!»
 
+#### c0.partenza — si salpa da Cala Pappagallo (00 §9.18), subito dopo c0.fine
+`[regia]` La ciurma carica la scialuppa sul veliero ormeggiato al molo di Cala Pappagallo. Le vele si gonfiano, l'isola con la sua Rocca si allontana. La camera sale e la mappa del Timone si apre sul mare: si entra nella mappa del cap. 1.
+1. **Mastro Gancio**: «Si torna a casa, capitana?»
+2. **Scarlatta**: «A casa, sì. A riprendercela.»
+
 ---
 
 ## 4. Capitolo 1 — Acque di Casa
 
 #### c1.inizio — prima del round 1 (turno protetto)
-`[regia]` Porto Teschio, banchina. Su ogni isolotto vicino sventola un cartello grigio della Marina. Scarlatta stringe la mappa.
+`[regia]` Il veliero arriva da Cala Pappagallo e attracca a Porto Teschio. Su ogni isolotto vicino sventola un cartello grigio della Marina. Scarlatta stringe la mappa.
 1. **Mastro Gancio**: «La Marina ha piantato cartelli su tutte le isole di casa.»
 2. **Scarlatta**: «Su casa MIA? Ciurma, si stacca un cartello alla volta.»
 3. **Mastro Gancio**: «Prima i rinforzi, poi l'attacco. E niente fretta, capitana.»

@@ -6,9 +6,12 @@ import type { EventoBattaglia, Pirata, StatoBattaglia, Terreno } from '../../cor
 import { BIL } from '../../contenuti/bilanciamento';
 import { capsulaUrta, materialeSottoPiedi, solido, MEZZA_ALTEZZA_PIRATA, MEZZA_LARGHEZZA_PIRATA } from './terreno';
 import { ESPULSIONE_MAX_PX } from './costanti';
+import { aggiornaAppeso, lascia, provaAggrappo } from './appigli';
 
 export interface Corpo {
   x: number; y: number; vx: number; vy: number; aTerra: boolean; yInizioCaduta: number;
+  /** solo per i pirati veri: id dell'appiglio a cui è aggrappato (−1 = nessuno) */
+  appeso?: number;
 }
 
 const P = BIL.pirata;
@@ -25,9 +28,17 @@ export function inAcqua(c: Corpo, mare: number): boolean {
   return c.y + MEZZA_ALTEZZA_PIRATA >= mare;
 }
 
-/** Stacca il corpo dal suolo (salto, spinta, terreno che sparisce). */
+/** Stacca il corpo dal suolo o dall'appiglio (salto, spinta, terreno che sparisce). */
 export function stacca(c: Corpo): void {
-  if (c.aTerra) { c.aTerra = false; c.yInizioCaduta = c.y; }
+  const appeso = c.appeso !== undefined && c.appeso >= 0;
+  if (c.aTerra || appeso) { c.aTerra = false; c.yInizioCaduta = c.y; }
+  if (appeso) c.appeso = -1;
+}
+
+/** Come stacca, per un pirata spinto da un colpo: se era appeso esce l'evento `staccato`. */
+export function staccaPirata(p: Pirata, eventi: EventoBattaglia[]): void {
+  if (p.appeso >= 0) eventi.push({ t: 'staccato', pirata: p.id });
+  stacca(p);
 }
 
 /**
@@ -178,6 +189,7 @@ export function danneggia(p: Pirata, quanto: number, eventi: EventoBattaglia[]):
 /** Annega il pirata (muore subito, nessuna lapide): i PV che aveva contano come danno inflitto. */
 export function annega(p: Pirata, eventi: EventoBattaglia[]): void {
   if (p.stato !== 'vivo') return;
+  if (p.appeso >= 0) { p.appeso = -1; eventi.push({ t: 'staccato', pirata: p.id }); }
   p.dannoNelTurno += p.vita;
   p.vita = 0;
   p.stato = 'annegato';
@@ -188,11 +200,22 @@ export function annega(p: Pirata, eventi: EventoBattaglia[]): void {
 
 /**
  * Un tick di fisica per un pirata in campo (anche a 0 PV: il corpo cade e può essere spinto).
- * `dir` = camminata richiesta (solo per il pirata attivo nelle fasi in cui può muoversi).
+ * `dir` = camminata richiesta, `su` = arrampicata richiesta (solo per il pirata attivo nelle fasi in cui può muoversi).
  */
-export function aggiornaPirata(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, eventi: EventoBattaglia[]): void {
+export function aggiornaPirata(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, eventi: EventoBattaglia[], su: -1 | 0 | 1 = 0): void {
   if (p.stato !== 'vivo') return;
   const t = s.terreno;
+  if (p.appeso >= 0 && p.vita <= 0) lascia(t, p, eventi); // a terra con 0 PV: cade giù
+  if (p.appeso < 0 && su !== 0 && p.vita > 0) provaAggrappo(s, p, su, eventi);
+  if (p.appeso >= 0) {
+    if (espelli(t, p)) p.yInizioCaduta = p.y;
+    if (aggiornaAppeso(s, p, su, eventi)) {
+      if (inAcqua(p, t.mare)) annega(p, eventi);
+      return;
+    }
+    if (inAcqua(p, t.mare)) annega(p, eventi);
+    return;
+  }
   if (espelli(t, p)) controllaAppoggio(t, p);
   if (p.aTerra) {
     if (dir !== 0 && p.vita > 0) cammina(t, p, dir);
@@ -209,5 +232,5 @@ export function aggiornaPirata(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, ev
 
 /** Il pirata è fermo (o fuori dal campo)? */
 export function fermo(p: Pirata): boolean {
-  return p.stato !== 'vivo' || (p.aTerra && p.vx === 0 && p.vy === 0);
+  return p.stato !== 'vivo' || p.appeso >= 0 || (p.aTerra && p.vx === 0 && p.vy === 0);
 }

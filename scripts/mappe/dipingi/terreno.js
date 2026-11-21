@@ -32,11 +32,14 @@
     const x0 = c0.getContext('2d'); x0.drawImage(img, 0, 0);
     const src = x0.getImageData(0, 0, W, H).data;
     const mat = new Uint8Array(W * H);
-    for (let i = 0; i < W * H; i++) mat[i] = src[i * 4 + 3] > 127 ? Math.round(src[i * 4] / 40) : ARIA;
+    const tag = new Uint8Array(W * H);   // G/50: 1 foglie, 2 edificio, 3 rovina, 4 ponte
+    for (let i = 0; i < W * H; i++) { mat[i] = src[i * 4 + 3] > 127 ? Math.round(src[i * 4] / 40) : ARIA; tag[i] = Math.round(src[i * 4 + 1] / 50); }
+    // il "terreno" vero: senza torri, ponti e cespugli (servono a strati, erba e grotte)
+    const terra = (i) => mat[i] !== ARIA && (tag[i] === 0 || tag[i] === 3);
 
     // superficie (prima quota solida dall'alto) e profondità sotto la superficie della colonna
     const sup = new Int32Array(W).fill(H);
-    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (mat[y * W + x]) { sup[x] = y; break; }
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (terra(y * W + x)) { sup[x] = y; break; }
     // superficie "di fondo" senza le sporgenze strette (rovina, prua del relitto): serve agli strati
     const sup2 = new Int32Array(W);
     for (let x = 0; x < W; x++) { let v = 0; for (let k = -22; k <= 22; k++) v = Math.max(v, Math.min(sup[Math.max(0, Math.min(W - 1, x + k))], 1000)); sup2[x] = Math.min(v, sup[x] + 60); }
@@ -45,8 +48,21 @@
     for (let x = 2; x < W - 2; x++) pend[x] = (sup[x + 2] - sup[x - 2]) / 4;
     // aria "coperta" (grotte, arco, ventre del relitto): ha terreno sopra nella sua colonna
     const coperta = new Float32Array(W * H), ariaF = new Float32Array(W * H);
-    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) { const i = y * W + x; if (!mat[i]) { ariaF[i] = 1; if (y > sup[x]) coperta[i] = 1; } }
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) { const i = y * W + x; if (!mat[i]) ariaF[i] = 1; }
+    // aria coperta = una grotta vera: terreno sopra e sotto nella colonna, entro 130 px (non il vuoto sotto i balconi)
+    for (let x = 0; x < W; x++) {
+      let sopra = -1e9;
+      for (let y = 0; y < H; y++) {
+        const i = y * W + x;
+        if (terra(i)) { sopra = y; continue; }
+        if (mat[i] || y < sup[x] || y - sopra > 130) continue;
+        let sotto = y; while (sotto < H && !terra(sotto * W + x) && sotto - sopra <= 130) sotto++;
+        if (sotto < H && terra(sotto * W + x)) for (let k = y; k < sotto; k++) if (!mat[k * W + x]) coperta[k * W + x] = 1;
+        y = sotto - 1;
+      }
+    }
     const ao = sfoca(sfoca(coperta, W, H, 10), W, H, 8);
+    const copM = sfoca(sfoca(coperta, W, H, 26), W, H, 18);
     const bordo = sfoca(ariaF, W, H, 2);       // vicino all'aria (contorno)
     const luceBordo = sfoca(ariaF, W, H, 7);   // fascia di luce sotto la superficie
     const vol = sfoca(sfoca(ariaF, W, H, 18), W, H, 18);   // per il volume: verso dove c'è aria
@@ -57,6 +73,7 @@
       terra1: hx('#B9774A'), terra2: hx('#8A5A3A'), terra3: hx('#5A3B28'), terraO: hx('#4A3048'),
       roccia1: hx('#E2BE8E'), roccia2: hx('#B9906C'), roccia3: hx('#7E6658'), rocciaO: hx('#5E4A4A'),
       legno1: hx('#9A5E34'), legno2: hx('#6B3E22'), ferro: hx('#3E4656'),
+      foglia1: hx('#7FD255'), foglia2: hx('#3F8A3A'), foglia3: hx('#25603A'),
       viola: hx('#3A2A55'), caldo: hx('#FFD9A0'), contorno: hx('#2A1A12'),
     };
     const out = x0.createImageData(W, H), o = out.data;
@@ -66,7 +83,12 @@
       const d = y - Math.max(sup[x], sup2[x] - 10);
       const nn = n1(x, y, 90), fine = n2(x, y, 9), gr = n3(x, y, 3);
       let c;
-      if (m === SABBIA) {
+      if (tag[i] === 1) {
+        // cespuglio: ciuffi di foglie (macchie di rumore), più chiaro in alto a sinistra
+        const f = n2(x * 1.6, y * 1.6, 7), ff = n3(x, y, 4);
+        c = f > 0.62 ? C.foglia1 : f > 0.4 ? mix(C.foglia1, C.foglia2, 0.6) : C.foglia2;
+        if (ff < 0.18) c = mix(c, C.foglia3, 0.6);
+      } else if (m === SABBIA) {
         c = mix(C.sabbia, C.sabbiaO, Math.min(1, d / 40) * 0.6 + (nn - 0.5) * 0.5);
         if (fine > 0.72) c = mix(c, C.sabbiaL, 0.5);
       } else if (m === TERRA) {
@@ -87,6 +109,17 @@
         if (Math.floor(st) % 2) c = mix(c, C.roccia1, 0.08);
         const crepa = Math.abs(n2(x * 0.5, y * 2.2, 40) - 0.5);
         if (crepa < 0.012) c = mix(c, C.rocciaO, 0.6);
+      } else if (m === LEGNO && tag[i] === 2) {
+        // torri: tavole verticali con chiodi
+        const asse = x / 7;
+        c = mix(C.legno1, C.legno2, (Math.floor(asse) % 2) * 0.3 + (nn - 0.5) * 0.4);
+        if ((asse % 1) < 0.15) c = mix(c, C.legno2, 0.75);
+        if (n2(x * 3, y * 0.3, 6) > 0.72) c = mix(c, C.legno2, 0.25);
+      } else if (m === LEGNO && tag[i] === 4) {
+        // ponte di corda: assi corte affiancate
+        const asse = x / 6;
+        c = mix(hx('#B07A48'), C.legno2, (Math.floor(asse) % 2) * 0.3 + (nn - 0.5) * 0.3);
+        if ((asse % 1) < 0.18) c = mix(c, C.contorno, 0.5);
       } else if (m === LEGNO) {
         // assi: righe ogni 13 px inclinate come lo scafo, venature
         const asse = (y + x * 0.58) / 13;
@@ -253,9 +286,9 @@
     }
     ctx.restore();
     // ── rovina: muro di blocchi di pietra (colonne dove la superficie sporge sopra quella di fondo) ──
-    for (let x = 1180; x < 1360; x++) {
-      if (materiale(x, sup[x] + 2) !== ROCCIA || sup2[x] - sup[x] < 20) continue;
-      for (let y = sup[x]; y < sup2[x]; y++) {
+    for (let x = 0; x < W; x++) {
+      if (tag[(sup[x] + 2) * W + x] !== 3) continue;
+      for (let y = sup[x]; y < H && tag[y * W + x] === 3; y++) {
         const riga = Math.floor((y - sup[x]) / 12), ox = (riga % 2) * 7;
         const giunto = (y - sup[x]) % 12 === 0 || (x + ox) % 15 === 0;
         const k = (y * W + x) * 4;
@@ -274,7 +307,7 @@
           const y = (i / W) | 0, x = i - y * W, t = Math.min(1, ao[i] * 1.6);
           const base = y < 760 ? [96, 78, 92] : [74, 52, 58], nn = n1(x, y, 30);
           f[i * 4] = base[0] * (0.7 + nn * 0.5) * (1 - t * 0.35); f[i * 4 + 1] = base[1] * (0.7 + nn * 0.5) * (1 - t * 0.35); f[i * 4 + 2] = base[2] * (0.75 + nn * 0.5) * (1 - t * 0.2) + 10;
-          f[i * 4 + 3] = 110;
+          f[i * 4 + 3] = Math.round(110 * Math.min(1, copM[i] * 1.8));   // sfuma dove la grotta si apre sull'aria libera
         } else { f[i * 4 + 3] = 0; f[i * 4] = f[i * 4 + 1] = f[i * 4 + 2] = 0; }
         continue;
       }

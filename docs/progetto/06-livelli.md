@@ -96,6 +96,9 @@ Se il territorio difeso ha un Forte, il generatore lo piazza **dopo la sagoma e 
 - Per l'equità tra i lati il vantaggio del forte è voluto: quei controlli valgono solo sul lato dell'attaccante. Le regole anti-frustrazione (§6) invece valgono per entrambi.
 - Il forte di A4 Forte Uncino è solo una scenografia sullo sfondo. Il Forte comprato vale per una sola mappa e sparisce con la conquista. La battaglia successiva su quel territorio mostra le rovine come decorazione.
 
+## 5-bis. Cala Pappagallo (mappa a mano del Prologo, 00 §9.18)
+Isola di partenza del tutorial e della Carriera, dipinta a mano: due piane, Rocca centrale (cima a y 292) con arco percorribile, relitto, rovina, 2 grotte, 3 barili, 5 spawn per lato. Forma in `scripts/mappe/cala-pappagallo-forma.ts`. Nel Prologo (2 contro 2) servono anche i punti di 10 §2: cassa a 150 px dal primo pirata, gradino di 20 px, un marinaio sul bordo di una scogliera sul mare, una buca per l'ultimo marinaio.
+
 ## 6. Tre mappe firma (fatte a mano)
 **Formato:** PNG 2048×1024 indicizzato (un colore per materiale) + JSON con spawn, props, punto di sbarco e mare. Passano lo stesso validatore del §1. Se c'è un Forte, va in un punto prestabilito della mappa.
 

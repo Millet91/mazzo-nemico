@@ -21,7 +21,7 @@ export function pirataDelTurno(s: StatoBattaglia): Pirata | undefined {
 
 export function cambiaFase(s: StatoBattaglia, f: FaseTurno, eventi: EventoBattaglia[]): void {
   const t = s.turno;
-  t.fase = f; t.inizioFase = s.tick; t.camminata = 0; t.fermoDa = -1;
+  t.fase = f; t.inizioFase = s.tick; t.camminata = 0; t.arrampicata = 0; t.fermoDa = -1;
   eventi.push({ t: 'fase', fase: f });
 }
 
@@ -135,6 +135,7 @@ function creaLapidi(s: StatoBattaglia, eventi: EventoBattaglia[]): number {
   for (const p of s.pirati) {
     if (p.stato !== 'vivo' || p.vita > 0) continue;
     p.stato = 'morto';
+    p.appeso = -1;
     p.vx = 0; p.vy = 0;
     eventi.push({ t: 'morto', pirata: p.id, causa: 'pv' });
     const id = s.prossimoId++;
@@ -241,7 +242,10 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
   }
   const puoMuoversi = (t.fase === 'azione' || t.fase === 'fuga') && attivo !== undefined && inGioco(attivo);
 
-  for (const p of s.pirati) aggiornaPirata(s, p, p === attivo && puoMuoversi ? t.camminata : 0, eventi);
+  for (const p of s.pirati) {
+    const mio = p === attivo && puoMuoversi;
+    aggiornaPirata(s, p, mio ? t.camminata : 0, eventi, mio ? t.arrampicata : 0);
+  }
   aggiornaProiettili(s, eventi);
 
   const inFase = s.tick - t.inizioFase;
@@ -274,7 +278,7 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
       let tuttoFermo = !s.proiettili.some(proiettileAttivo) && s.pirati.every(fermo);
       if (!tuttoFermo && inFase >= BIL.turno.risoluzioneMaxTick) {
         // caso 8: chi vibra si ferma d'ufficio, i proiettili in volo spariscono (barili e casse restano)
-        for (const p of s.pirati) if (p.stato === 'vivo') { p.vx = 0; p.vy = 0; p.aTerra = true; p.yInizioCaduta = p.y; }
+        for (const p of s.pirati) if (p.stato === 'vivo') { p.vx = 0; p.vy = 0; p.aTerra = p.appeso < 0; p.yInizioCaduta = p.y; }
         s.proiettili = s.proiettili.filter((p) => !proiettileAttivo(p));
         tuttoFermo = true;
         t.fermoDa = s.tick - BIL.turno.risoluzioneFermoTick;

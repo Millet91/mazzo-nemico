@@ -35,6 +35,8 @@ export interface VistaBattaglia {
   iaPensa: boolean;
   /** si può arrendere (dal turno 4, solo l'attaccante umano) */
   puoArrendersi: boolean;
+  /** pirata attivo rispetto a scale e liane: 'vicino' = può aggrapparsi, 'appeso' = è aggrappato */
+  arrampicata?: 'libero' | 'vicino' | 'appeso';
   esito: EsitoBattaglia | null;
 }
 

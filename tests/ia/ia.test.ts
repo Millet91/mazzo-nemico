@@ -256,3 +256,35 @@ describe('IA · barili di polvere (sim vera)', () => {
     expect(con).toBeGreaterThan(senza);
   });
 });
+
+describe('IA · ostacoli (sim vera)', () => {
+  it('con un muro davanti non continua a colpirlo: sceglie un pallonetto che ci passa sopra', () => {
+    let muro = 0, colpi = 0;
+    for (let seme = 1; seme <= 30; seme++) {
+      // muro di roccia alto 150 px a 60 px dall'IA, nemico 450 px più in là
+      const s = duello(800, 1250, { seme, vento: (seme % 13) - 6, muri: [[1150, 1190, SUOLO - 150]] });
+      const io = s.pirati.find((x) => x.id === s.turno.pirata)!;
+      const nem = s.pirati.find((x) => x.squadra === 0)!;
+      const p = decidi(s, 'mozzo');
+      expect(p.arma).not.toBe('pistola'); // il colpo dritto finirebbe nella roccia
+      const e = simulaColpo(s, { pirata: io.id, arma: p.arma, mezziGradi: p.mezziGradi, potenza: p.potenza, miccia: p.miccia });
+      if (e.impatto && e.impatto.x > 1130 && e.impatto.x < 1210) muro++; // sul muro
+      if ((e.danni[nem.id] ?? 0) > 0) colpi++;
+    }
+    console.log(`muro alto 150 px davanti: ${muro}/30 sul muro, ${colpi}/30 a segno`);
+    expect(muro).toBeLessThanOrEqual(5);
+    expect(colpi).toBeGreaterThanOrEqual(5);
+  });
+
+  it('con un muro a metà strada passa sopra quasi sempre', () => {
+    let muro = 0;
+    for (let seme = 1; seme <= 30; seme++) {
+      const s = duello(800, 1250, { seme, vento: (seme % 13) - 6, muri: [[1000, 1040, SUOLO - 150]] });
+      const io = s.pirati.find((x) => x.id === s.turno.pirata)!;
+      const p = decidi(s, 'mozzo');
+      const e = simulaColpo(s, { pirata: io.id, arma: p.arma, mezziGradi: p.mezziGradi, potenza: p.potenza, miccia: p.miccia });
+      if (e.impatto && e.impatto.x > 990) muro++;
+    }
+    expect(muro).toBeLessThanOrEqual(3);
+  });
+});

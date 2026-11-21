@@ -38,8 +38,14 @@ export function mappaPer(cfg: ConfigBattaglia): MappaGenerata {
   return fissa ?? generaMappa({ seme: cfg.seme, bioma: cfg.bioma, variante: cfg.variante, piratiPerLato: [cfg.squadre[0].pirati, cfg.squadre[1].pirati] });
 }
 
-export function nuovaBattaglia(cfg: ConfigBattaglia): StatoBattaglia {
-  return creaBattaglia(cfg, mappaPer(cfg));
+export function nuovaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata = mappaPer(cfg)): StatoBattaglia {
+  return creaBattaglia(cfg, mappa);
+}
+
+/** Fuzz di scale e liane (#47) finché nessuna mappa ne ha: una scala o liana alta 160 px sopra ogni punto di nascita. */
+export function conAppigli(m: MappaGenerata): MappaGenerata {
+  const appigli = m.spawn.flat().map((p, i) => ({ tipo: (i % 2 ? 'liana' : 'scala') as 'scala' | 'liana', x: p.x, yAlto: p.y - 160, yBasso: p.y + 11 }));
+  return { ...m, appigli: [...(m.appigli ?? []), ...appigli] };
 }
 
 export type Pilota = (s: StatoBattaglia) => Comando[];
@@ -60,6 +66,16 @@ export function pilotaCasuale(seme: number): Pilota {
       case 7: return [{ t: 'miccia', secondi: intero(r, 1, 5) }];
       default: return [{ t: 'fuoco' }];
     }
+  };
+}
+
+/** Come pilotaCasuale, ma un comando su tre è `arrampica` (su, giù o ferma): per il fuzz di scale e liane. */
+export function pilotaScalatore(seme: number): Pilota {
+  const r: ConRng = { rng: semeIniziale(seme ^ 0x5ca1a) };
+  const caso = pilotaCasuale(seme);
+  return (s) => {
+    if ((s.turno.fase === 'azione' || s.turno.fase === 'fuga') && casuale(r) < 0.04) return [{ t: 'arrampica', dir: (intero(r, 0, 2) - 1) as -1 | 0 | 1 }];
+    return caso(s);
   };
 }
 
@@ -84,11 +100,15 @@ export interface Partita {
   hash: Record<number, string>;
   violazioni: string[];
   msPerTick: number;
+  /** quante volte è uscito ogni tipo di evento (per controllare che il fuzz abbia davvero toccato una regola) */
+  eventiVisti: Record<string, number>;
 }
 
 /** Gioca fino alla fine (o al TICK_MAX) controllando gli invarianti di 13 §2 L2 a ogni tick. */
-export function gioca(cfg: ConfigBattaglia, pilota: Pilota, controlli = true): Partita {
-  const s = nuovaBattaglia(cfg);
+export function gioca(cfg: ConfigBattaglia, pilota: Pilota, controlli = true, mappa?: MappaGenerata): Partita {
+  const s = nuovaBattaglia(cfg, mappa);
+  const eventiVisti: Record<string, number> = {};
+  const senzaAppiglio = new Map<number, number>();
   const eventi: EventoBattaglia[] = [];
   const comandi: ComandoRegistrato[] = [];
   const hash: Record<number, string> = {};
@@ -103,6 +123,7 @@ export function gioca(cfg: ConfigBattaglia, pilota: Pilota, controlli = true): P
     const t0 = performance.now();
     avanzaTick(s, eventi);
     ms += performance.now() - t0;
+    for (const e of eventi) eventiVisti[e.t] = (eventiVisti[e.t] ?? 0) + 1;
     eventi.length = 0;
     if (s.tick % 600 === 0) hash[s.tick] = hashStato(s);
     if (!controlli) continue;
@@ -121,6 +142,20 @@ export function gioca(cfg: ConfigBattaglia, pilota: Pilota, controlli = true): P
         if (n > 3) v(`pirata ${p.id} dentro il solido da ${n} tick (13 caso 7)`);
       }
     }
+    // scale e liane (#47, invarianti proposti da A)
+    for (const a of s.appigli) {
+      if (a.yBasso - a.yAlto < BIL.arrampicata.pezzoMinimo) v(`appiglio ${a.id} lungo ${a.yBasso - a.yAlto} px, sotto il pezzo minimo`);
+      if (![a.x, a.yAlto, a.yBasso].every(Number.isFinite)) v(`appiglio ${a.id} con coordinate non finite`);
+    }
+    if (new Set(s.appigli.map((a) => a.id)).size !== s.appigli.length) v('due appigli con lo stesso id');
+    for (const p of s.pirati) {
+      if (p.appeso < 0) { senzaAppiglio.set(p.id, 0); continue; }
+      if (p.stato !== 'vivo') v(`pirata ${p.id} ${p.stato} ma ancora appeso a ${p.appeso}`);
+      if (p.vx !== 0 || p.vy !== 0) v(`pirata ${p.id} appeso con velocità (${p.vx}, ${p.vy})`);
+      const n = s.appigli.some((a) => a.id === p.appeso) ? 0 : (senzaAppiglio.get(p.id) ?? 0) + 1;
+      senzaAppiglio.set(p.id, n);
+      if (n > 1) v(`pirata ${p.id} appeso all'appiglio ${p.appeso} che non c'è più da ${n} tick`);
+    }
     for (const q of s.proiettili) if (!Number.isFinite(q.x) || !Number.isFinite(q.y)) v(`proiettile ${q.id} con posizione non finita`);
 
     // ogni turno si chiude: dallo sparo al turno dopo al massimo 15 s simulati (+ la fuga)
@@ -137,7 +172,7 @@ export function gioca(cfg: ConfigBattaglia, pilota: Pilota, controlli = true): P
     if (!s.esito) v(`la battaglia non è finita entro ${TICK_MAX} tick`);
     else if (s.esito.turni > BIL.battaglia.turnoLimite) v(`finita al turno ${s.esito.turni}, oltre il limite ${BIL.battaglia.turnoLimite}`);
   }
-  return { stato: s, comandi, hash, violazioni, msPerTick: ms / Math.max(1, s.tick) };
+  return { stato: s, comandi, hash, violazioni, msPerTick: ms / Math.max(1, s.tick), eventiVisti };
 }
 
 /** Rigioca una lista di comandi registrati (stessa logica di un replay) e restituisce gli hash. */

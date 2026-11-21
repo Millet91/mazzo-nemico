@@ -1,6 +1,7 @@
 // L1 dell'HUD (agente D): logica dei tasti, griglia 4×4, configurazione della Schermaglia, banner, testi.
 import { describe, it, expect } from 'vitest';
 import {
+  JOYSTICK,
   creaJoystickMira, DOPPIO, limitaPomello, miraDaPomello, pomelloDaMira,
   alzo, bannerDaEventi, barraVento, celleGriglia, comandiVisibili, configSchermaglia, creaDoppioTocco,
   creaGrillettoUnico, creaJoystick, creaRipetitore, micciaSuccessiva, miraAttiva, PASSO_MIRA, RIPETI_OGNI_MS, versoDaMira,
@@ -242,5 +243,57 @@ describe('doppio joystick: mira', () => {
     const m = inviati[0] as { mezziGradi: number; potenza: number };
     expect(Number.isInteger(m.mezziGradi)).toBe(true);
     expect(m.mezziGradi).toBeGreaterThan(0);
+  });
+});
+
+describe('joystick: scale e liane', () => {
+  const crea = (modo: 'libero' | 'vicino' | 'appeso', verso: 1 | -1 = 1) => {
+    const c: unknown[] = [];
+    let m = modo;
+    const j = creaJoystick((x) => c.push(x), () => verso, () => m);
+    return { c, j, cambia: (n: typeof m) => { m = n; } };
+  };
+  const R = JOYSTICK.raggio;
+  it('vicino: spinta quasi verticale oltre il 40% = arrampica, non salta', () => {
+    const { c, j } = crea('vicino');
+    j.sposta(5, -0.3 * R);           // sotto il 40%: niente
+    expect(c).toEqual([]);
+    j.sposta(10, -0.8 * R);           // ~13° dalla verticale: su
+    expect(c).toEqual([{ t: 'arrampica', dir: -1 }]);
+    j.sposta(-10, 0.8 * R);           // giù
+    j.rilascia();
+    expect(c).toEqual([{ t: 'arrampica', dir: -1 }, { t: 'arrampica', dir: 1 }, { t: 'arrampica', dir: 0 }]);
+  });
+  it('vicino: il salto solo in diagonale 30-60° oltre il 60%, nel verso della spinta', () => {
+    const { c, j } = crea('vicino', 1);
+    j.sposta(-0.6 * R, -0.6 * R);    // 45° in alto a sinistra, pirata girato a destra → salto all'indietro
+    expect(c).toContainEqual({ t: 'salta', indietro: true });
+    expect(c.filter((x: any) => x.t === 'arrampica')).toEqual([]);
+  });
+  it('vicino: orizzontale cammina', () => {
+    const { c, j } = crea('vicino');
+    j.sposta(0.8 * R, 0);
+    expect(c).toEqual([{ t: 'muovi', dir: 1 }]);
+  });
+  it('appeso: destra/sinistra pura non fa niente, diagonale salta via, lasciato = fermo', () => {
+    const { c, j } = crea('appeso', 1);
+    j.sposta(R, 0);
+    expect(c).toEqual([]);
+    j.sposta(0, -R);
+    j.sposta(0.6 * R, -0.6 * R);     // diagonale avanti: smette di salire e salta
+    j.rilascia();
+    expect(c).toEqual([{ t: 'arrampica', dir: -1 }, { t: 'arrampica', dir: 0 }, { t: 'salta', indietro: false }]);
+  });
+  it('appeso: scivolando da destra verso l\'alto non salta per sbaglio', () => {
+    const { c, j } = crea('appeso', 1);
+    j.sposta(0.9 * R, 0);
+    j.sposta(0.6 * R, -0.6 * R);
+    j.sposta(0, -R);
+    expect(c).toEqual([{ t: 'arrampica', dir: -1 }]);
+  });
+  it('libero: come prima, su oltre il 60% salta', () => {
+    const { c, j } = crea('libero');
+    j.sposta(0, -R);
+    expect(c).toEqual([{ t: 'salta', indietro: false }]);
   });
 });

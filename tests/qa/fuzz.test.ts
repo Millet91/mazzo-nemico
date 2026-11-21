@@ -3,7 +3,7 @@
 // Un caso che fallisce stampa il seme: si rigioca con FUZZ_SEME=<seme> e diventa un replay di regressione.
 import { describe, it, expect } from 'vitest';
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { configCaso, gioca, pilotaCasuale, pilotaIa, rigioca, SIM_SEGNAPOSTO } from './banco';
+import { configCaso, conAppigli, gioca, mappaPer, pilotaCasuale, pilotaIa, pilotaScalatore, rigioca, SIM_SEGNAPOSTO } from './banco';
 import { VERSIONE_REGOLE } from '../../src/core/tipi';
 
 const N = Number(process.env.FUZZ_N ?? 50);
@@ -66,5 +66,22 @@ describe('QA · IA contro IA', () => {
         if (!SIM_SEGNAPOSTO) expect(p.stato.esito, `seme ${seme}`).not.toBeNull();
       }
     }
+  }, 180_000);
+});
+
+describe('QA · scale e liane (#47)', () => {
+  it('con una scala o liana su ogni nascita e comandi arrampica casuali: nessuna violazione, e ci si aggrappa davvero', () => {
+    const visti: Record<string, number> = {};
+    for (let seme = 1; seme <= 24; seme++) {
+      const cfg = configCaso(seme + 7000, undefined, seme % 4 === 0 ? 'cala-pappagallo' : undefined);
+      const p = gioca(cfg, pilotaScalatore(seme), true, conAppigli(mappaPer(cfg)));
+      expect(p.violazioni, `seme ${seme}`).toEqual([]);
+      if (!SIM_SEGNAPOSTO) expect(p.stato.esito, `seme ${seme}`).not.toBeNull();
+      for (const [k, n] of Object.entries(p.eventiVisti)) visti[k] = (visti[k] ?? 0) + n;
+    }
+    // il fuzz deve aver toccato le regole nuove, altrimenti non prova niente
+    expect(visti.aggrappato ?? 0).toBeGreaterThan(10);
+    expect(visti.staccato ?? 0).toBeGreaterThan(5);
+    expect(visti.appiglioRotto ?? 0).toBeGreaterThan(0);
   }, 180_000);
 });

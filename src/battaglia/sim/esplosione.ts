@@ -5,7 +5,8 @@ import type { EventoBattaglia, IdArma, IdCiurma, StatoBattaglia } from '../../co
 import { ARMA } from '../../contenuti/armi';
 import { BIL } from '../../contenuti/bilanciamento';
 import { distanza2Capsula, scavaCratere, MEZZA_LARGHEZZA_PIRATA } from './terreno';
-import { danneggia, stacca } from './pirata';
+import { danneggia, staccaPirata } from './pirata';
+import { tagliaAppigli } from './appigli';
 import { SPINTA_MIN_SU } from './costanti';
 import { accendiOggetti } from './oggetti';
 
@@ -69,11 +70,12 @@ export function esplodi(
     if (q.stato !== 'vivo') continue;
     const e = effettoEsplosione(x, y, raggio, danno, spinta, q.x, q.y);
     if (!e) continue;
-    stacca(q);
+    staccaPirata(q, eventi);
     q.vx += e.vx; q.vy += e.vy;
     danneggia(q, e.danno, eventi);
   }
   accendiOggetti(s, x, y, raggio);
+  tagliaAppigli(s, x, y, raggio, eventi);
 }
 
 /** Raggio e danno pieno di un'esplosione (senza tratti): armi da ARMA, lapide e barile da BIL. */

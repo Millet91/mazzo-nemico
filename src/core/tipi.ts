@@ -277,7 +277,7 @@ export type EventoBattaglia =
   | { t: 'salto'; pirata: number }
   | { t: 'atterrato'; pirata: number; dannoCaduta: number }
   | { t: 'rimbalzo'; proiettile: number; x: number; y: number }
-  | { t: 'esplosione'; x: number; y: number; raggio: number; arma: IdArma | 'lapide' }
+  | { t: 'esplosione'; x: number; y: number; raggio: number; arma: IdArma | 'lapide' | 'cassa' }
   /** la maschera è cambiata in questo rettangolo (il render ridisegna solo le tile toccate) */
   | { t: 'cratere'; x: number; y: number; raggio: number }
   | { t: 'colpoPistola'; da: Punto; a: Punto }

@@ -9,4 +9,6 @@
 - `analisi.ts` — superficie, voli balistici semplificati (un punto, senza rimbalzi), linea di tiro, camminata.
 - `parametri.ts` — tutti i numeri del livello e il seme di riserva. Fisica, mare e armi si leggono da `BIL` e `ARMA`.
 
+Ordine degli spawn di ogni lato: dal più interno al più esterno. La sim usa i primi N, quindi con 3 pirati restano liberi i posti vicino al mare.
+
 Test: `tests/gen/` (determinismo con impronte d'oro, validazione su 200 semi, riserva, tempo).

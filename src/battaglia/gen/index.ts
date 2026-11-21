@@ -114,11 +114,16 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
   if (specchiata) {
     specchiaMaschera(maschera);
     const sp = (p: Punto): Punto => ({ x: W - 1 - p.x, y: p.y });
-    sx = sx.map(sp).reverse();
-    dx = dx.map(sp).reverse();
+    sx = sx.map(sp);
+    dx = dx.map(sp);
     decor = decor.map((d) => ({ ...d, x: W - 1 - d.x, specchio: !d.specchio })).reverse();
   }
-  // lato 0 (attaccante) = il gruppo scelto a sinistra; con lo specchio finisce a destra
+  // lato 0 (attaccante) = il gruppo scelto a sinistra; con lo specchio finisce a destra.
+  // Ordine: dal più interno al più esterno. La sim usa i primi N posti, quindi con meno di 5 pirati
+  // restano liberi i posti vicini al mare (Lead design: chi parte sul bordo non deve essere condannato).
+  const dentroPrima = (a: Punto, b: Punto) => Math.abs(a.x - W / 2) - Math.abs(b.x - W / 2);
+  sx.sort(dentroPrima);
+  dx.sort(dentroPrima);
   return {
     terreno: { w: W, h: MONDO.h, maschera, mare },
     spawn: [sx, dx],

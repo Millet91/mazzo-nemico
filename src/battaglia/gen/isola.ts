@@ -191,6 +191,7 @@ export function terrenoIsola(s: ConRng): TerrenoIsola {
 
   // grotte a metaball: gruppi di 2 sfere vicine; campo Σ r²/d² ≥ 1 ⇒ aria
   const grotte: Sfera[][] = [];
+  const mezzoTetto = ISOLA.grottaTetto / 2, ARIA = MATERIALE.aria;
   const nGrotte = intero(s, ISOLA.grotteMin, ISOLA.grotteMax);
   for (let g = 0; g < nGrotte; g++) {
     const x0 = intero(s, 360, W - 360);
@@ -216,7 +217,7 @@ export function terrenoIsola(s: ConRng): TerrenoIsola {
           const d2 = ddx * ddx + ddy * ddy;
           campo += d2 === 0 ? 2 : (b.r * b.r) / d2;
         }
-        if (campo >= 1 && y >= prof[x] + ISOLA.grottaTetto / 2) maschera[y * W + x] = MATERIALE.aria;
+        if (campo >= 1 && y >= prof[x] + mezzoTetto) maschera[y * W + x] = ARIA;
       }
     }
   }
@@ -234,7 +235,7 @@ export function terrenoIsola(s: ConRng): TerrenoIsola {
     for (let y = Math.max(CIELO, y0 - ry); y <= Math.min(FONDALE - 1, y0 + ry); y++) {
       for (let x = Math.max(0, x0 - r); x <= Math.min(W - 1, x0 + r); x++) {
         const u = (x - x0) / r, v = (y - y0) / ry;
-        if (u * u + v * v <= 1) maschera[y * W + x] = MATERIALE.roccia;
+        if (u * u + v * v <= 1) maschera[y * W + x] = ROC;
       }
     }
   }

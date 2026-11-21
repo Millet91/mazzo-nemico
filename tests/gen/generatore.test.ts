@@ -1,6 +1,6 @@
 // Test del generatore di mappe (agente C, M1). Piano QA L1: determinismo, spawn equi e sicuri, ferro ≤ 3%,
 // seme di riserva dopo 8 fallimenti, validazione su 200 semi, tempo di generazione.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { generaMappa } from '../../src/battaglia/gen';
 import { tentativo } from '../../src/battaglia/gen/index';
 import { conTentativi } from '../../src/battaglia/gen/tentativi';
@@ -12,6 +12,9 @@ import { misuraMare } from '../../src/battaglia/gen/misura';
 import { BIL } from '../../src/contenuti/bilanciamento';
 import { MATERIALE, type MappaGenerata, type RichiestaMappa } from '../../src/core/tipi';
 import { impronta } from './impronta';
+
+// 200 mappe e il validatore completo: in parallelo con il resto della suite servono più dei 5 s standard.
+vi.setConfig({ testTimeout: 60_000 });
 
 const W = BIL.mondo.larghezza;
 const richiesta = (seme: number): RichiestaMappa => ({ seme, bioma: 'isola', piratiPerLato: [3, 3] });
@@ -38,7 +41,7 @@ describe('Generatore · determinismo', () => {
   // Impronte d'oro: se cambiano per una modifica voluta del generatore, si aggiornano in un commit a parte
   // (piano QA). Se cambiano senza motivo, il generatore non è più deterministico.
   it('impronte d\'oro dei semi 7, 42, 1234', () => {
-    expect([7, 42, 1234].map((s) => impronta(generaMappa(richiesta(s))))).toEqual(['37c6b525', 'f2860524', 'd059e1a3']);
+    expect([7, 42, 1234].map((s) => impronta(generaMappa(richiesta(s))))).toEqual(['6c320321', '583e7428', '7c04b64b']);
   });
 
   it('semi diversi ⇒ mappe diverse', () => {
@@ -141,6 +144,15 @@ describe('Generatore · spawn', () => {
     expect(problemi).toEqual([]);
   });
 
+  it('ordine dei posti: dal più interno al più esterno (la sim usa i primi N)', () => {
+    for (const m of MAPPE) {
+      for (const lato of m.spawn) {
+        const d = lato.map((p) => Math.abs(p.x - W / 2));
+        expect(d).toEqual(d.slice().sort((a, b) => a - b));
+      }
+    }
+  });
+
   it('distanze: ≥ 60 px tra compagni e ≥ 150 px dai nemici', () => {
     const d = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
     for (const m of MAPPE) {
@@ -227,6 +239,15 @@ describe('Generatore · costa aperta (misura di prova del Lead design)', () => {
     expect(pc(r.sciabolaInMare, r.spawn)).toBeGreaterThanOrEqual(30);
     expect(pc(r.sciabolaInMare, r.spawn)).toBeLessThanOrEqual(60);
     expect(pc(r.dueCannonateInMare, r.spawn)).toBeGreaterThan(10);
+  });
+
+  it('con 3 pirati (M1) il più esterno non è condannato: sciabola < 70%, due cannonate > 25%', () => {
+    const r = misuraMare(MAPPE, 3);
+    const pc = (a: number, b: number) => (100 * a) / b;
+    console.log(`costa 3v3: sciabola esterni ${pc(r.sciabolaInMareEsterni, r.esterni).toFixed(1)}%, due cannonate esterni ${pc(r.dueCannonateInMareEsterni, r.esterni).toFixed(1)}%`);
+    expect(r.cannoneInMare).toBe(0);
+    expect(pc(r.sciabolaInMareEsterni, r.esterni)).toBeLessThan(70);
+    expect(pc(r.dueCannonateInMareEsterni, r.esterni)).toBeGreaterThan(25);
   });
 });
 

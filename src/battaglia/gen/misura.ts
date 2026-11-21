@@ -16,7 +16,7 @@ export interface MisuraMare {
   cannoneInMare: number;
   sciabolaInMare: number;
   dueCannonateInMare: number;
-  /** solo lo spawn più vicino al mare di ogni lato */
+  /** solo lo spawn più vicino al mare di ogni lato (tra quelli contati) */
   esterni: number;
   sciabolaInMareEsterni: number;
   dueCannonateInMareEsterni: number;
@@ -24,7 +24,8 @@ export interface MisuraMare {
   distanzaDopoCannone: number;
 }
 
-export function misuraMare(mappe: MappaGenerata[]): MisuraMare {
+/** `usati`: quanti posti per lato si contano (i primi, come fa la sim con N pirati). */
+export function misuraMare(mappe: MappaGenerata[], usati = 5): MisuraMare {
   const r: MisuraMare = {
     spawn: 0, cannoneInMare: 0, sciabolaInMare: 0, dueCannonateInMare: 0,
     esterni: 0, sciabolaInMareEsterni: 0, dueCannonateInMareEsterni: 0, distanzaDopoCannone: 0,
@@ -34,7 +35,8 @@ export function misuraMare(mappe: MappaGenerata[]): MisuraMare {
   for (const m of mappe) {
     const k = m.terreno.maschera, mare = m.terreno.mare;
     const sup = superficie(k);
-    for (const lato of m.spawn) {
+    for (const tutti of m.spawn) {
+      const lato = tutti.slice(0, usati);
       // verso il mare: fuori dalla propria metà
       const dir: -1 | 1 = lato[0].x < MONDO.w / 2 ? -1 : 1;
       const esterno = dir === -1 ? Math.min(...lato.map((p) => p.x)) : Math.max(...lato.map((p) => p.x));

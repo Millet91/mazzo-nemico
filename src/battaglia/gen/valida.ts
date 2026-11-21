@@ -60,12 +60,13 @@ export function validaMassa(m: Uint8Array, mare: number): string[] {
   if (r.frazione < REGOLE.solidoMin || r.frazione > REGOLE.solidoMax) err.push(`solido al ${(r.frazione * 100).toFixed(1)}% (${REGOLE.solidoMin * 100}-${REGOLE.solidoMax * 100}%)`);
   if (r.frazioneFerro > REGOLE.ferroMax) err.push(`ferro al ${(r.frazioneFerro * 100).toFixed(1)}% del solido (max 3%)`);
   // prima riga con terreno fuori dai bordi (riga per riga: veloce)
-  let cima: number = MONDO.h;
-  for (let y = 0; y < MONDO.fondale && cima === MONDO.h; y++) {
+  const fondo = MONDO.fondale, da = MONDO.bordo, a = W - MONDO.bordo;
+  let cima = -1;
+  for (let y = 0; y < fondo && cima < 0; y++) {
     const r = y * W;
-    for (let x = MONDO.bordo; x < W - MONDO.bordo; x++) if (m[r + x] !== ARIA) { cima = y; break; }
+    for (let x = da; x < a; x++) if (m[r + x] !== ARIA) { cima = y; break; }
   }
-  if (cima < ISOLA.cimaMinY) err.push(`cima a y ${cima}, sopra ${ISOLA.cimaMinY}`);
+  if (cima >= 0 && cima < ISOLA.cimaMinY) err.push(`cima a y ${cima}, sopra ${ISOLA.cimaMinY}`);
   const [sx, dx] = r.meta;
   if (Math.abs(sx - dx) > REGOLE.equitaMassa * Math.max(sx, dx)) err.push(`equità: massa delle due metà ${sx} / ${dx}`);
   return err;

@@ -39,3 +39,12 @@ export const A_TERRA_TICK = 30;
 
 /** la pendenza del suolo si misura sul dislivello a questi px davanti al pirata */
 export const SONDA_PENDENZA_PX = 8;
+
+/** Balzo con la rincorsa: al salto si aggiunge questa parte della velocità di corsa (da fermo 69 px, di corsa circa 105) */
+export const RINCORSA = 0.5;
+
+/** salti dal muro concessi da quando si lascia terra (`Pirata.saltiMuro`) */
+export const SALTI_MURO_MAX = 1;
+
+/** in aria una parete conta come "accanto" entro questi px (per il salto dal muro) */
+export const MURO_ACCANTO_PX = 2;

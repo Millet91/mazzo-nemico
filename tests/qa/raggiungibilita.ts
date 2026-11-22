@@ -1,13 +1,14 @@
 // Raggiungibilità (QA studio v2 §3.2, PIANO Fase 0): da dove parte un pirata, dove arriva con le MOSSE VERE della sim?
 // Esplora i posti in cui un pirata può stare in piedi, usando le stesse funzioni della battaglia: `cammina` (un px
 // per volta, gradino 8 px), lo scavalco dei muretti fino a 28 px (`altezzaScavalco` + `saleScavalco`), l'uscita di
-// corsa da un ciglio, il salto in avanti (`vola`), e scale e liane (`provaAggrappo` + `aggiornaAppeso`).
-// Non usa il salto all'indietro (lo studio v2 lo abolisce): la mappa non deve dipenderne.
+// corsa da un ciglio, il salto in avanti da fermo (`volaPulito`: atterra in piedi), e scale e liane (`provaAggrappo` + `aggiornaAppeso`).
+// Non usa la rincorsa (mossa premio: una squadra della carriera può non averla) né il salto dal muro:
+// la mappa non deve dipenderne.
 // Chi finisce in mare è morto: quel passo non conta. Il danno da caduta non ferma l'esplorazione.
 // Proprietario: Lead test/QA. Lo usa tests/mappe/percorribilita.test.ts.
 import type { Appiglio, MappaGenerata, Pirata, Punto, StatoBattaglia, Terreno } from '../../src/core/tipi';
 import { BIL } from '../../src/contenuti/bilanciamento';
-import { cammina, espelli, inAcqua, passo, vola, type Corpo } from '../../src/battaglia/sim/pirata';
+import { cammina, espelli, inAcqua, passo, vola, volaPulito, type Corpo } from '../../src/battaglia/sim/pirata';
 import { altezzaScavalco, saleScavalco } from '../../src/battaglia/sim/movimento';
 import { aggiornaAppeso, provaAggrappo } from '../../src/battaglia/sim/appigli';
 import { capsulaUrta, MEZZA_ALTEZZA_PIRATA } from '../../src/battaglia/sim/terreno';
@@ -36,10 +37,10 @@ export function esploratore(mappa: MappaGenerata) {
   const archi = new Map<number, Archi>();
 
   /** fa cadere/volare il corpo finché si ferma: restituisce la chiave del posto, o −1 se annega o non si ferma */
-  function atterra(c: Corpo): number {
+  function atterra(c: Corpo, pulito = true): number {
     for (let k = 0; k < TICK_VOLO_MAX; k++) {
       if (inAcqua(c, t.mare)) return -1;
-      if (vola(t, c) >= 0) return inAcqua(c, t.mare) ? -1 : chiave(Math.floor(c.x), Math.floor(c.y));
+      if ((pulito ? volaPulito(t, c) : vola(t, c)) >= 0) return inAcqua(c, t.mare) ? -1 : chiave(Math.floor(c.x), Math.floor(c.y));
     }
     return -1;
   }

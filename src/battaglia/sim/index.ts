@@ -16,7 +16,7 @@
 //   lapide-barilotto: solo allora `stato: 'morto'` ed evento `morto`. Chi annega passa subito ad 'annegato'.
 
 import type {
-  Comando, ConfigBattaglia, EsitoColpo, EventoBattaglia, MappaGenerata, PianoColpo, Pirata, Punto, StatoBattaglia,
+  Comando, ConfigBattaglia, EsitoColpo, EventoBattaglia, IdArma, IdCiurma, MappaGenerata, PianoColpo, Pirata, Punto, StatoBattaglia,
 } from '../../core/tipi';
 import { semeIniziale } from '../../core/rng';
 import { coseno, normalizza } from '../../core/trig';
@@ -24,14 +24,15 @@ import { BIL } from '../../contenuti/bilanciamento';
 import { ARMA, dotazioneIniziale } from '../../contenuti/armi';
 import { T } from '../../testi/it';
 import { MEZZA_ALTEZZA_PIRATA } from './terreno';
-import { inGioco, stacca } from './pirata';
-import { gira } from './movimento';
-import { avanza, FATTO, iniziaTurno, miraIniziale, pirataDelTurno, ritirata } from './turno';
+import { inGioco } from './pirata';
+import { decidiBalzo, gira, type EsitoBalzo } from './movimento';
+import { avanza, iniziaTurno, miraIniziale, pirataDelTurno, ritirata } from './turno';
 import { hashDi } from './hash';
 import { creaBarili } from './oggetti';
 import { creaAppigli } from './appigli';
 import { durataColpi } from './armi';
 import { avvisoTiro as avviso, simulaColpo as simula, traiettoria as linea } from './simula';
+import { spintaAlCentro as spintaCentro } from './esplosione';
 
 /** Crea lo stato iniziale. La mappa arriva dal generatore (battaglia/gen). Il turno 1 parte in fase 'inquadra'. */
 export function creaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata): StatoBattaglia {
@@ -107,15 +108,16 @@ export function eseguiComando(s: StatoBattaglia, c: Comando): void {
       break;
     }
     case 'arrampica': {
-      t.arrampicata = c.dir === -1 || c.dir === 1 ? c.dir : 0; // si aggrappa o sale/scende al prossimo tick
+      // si aggrappa o sale/scende al prossimo tick. "In un tocco": il comando resta finché il pirata arriva in cima
+      // o in fondo; da appeso, il tasto opposto a quello con cui sta andando lo ferma (e `dir: 0` pure)
+      const d = c.dir === -1 || c.dir === 1 ? c.dir : 0;
+      t.arrampicata = p.appeso >= 0 && d !== 0 && t.arrampicata === -d ? 0 : d;
       break;
     }
     case 'salta': {
       if (!inAzione && s.tick - t.inizioFase < durataColpi(t.arma)) break; // la pistola sta ancora sparando
-      if (!p.aTerra && p.appeso < 0) break;
-      const sa = c.indietro ? BIL.pirata.saltoIndietro : BIL.pirata.saltoAvanti;
-      stacca(p);
-      p.vx = sa.vx * p.verso; p.vy = sa.vy; // l'evento `salto` esce al prossimo tick (turno.ts)
+      // il Balzo parte al prossimo tick: movimento.ts sceglie tra salto, scavalco, afferra, stacca e salto dal muro
+      t.richiesta = c.indietro ? 'balzoMuro' : 'balzo';
       break;
     }
     case 'mira': {
@@ -147,7 +149,7 @@ export function eseguiComando(s: StatoBattaglia, c: Comando): void {
     }
     case 'fatto': {
       // in fuga chiude subito il turno: la fase cambia (con l'evento `fatto`) al prossimo avanzaTick
-      if (t.fase === 'fuga') t.fermoDa = FATTO;
+      if (t.fase === 'fuga') t.richiesta = 'fatto';
       break;
     }
     case 'fuoco': {
@@ -193,4 +195,25 @@ export function avvisoTiro(s: StatoBattaglia): 'vicino' | 'danno' | null {
 /** Il pirata attivo (o undefined a battaglia finita). */
 export function pirataAttivo(s: StatoBattaglia): Pirata | undefined {
   return s.pirati.find((x) => x.id === s.turno.pirata && x.stato === 'vivo');
+}
+
+/**
+ * Cosa farebbe adesso il Balzo del pirata attivo (per l'etichetta del tasto, `VistaBattaglia.balzo`), o undefined
+ * se non può fare niente (fuori fase, a metà scavalco, sbalzato in volo, in aria senza pareti né appigli).
+ * Con 'muro' il tasto manda `salta` con `indietro: true`. Non muta `s`.
+ */
+export function balzoPossibile(s: StatoBattaglia): EsitoBalzo | undefined {
+  const t = s.turno;
+  const p = pirataAttivo(s);
+  if (s.esito || !p || !inGioco(p)) return undefined;
+  if (t.fase !== 'azione' && !(t.fase === 'fuga' && s.tick - t.inizioFase >= durataColpi(t.arma))) return undefined;
+  return decidiBalzo(s, p, false) ?? undefined;
+}
+
+/**
+ * Spinta al centro, in px/tick, dell'esplosione di un'arma sparata da `ciurma` (null = senza tratti): la stessa
+ * che usano la battaglia e `simulaColpo`. Per il generatore delle coste e per le prove delle mappe.
+ */
+export function spintaAlCentro(arma: IdArma, ciurma: IdCiurma | null): number {
+  return spintaCentro(arma, ciurma);
 }

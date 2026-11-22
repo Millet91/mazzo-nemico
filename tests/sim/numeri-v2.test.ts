@@ -1,12 +1,14 @@
 // Numeri di battaglia dello studio v2 (PIANO §7, regole versione 2) e la loro conseguenza sulle coste.
-// Il generatore resta tarato sul cannone v1 (REGOLE.cannoneDanno 45): con le mappe di oggi e il cannone v2 un colpo
-// diretto può buttare in mare uno spawn. Qui si MISURA quanto spesso, così chi rifà le coste ha il numero di partenza.
+// Il generatore resta tarato sul cannone v1 (REGOLE.cannoneDanno 45). La spinta di cannone e granata v2 è tornata
+// quella della v1 (`spintaEsplosione` in armi.ts): qui si controlla che un colpo diretto non butti in mare gli spawn.
 import { describe, it, expect } from 'vitest';
 import { generaMappa } from '../../src/battaglia/gen';
 import { spinto } from '../../src/battaglia/gen/spawn';
 import { REGOLE } from '../../src/battaglia/gen/parametri';
 import { ARMA } from '../../src/contenuti/armi';
-import { BIL } from '../../src/contenuti/bilanciamento';
+import { BIL, TICK_AL_SECONDO } from '../../src/contenuti/bilanciamento';
+import { simulaColpo, spintaAlCentro } from '../../src/battaglia/sim';
+import { avanzaFinche, battagliaPiatta, inAzione, pirata, spara, terrenoPiatto } from './aiuti';
 
 describe('Numeri v2 · coste e cannone', () => {
   it('il generatore resta sul cannone v1: le impronte delle mappe non cambiano coi numeri nuovi', () => {
@@ -14,9 +16,36 @@ describe('Numeri v2 · coste e cannone', () => {
     expect(ARMA.cannone.danno).toBeGreaterThan(REGOLE.cannoneDanno);
   });
 
+  it('la spinta di cannone e granata è quella della v1 (`spintaEsplosione`), col Teschio +10%', () => {
+    const S = TICK_AL_SECONDO;
+    expect(spintaAlCentro('cannone', null) * S).toBeCloseTo(311, 6);
+    expect(spintaAlCentro('cannone', 'teschio') * S).toBeCloseTo(311 * 66 / 60, 6); // 342, come 49 × 7 della v1
+    expect(spintaAlCentro('granata', null) * S).toBeCloseTo(280, 6);
+    expect(spintaAlCentro('granata', 'teschio') * S).toBeCloseTo(280 * 57 / 52, 6);
+    // la sciabola resta l'arma che spinge di più
+    expect(ARMA.sciabola.spintaFissa!).toBeGreaterThan(spintaAlCentro('cannone', 'teschio') * S);
+    // senza `spintaEsplosione`: danno × 7 px/s
+    expect(spintaAlCentro('barile', null)).toBeCloseTo(ARMA.barile.danno * BIL.fisica.spintaPerDanno, 9);
+  });
+
+  it('in battaglia e in simulaColpo la spinta è la stessa: una cannonata del Teschio vicino al bordo', () => {
+    // piano che finisce a x 1000: il nemico a 960 vola oltre il bordo solo se la spinta è quella giusta
+    const t = terrenoPiatto(undefined, 100, 1000);
+    const s = battagliaPiatta([800], [960], { terreno: t });
+    inAzione(s);
+    const q = pirata(s, 1);
+    let potenza = 30;
+    while (potenza < 100 && !(simulaColpo(s, { pirata: 0, arma: 'cannone', mezziGradi: 40, potenza }).danni[q.id] > 20)) potenza++;
+    const previsto = simulaColpo(s, { pirata: 0, arma: 'cannone', mezziGradi: 40, potenza });
+    spara(s, 'cannone', 40, potenza);
+    avanzaFinche(s, (x) => x.turno.numero === 2 || x.esito !== null, 1200);
+    expect(previsto.danni[q.id] ?? 0).toBeGreaterThan(0);
+    expect(q.stato === 'annegato').toBe(previsto.annegati.includes(q.id));
+    if (q.stato !== 'annegato') expect(BIL.pirata.pv - q.vita).toBe(previsto.danni[q.id]);
+  });
+
   it('misura: spawn che un colpo diretto del cannone v2 butta in mare (3 per lato, 40 semi)', () => {
-    const conta = (danno: number) => {
-      const v = danno * BIL.fisica.spintaPerDanno;
+    const conta = (v: number) => {
       let n = 0, mare = 0;
       for (let seme = 1; seme <= 40; seme++) {
         const m = generaMappa({ seme, bioma: 'isola', piratiPerLato: [5, 5] });
@@ -27,11 +56,13 @@ describe('Numeri v2 · coste e cannone', () => {
       }
       return (100 * mare) / n;
     };
-    const v1 = conta(Math.floor(REGOLE.cannoneDanno * (1 + BIL.tratti.teschioBonusDanno)));
-    const v2 = conta(ARMA.cannone.danno);
-    const v2Teschio = conta(Math.floor(ARMA.cannone.danno * (1 + BIL.tratti.teschioBonusDanno)));
+    const v1 = conta(Math.floor(REGOLE.cannoneDanno * (1 + BIL.tratti.teschioBonusDanno)) * BIL.fisica.spintaPerDanno);
+    const v2 = conta(spintaAlCentro('cannone', null));
+    const v2Teschio = conta(spintaAlCentro('cannone', 'teschio'));
     console.log(`coste: spawn in mare con un colpo diretto — v1 ${v1.toFixed(1)}%, v2 ${v2.toFixed(1)}%, v2 col Teschio ${v2Teschio.toFixed(1)}%`);
     expect(v1).toBe(0); // la garanzia di 06 §7.2 vale coi numeri su cui le coste sono tarate
-    expect(v2Teschio).toBeLessThan(40); // misurato 25% su 200 semi: se sale, le coste vanno rifatte prima
+    // con `spintaEsplosione` il cannone v2 spinge come quello v1: le coste di oggi reggono di nuovo
+    expect(v2).toBe(0);
+    expect(v2Teschio).toBe(0);
   }, 20000);
 });

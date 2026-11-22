@@ -7,7 +7,7 @@ import { ARMA } from '../../contenuti/armi';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { coseno, normalizza, seno } from '../../core/trig';
 import { bocca, colpitiMischia, fisicaDi, spintaMischia, velocitaIniziale } from './armi';
-import { dannoArma, direzioneSpinta, effettoEsplosione, tiroVicino } from './esplosione';
+import { dannoArma, direzioneSpinta, effettoEsplosione, spintaAlCentro, tiroVicino } from './esplosione';
 import { inAcqua, vola, type Corpo } from './pirata';
 import { muoviProiettile, raggio, type Bersaglio, type CorpoProiettile } from './proiettili';
 import { ASSESTAMENTO_TICK, OGGETTO_RAGGIO } from './costanti';
@@ -74,7 +74,7 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
   const esplosione = (x: number, y: number, suTerreno = false) => {
     impatto = { x, y };
     const risparmia = suTerreno && tiroVicino(a.id, io.x, io.y, x, y) ? io.id : -1;
-    area(x, y, a.raggio, dannoArma(a.id, ciurma), a.danno * BIL.fisica.spintaPerDanno, risparmia);
+    area(x, y, a.raggio, dannoArma(a.id, ciurma), spintaAlCentro(a.id, ciurma), risparmia);
     catena();
   };
   const bersagliOgg = bersagliOggetti(s.proiettili);

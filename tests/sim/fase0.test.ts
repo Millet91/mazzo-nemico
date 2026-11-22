@@ -81,14 +81,15 @@ describe('Fase 0 · raggiungibilità', () => {
     return battagliaPiatta([x0], [1600], { terreno: t });
   }
 
-  it('il salto supera uno scalino di 24 px anche partendo attaccati allo scalino (QA §3.2)', () => {
-    for (const x0 of [593, 590, 580, 560]) {
+  it('il Balzo supera uno scalino di 24 px anche partendo attaccati allo scalino (QA §3.2): scavalco o salto', () => {
+    for (const x0 of [594, 593, 590, 580, 560]) {
       const s = conScalino(24, x0);
       inAzione(s);
       eseguiComando(s, { t: 'salta', indietro: false });
+      avanza(s, 1);
       avanzaFinche(s, (x) => pirata(x, 0).aTerra, 300);
       expect(piedi(s), `da x ${x0}`).toBe(SUOLO - 24);
-      expect(pirata(s, 0).x, `da x ${x0}`).toBeGreaterThan(600);
+      expect(pirata(s, 0).x, `da x ${x0}`).toBeGreaterThanOrEqual(600);
     }
   });
 

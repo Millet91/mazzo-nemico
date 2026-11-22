@@ -1,6 +1,6 @@
 // Scale e liane (appigli): segmenti verticali fuori dalla maschera, a cui il pirata attivo si aggrappa col
 // comando `arrampica` (regole in docs: /mnt/project-files/design/comandi/scale-e-liane.md). Appeso non ha gravità e
-// può sparare; sale a 40 px/s e scende a 60 px/s; destra e sinistra da appeso non fanno niente. Un'esplosione stacca chi spinge e taglia il tratto di appiglio nel raggio.
+// può sparare; sale e scende a BIL.movimento.scalaVel (90 px/s, "in un tocco": il comando resta finché arriva in cima o in fondo); destra e sinistra da appeso non fanno niente. Un'esplosione stacca chi spinge e taglia il tratto di appiglio nel raggio.
 
 import type { Appiglio, EventoBattaglia, MappaGenerata, Pirata, StatoBattaglia, Terreno } from '../../core/tipi';
 import { BIL } from '../../contenuti/bilanciamento';
@@ -35,7 +35,8 @@ export function appiglioVicino(s: StatoBattaglia, x: number, y: number): Appigli
   return migliore;
 }
 
-function aggrappa(s: StatoBattaglia, p: Pirata, a: Appiglio, eventi: EventoBattaglia[]): void {
+/** Aggrappa il pirata all'appiglio (lo usa anche il Balzo "afferra"). */
+export function aggrappa(s: StatoBattaglia, p: Pirata, a: Appiglio, eventi: EventoBattaglia[]): void {
   // si avvicina all'asse quanto può senza entrare nel terreno
   const passo = a.x > p.x ? 1 : -1;
   for (let k = Math.floor(Math.abs(a.x - p.x)); k >= 0; k--) {
@@ -128,7 +129,7 @@ export function aggiornaAppeso(s: StatoBattaglia, p: Pirata, su: -1 | 0 | 1, eve
   p.vx = 0; p.vy = 0;
   if (su === -1) {
     if (p.y > cima) versoAsse(t, p, a, 1, false);
-    const ny = Math.max(cima, p.y - A.velocitaSu);
+    const ny = Math.max(cima, p.y - BIL.movimento.scalaVel);
     if (ny < p.y && !capsulaUrta(t, p.x, ny)) p.y = ny;
     if (p.y <= cima) {
       if (capsulaUrta(t, p.x, p.y + 1)) { lascia(t, p, eventi); return false; }
@@ -148,7 +149,7 @@ export function aggiornaAppeso(s: StatoBattaglia, p: Pirata, su: -1 | 0 | 1, eve
     versoAsse(t, p, a, 1, false);
     const fondo = a.yBasso - MEZZA_ALTEZZA_PIRATA;
     if (p.y >= fondo) { lascia(t, p, eventi); return false; } // in fondo: si lascia (o è già a terra)
-    const ny = Math.min(fondo, p.y + A.velocitaGiu);
+    const ny = Math.min(fondo, p.y + BIL.movimento.scalaVel);
     if (capsulaUrta(t, p.x, ny)) { appoggiaSeSuolo(t, p); lascia(t, p, eventi); return false; }
     p.y = ny;
   }

@@ -7,7 +7,7 @@ import { Motore } from './motore';
 import { Musica } from './musica';
 import { Ambiente } from './ambiente';
 import { memoriaNuova, suoniPerEventi, suoniPerVista, type AzioniAudio, type Richiesta } from './eventi';
-import { preparaSuoni, quantiPronti } from './magazzino';
+import { infoPreparazione, preparaSuoni, quantiPronti } from './magazzino';
 import { creaSuonatore, preparaNote } from './note';
 import { caricaPreferenzeAudio, volumeEffetti, volumeMusica } from './preferenze';
 import { ID_SUONI } from './registro';
@@ -138,11 +138,23 @@ function suClic(e: Event): void {
   suona({ id: el.getAttribute('role') === 'switch' ? 'ui_interruttore' : el.classList.contains('primario') ? 'ui_primario' : 'ui_tocco' });
 }
 
+export interface StatoAudio {
+  /** stato del contesto WebAudio: 'assente' finché non c'è un tocco, poi 'running', 'suspended' (app in pausa)... */
+  contesto: string;
+  pronti: number; totale: number;
+  /** ms dall'avvio a tutti i suoni pronti (null: non ancora); quanti sono venuti dal cassetto del telefono */
+  msPronti: number | null; daCassetto: number;
+  brano: string | null; scena: Scena | null; ambiente: boolean; percussioni: boolean;
+  chiesti: string[]; suonati: number; voci: number;
+}
+
 /** Stato per la Diagnostica e per i test a schermo. */
-export function statoAudio(): { contesto: string; pronti: number; totale: number; brano: string | null; scena: Scena | null; ambiente: boolean; percussioni: boolean; chiesti: string[]; suonati: number; voci: number } {
+export function statoAudio(): StatoAudio {
+  const p = infoPreparazione();
   return {
-    contesto: ctx?.state ?? 'assente', pronti: quantiPronti(), totale: ID_SUONI.length, brano: musica?.inCorso ?? null,
-    scena, ambiente: ambiente?.attivo ?? false, percussioni: musica?.stratoAcceso ?? false, chiesti: [...chiesti], suonati, voci: motore?.vociAttive ?? 0,
+    contesto: ctx?.state ?? 'assente', pronti: quantiPronti(), totale: ID_SUONI.length, msPronti: p.ms, daCassetto: p.daCassetto,
+    brano: musica?.inCorso ?? null, scena, ambiente: ambiente?.attivo ?? false, percussioni: musica?.stratoAcceso ?? false,
+    chiesti: [...chiesti], suonati, voci: motore?.vociAttive ?? 0,
   };
 }
 

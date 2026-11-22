@@ -6,6 +6,7 @@ import { daGradi, normalizza } from '../../src/core/trig';
 import { avanzaTick, eseguiComando, pirataAttivo } from '../../src/battaglia/sim';
 import type { EventoBattaglia } from '../../src/core/tipi';
 import { MATERIALE } from '../../src/core/tipi';
+import { dannoArma } from '../../src/battaglia/sim/esplosione';
 import { avanza, avanzaFinche, battagliaPiatta, eventiDi, inAzione, pirata, rettangolo, spara, SUOLO, terrenoPiatto } from './aiuti';
 
 const TIMER = BIL.turno.timerMozzo * TICK_AL_SECONDO;
@@ -50,22 +51,70 @@ describe('Fasi del turno e timer', () => {
     expect(s.turno.squadra).toBe(1);
   });
 
-  it('dopo lo sparo: volo (timer fermo) → fuga di 3 s → risoluzione', () => {
+  it('dopo lo sparo la fuga parte subito (timer fermo); da fermi si chiude dopo 0,5 s, poi volo finché il colpo vola', () => {
     const s = battagliaPiatta([800], [1400]);
     inAzione(s);
-    spara(s, 'cannone', daGradi(45), 50);
+    spara(s, 'cannone', daGradi(60), 80); // pallonetto lungo: vola più della fuga
     const ev: EventoBattaglia[] = [];
     avanzaTick(s, ev);
     expect(eventiDi(ev, 'sparo')).toEqual([{ t: 'sparo', pirata: 0, arma: 'cannone' }]);
-    expect(s.turno.fase).toBe('volo');
-    const rimasti = s.turno.tickRimasti;
-    avanzaFinche(s, (x) => x.turno.fase !== 'volo');
-    expect(s.turno.tickRimasti).toBe(rimasti);
     expect(s.turno.fase).toBe('fuga');
+    const rimasti = s.turno.tickRimasti;
     const inizio = s.tick;
     avanzaFinche(s, (x) => x.turno.fase !== 'fuga');
-    expect(s.tick - inizio).toBe(BIL.turno.fugaTick);
+    expect(s.tick - inizio).toBe(BIL.ritmo.fermoFugaTick);
+    expect(s.turno.fase).toBe('volo');
+    expect(s.proiettili.length).toBe(1);
+    avanzaFinche(s, (x) => x.turno.fase !== 'volo');
     expect(s.turno.fase).toBe('risoluzione');
+    expect(s.turno.tickRimasti).toBe(rimasti); // il timer per sparo non scorre né in fuga né in volo
+  });
+
+  it('se il colpo è già scoppiato a fine fuga non c\'è la fase di volo', () => {
+    const s = battagliaPiatta([800], [1000]);
+    inAzione(s);
+    spara(s, 'cannone', 0, 100);
+    const fasi = eventiDi(avanzaFinche(s, (x) => x.turno.numero === 2), 'fase').map((e) => e.fase);
+    expect(fasi.slice(0, 2)).toEqual(['fuga', 'risoluzione']);
+    expect(fasi).not.toContain('volo');
+  });
+
+  it('chi si muove ha tutta la fuga: 1,5 s, non di più', () => {
+    const s = battagliaPiatta([800], [1400]);
+    inAzione(s);
+    spara(s, 'cannone', daGradi(45), 50);
+    avanza(s, 1);
+    const inizio = s.tick, x0 = pirata(s).x;
+    eseguiComando(s, { t: 'muovi', dir: -1 });
+    avanzaFinche(s, (x) => x.turno.fase !== 'fuga');
+    expect(s.tick - inizio).toBe(BIL.ritmo.fugaTick);
+    expect(pirata(s, 0).x).toBeLessThan(x0 - 40);
+  });
+
+  it('il comando fatto chiude la fuga al tick dopo, con l\'evento; fuori dalla fuga non fa niente', () => {
+    const s = battagliaPiatta([800], [1400]);
+    inAzione(s);
+    eseguiComando(s, { t: 'fatto' }); // in azione: ignorato
+    expect(eventiDi(avanza(s, 2), 'fatto')).toHaveLength(0);
+    expect(s.turno.fase).toBe('azione');
+    spara(s, 'cannone', 0, 100);
+    avanza(s, 1);
+    eseguiComando(s, { t: 'muovi', dir: -1 });
+    avanza(s, 5);
+    expect(s.turno.fase).toBe('fuga');
+    eseguiComando(s, { t: 'fatto' });
+    const ev = avanza(s, 1);
+    expect(eventiDi(ev, 'fatto')).toEqual([{ t: 'fatto', pirata: 0 }]);
+    expect(s.turno.fase).not.toBe('fuga');
+  });
+
+  it('un turno giocato in fretta (sparo subito, senza fuga) dura meno di 3 s', () => {
+    const s = battagliaPiatta([800], [1000]);
+    const t0 = s.tick;
+    inAzione(s);
+    spara(s, 'cannone', 0, 100);
+    avanzaFinche(s, (x) => x.turno.numero === 2);
+    expect(s.tick - t0).toBeLessThan(3 * TICK_AL_SECONDO);
   });
 
   it('i comandi fuori fase si ignorano e non si spara due volte', () => {
@@ -140,24 +189,27 @@ describe('Comandi di mira e movimento', () => {
     expect(s.turno.mira.mezziGradi).toBe(normalizza(daGradi(150)));
   });
 
-  it('camminata e salto avanti/indietro del pirata attivo', () => {
+  it('camminata, corsa e Balzo del pirata attivo', () => {
     const s = battagliaPiatta([800], [1400]);
     inAzione(s);
     const p = pirata(s);
     eseguiComando(s, { t: 'muovi', dir: 1 });
-    avanza(s, 60);
-    expect(p.x).toBeCloseTo(860, 5);
+    avanza(s, 20);
+    expect(p.x).toBeCloseTo(820, 5); // passo corto: 1 px a tick
+    avanza(s, 40);
+    expect(p.x).toBeGreaterThan(870); // tenendo premuto parte la corsa
     eseguiComando(s, { t: 'muovi', dir: 0 });
     eseguiComando(s, { t: 'salta', indietro: false });
     const ev = avanza(s, 1);
     expect(eventiDi(ev, 'salto')).toEqual([{ t: 'salto', pirata: p.id }]);
     avanzaFinche(s, () => p.aTerra);
-    expect(p.x).toBeGreaterThan(870);
+    expect(p.x).toBeGreaterThan(900);
     const x = p.x;
+    // il salto alto all'indietro non esiste più: lontano da una parete `indietro` è un salto normale
     eseguiComando(s, { t: 'salta', indietro: true });
     avanza(s, 1);
     avanzaFinche(s, () => p.aTerra);
-    expect(p.x).toBeLessThan(x);
+    expect(p.x).toBeGreaterThan(x + 60);
     expect(p.vita).toBe(BIL.pirata.pv); // i salti non fanno male
   });
 
@@ -178,12 +230,12 @@ describe('Le 4 armi di M1', () => {
     const n = pirata(s, 1);
     // tiro dritto: angolo 0, potenza piena; il proiettile scende poco in 184 px
     spara(s, 'cannone', 0, 100);
-    const ev = avanzaFinche(s, (x) => x.turno.fase === 'fuga');
+    const ev = avanzaFinche(s, (x) => x.turno.fase === 'risoluzione');
     expect(eventiDi(ev, 'esplosione')).toHaveLength(1);
     expect(eventiDi(ev, 'cratere')).toHaveLength(1);
     const d = eventiDi(ev, 'danno').find((e) => e.pirata === n.id)!;
-    expect(d.quanto).toBeGreaterThan(30);
-    expect(d.quanto).toBeLessThanOrEqual(49);
+    expect(d.quanto).toBeGreaterThan(ARMA.cannone.danno * 0.66);
+    expect(d.quanto).toBeLessThanOrEqual(dannoArma('cannone', 'teschio'));
   });
 
   it('granata: esplode allo scadere della miccia, non all\'impatto', () => {
@@ -192,21 +244,21 @@ describe('Le 4 armi di M1', () => {
     eseguiComando(s, { t: 'miccia', secondi: 2 });
     spara(s, 'granata', daGradi(60), 40);
     const t0 = s.tick + 1; // il colpo parte al tick dopo
-    const ev = avanzaFinche(s, (x) => x.turno.fase === 'fuga');
+    const ev = avanzaFinche(s, (x) => x.turno.fase === 'risoluzione');
     const quando = ev.indexOf(eventiDi(ev, 'esplosione')[0]);
     expect(quando).toBeGreaterThan(-1);
     expect(eventiDi(ev, 'rimbalzo').length).toBeGreaterThan(0);
     expect(s.tick).toBeGreaterThanOrEqual(t0 + 2 * TICK_AL_SECONDO);
   });
 
-  it('pistola: 2 colpi a 30 tick, 18 danni l\'uno, poi fuga', () => {
+  it('pistola: 2 colpi a 30 tick dallo stesso punto (in fuga ci si muove solo dopo il secondo)', () => {
     const s = battagliaPiatta([800], [1000]);
     inAzione(s);
     const n = pirata(s, 1);
     spara(s, 'pistola', 0);
     const ev: EventoBattaglia[] = [];
     const tick: number[] = [];
-    while (s.turno.fase !== 'fuga') { const prima = ev.length; avanzaTick(s, ev); if (eventiDi(ev.slice(prima), 'colpoPistola').length) tick.push(s.tick); }
+    while (s.turno.fase !== 'risoluzione') { const prima = ev.length; avanzaTick(s, ev); if (eventiDi(ev.slice(prima), 'colpoPistola').length) tick.push(s.tick); }
     expect(tick).toHaveLength(ARMA.pistola.colpi!);
     expect(tick[1] - tick[0]).toBe(ARMA.pistola.intervalloColpi);
     expect(BIL.pirata.pv - n.vita).toBe(2 * ARMA.pistola.danno);
@@ -218,7 +270,7 @@ describe('Le 4 armi di M1', () => {
     const s = battagliaPiatta([800], [1400], { terreno: t });
     inAzione(s);
     spara(s, 'pistola', 0);
-    const ev = avanzaFinche(s, (x) => x.turno.fase === 'fuga');
+    const ev = avanzaFinche(s, (x) => x.turno.fase === 'risoluzione');
     expect(eventiDi(ev, 'cratere')).toHaveLength(2);
     expect(eventiDi(ev, 'cratere')[0].raggio).toBeLessThanOrEqual(Math.ceil(ARMA.pistola.buca! * 1.2));
   });

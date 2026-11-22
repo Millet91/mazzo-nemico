@@ -2,6 +2,9 @@
 // In M1 sono attive solo le 4 Base: cannone, granata, pistola, sciabola. Le altre compaiono nella griglia
 // 4×4 in grigio col lucchetto. Solo il Lead modifica questo file (14: contratto della milestone).
 // Unità: danno in PV, raggi in px, spinte in px/s (la sim le converte con TICK_AL_SECONDO), tempi in s.
+// Studio v2 (PIANO §7, Bilanciamento): le 4 Base hanno più raggio che danno. Cannone 60/70 (era 45/55), granata 52/64
+// (era 40/50), pistola 28×2 (era 18×2), sciabola 40 (era 25, spinta 450 invariata). Regole versione 2.
+// La spinta di cannone e granata resta quella della v1 (`spintaEsplosione`): 311 × 1,1 = 342 col Teschio, come 49 × 7.
 
 import type { IdArma } from '../core/tipi';
 
@@ -26,6 +29,15 @@ export interface DefArma {
   raggio: number;
   /** spinta fissa in px/s (sciabola, pistola); se assente vale danno × 7 con attenuazione (00 §1.2) */
   spintaFissa?: number;
+  /**
+   * Spinta al centro dell'esplosione in px/s a danno pieno, con la stessa attenuazione del danno; col bonus di
+   * danno di una ciurma cresce nella stessa proporzione. Assente = danno × 7 (00 §1.2).
+   * Studio v2: i numeri nuovi alzano danno e raggio di cannone e granata, NON la spinta. Con danno × 7 il cannone
+   * (420 px/s, 462 col Teschio) spingerebbe più della sciabola (450) e butterebbe in mare al primo colpo un
+   * quarto delle partenze delle isole generate. Restano le spinte della v1: cannone 45 × 7 = 315 (343 col Teschio),
+   * granata 40 × 7 = 280 (308). La sciabola resta l'arma che spinge in mare.
+   */
+  spintaEsplosione?: number;
   /** angolo della spinta fissa in gradi sopra l'orizzontale, nel verso del pirata (sciabola: 45) */
   angoloSpinta?: number;
   /** risente del vento */
@@ -57,10 +69,10 @@ const A = (d: DefArma) => d;
 
 export const ARMI: readonly DefArma[] = [
   // ── riga 1: Base ──
-  A({ id: 'cannone', numero: 1, tipo: 'balistica', danno: 45, raggio: 55, vento: true, usaPotenza: true, usaAngolo: true, chiudeTurno: true, ottenimento: 'base', munizioni: -1, milestone: 'M1' }),
-  A({ id: 'granata', numero: 2, tipo: 'lancio', danno: 40, raggio: 50, vento: false, miccia: { min: 1, max: 5 }, rimbalzo: 0.5, usaPotenza: true, usaAngolo: true, chiudeTurno: true, ottenimento: 'base', munizioni: -1, milestone: 'M1' }),
-  A({ id: 'pistola', numero: 3, tipo: 'istantanea', danno: 18, raggio: 0, spintaFissa: 120, colpi: 2, intervalloColpi: 30, portata: 500, buca: 6, vento: false, usaPotenza: false, usaAngolo: true, chiudeTurno: true, ottenimento: 'base', munizioni: -1, milestone: 'M1' }),
-  A({ id: 'sciabola', numero: 4, tipo: 'mischia', danno: 25, raggio: 0, spintaFissa: 450, angoloSpinta: 45, portata: 30, vento: false, usaPotenza: false, usaAngolo: false, chiudeTurno: true, ottenimento: 'base', munizioni: -1, milestone: 'M1' }),
+  A({ id: 'cannone', numero: 1, tipo: 'balistica', danno: 60, raggio: 70, spintaEsplosione: 311, vento: true, usaPotenza: true, usaAngolo: true, chiudeTurno: true, ottenimento: 'base', munizioni: -1, milestone: 'M1' }),
+  A({ id: 'granata', numero: 2, tipo: 'lancio', danno: 52, raggio: 64, spintaEsplosione: 280, vento: false, miccia: { min: 1, max: 5 }, rimbalzo: 0.5, usaPotenza: true, usaAngolo: true, chiudeTurno: true, ottenimento: 'base', munizioni: -1, milestone: 'M1' }),
+  A({ id: 'pistola', numero: 3, tipo: 'istantanea', danno: 28, raggio: 0, spintaFissa: 120, colpi: 2, intervalloColpi: 30, portata: 500, buca: 6, vento: false, usaPotenza: false, usaAngolo: true, chiudeTurno: true, ottenimento: 'base', munizioni: -1, milestone: 'M1' }),
+  A({ id: 'sciabola', numero: 4, tipo: 'mischia', danno: 40, raggio: 0, spintaFissa: 450, angoloSpinta: 45, portata: 30, vento: false, usaPotenza: false, usaAngolo: false, chiudeTurno: true, ottenimento: 'base', munizioni: -1, milestone: 'M1' }),
   // ── riga 2: esplosivi ──
   A({ id: 'barile', numero: 5, tipo: 'piazzabile', danno: 75, raggio: 85, miccia: { min: 5, max: 5 }, vento: false, usaPotenza: false, usaAngolo: false, chiudeTurno: true, ottenimento: 'kit', munizioni: 1, milestone: 'M2' }),
   A({ id: 'mina', numero: 6, tipo: 'piazzabile', danno: 45, raggio: 50, vento: false, usaPotenza: false, usaAngolo: false, chiudeTurno: true, ottenimento: 'kit', munizioni: 1, milestone: 'M2' }),

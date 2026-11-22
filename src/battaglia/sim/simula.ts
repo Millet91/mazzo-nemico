@@ -7,7 +7,7 @@ import { ARMA } from '../../contenuti/armi';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { coseno, normalizza, seno } from '../../core/trig';
 import { bocca, colpitiMischia, fisicaDi, spintaMischia, velocitaIniziale } from './armi';
-import { dannoArma, direzioneSpinta, effettoEsplosione } from './esplosione';
+import { dannoArma, direzioneSpinta, effettoEsplosione, spintaAlCentro, tiroVicino } from './esplosione';
 import { inAcqua, vola, type Corpo } from './pirata';
 import { muoviProiettile, raggio, type Bersaglio, type CorpoProiettile } from './proiettili';
 import { ASSESTAMENTO_TICK, OGGETTO_RAGGIO } from './costanti';
@@ -44,8 +44,11 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
     .filter((pr) => eOggetto(pr) && pr.tickEsplosione < 0)
     .map((pr) => ({ id: pr.id, c: centroOggetto(pr), tipo: pr.tipo, esploso: false }));
   const coda: typeof oggetti = [];
-  const area = (x: number, y: number, raggio: number, dannoPieno: number, spinta: number) => {
+  const area = (x: number, y: number, raggio: number, dannoPieno: number, spinta: number, risparmia = -1) => {
+    // tiro vicino (come `esplodi`): chi ha sparato si salva solo se l'esplosione non raggiunge nessun altro
+    const salvo = risparmia >= 0 && !copie.some((c) => c.id !== risparmia && effettoEsplosione(x, y, raggio, dannoPieno, spinta, c.x, c.y)) ? risparmia : -1;
     for (const c of copie) {
+      if (c.id === salvo) continue;
       const e = effettoEsplosione(x, y, raggio, dannoPieno, spinta, c.x, c.y);
       if (!e) continue;
       spingi(c, e.vx, e.vy);
@@ -68,9 +71,10 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
     const o = oggetti.find((x) => x.id === idProiettileDaBersaglio(idBersaglio));
     if (o && !o.esploso) { o.esploso = true; coda.push(o); catena(); }
   };
-  const esplosione = (x: number, y: number) => {
+  const esplosione = (x: number, y: number, suTerreno = false) => {
     impatto = { x, y };
-    area(x, y, a.raggio, dannoArma(a.id, ciurma), a.danno * BIL.fisica.spintaPerDanno);
+    const risparmia = suTerreno && tiroVicino(a.id, io.x, io.y, x, y) ? io.id : -1;
+    area(x, y, a.raggio, dannoArma(a.id, ciurma), spintaAlCentro(a.id, ciurma), risparmia);
     catena();
   };
   const bersagliOgg = bersagliOggetti(s.proiettili);
@@ -79,7 +83,7 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
     case 'balistica':
     case 'lancio': {
       const b = bocca(t, io.x, io.y, mg);
-      if (b.bloccato && a.tipo === 'balistica') { esplosione(b.x, b.y); break; }
+      if (b.bloccato && a.tipo === 'balistica') { esplosione(b.x, b.y, true); break; }
       const v = velocitaIniziale(mg, a.usaPotenza ? piano.potenza : 100);
       const pr: CorpoProiettile = { x: b.x, y: b.y, vx: v.vx, vy: v.vy, fermo: false };
       const f = fisicaDi(a.id);
@@ -90,7 +94,7 @@ export function simulaColpo(s: StatoBattaglia, piano: PianoColpo): EsitoColpo {
         tick++;
         const u = muoviProiettile(t, t.mare, s.vento, pr, f, bersagli);
         if (u && u.tipo === 'mare') break;
-        if (u && (u.tipo === 'terreno' || u.tipo === 'pirata')) { esplosione(u.x, u.y); break; }
+        if (u && (u.tipo === 'terreno' || u.tipo === 'pirata')) { esplosione(u.x, u.y, u.tipo === 'terreno'); break; }
         if (miccia >= 0 && tick >= miccia) { esplosione(pr.x, pr.y); break; }
       }
       break;
@@ -203,4 +207,21 @@ export function traiettoria(s: StatoBattaglia, maxPunti = 60, maxRimbalzi = Infi
     if (i % 3 === 0) { out.push({ x: pr.x, y: pr.y }); if (out.length >= maxPunti) break; }
   }
   return out;
+}
+
+/**
+ * Avviso di tiro vicino per l'HUD (studio v2, Fase 0), per la mira e l'arma del turno: 'danno' se chi spara si
+ * farebbe male (o finirebbe in mare), 'vicino' se un'arma che esplode scoppierebbe a meno di BIL.fisica.tiroVicinoPx
+ * da lui senza ferirlo (colpo sprecato), altrimenti null. È un'anteprima come simulaColpo: non muta lo stato.
+ */
+export function avvisoTiro(s: StatoBattaglia): 'vicino' | 'danno' | null {
+  const p = s.pirati.find((x) => x.id === s.turno.pirata);
+  if (!p || p.stato !== 'vivo') return null;
+  const a = ARMA[s.turno.arma];
+  if (a.raggio <= 0) return null;
+  const e = simulaColpo(s, { pirata: p.id, arma: a.id, mezziGradi: s.turno.mira.mezziGradi, potenza: s.turno.mira.potenza, miccia: s.turno.miccia });
+  if ((e.danni[p.id] ?? 0) > 0 || e.annegati.includes(p.id)) return 'danno';
+  if (!e.impatto) return null;
+  const dx = e.impatto.x - p.x, dy = e.impatto.y - p.y, r = BIL.fisica.tiroVicinoPx;
+  return dx * dx + dy * dy < r * r ? 'vicino' : null;
 }

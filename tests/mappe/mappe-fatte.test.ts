@@ -37,13 +37,16 @@ describe('mappe fatte a mano', () => {
       if (!MAPPE_FATTE[id].copione) expect(ap.filter((a) => a.x < w / 2).length).toBe(ap.filter((a) => a.x >= w / 2).length);
       for (const a of ap) {
         const lungo = a.yBasso - a.yAlto;
-        expect(lungo, `${a.tipo} ${a.x}`).toBeGreaterThanOrEqual(60);
+        // nel Prologo (copione) la scala grande parte dal ripiano del gradino: può essere un po' più corta
+        expect(lungo, `${a.tipo} ${a.x}`).toBeGreaterThanOrEqual(MAPPE_FATTE[id].copione ? 50 : 60);
         expect(lungo, `${a.tipo} ${a.x}`).toBeLessThanOrEqual(220);
         for (let y = a.yAlto; y < a.yBasso; y++) expect(pieno(a.x, y), `${a.tipo} ${a.x} nel solido a ${y}`).toBe(false);
-        // in cima un piano alla quota yAlto entro 14 px dall'asse
+        // in cima un piano alla quota yAlto (±2 px) entro 14 px dall'asse; che ci si arrivi davvero lo prova percorribilita.test.ts
         let bordo = 99;
-        for (let d = 0; d <= 14; d++) for (const x of [a.x - d, a.x + d]) if (pieno(x, a.yAlto) && !pieno(x, a.yAlto - 1)) bordo = Math.min(bordo, d);
+        for (let d = 0; d <= 14; d++) for (const x of [a.x - d, a.x + d]) for (let y = a.yAlto - 2; y <= a.yAlto + 2; y++) if (pieno(x, y) && !pieno(x, y - 1)) bordo = Math.min(bordo, d);
         expect(bordo, `${a.tipo} ${a.x}: piano in cima`).toBeLessThanOrEqual(14);
+        // l'asse sta ad almeno 8 px dal muro (bug "la scalata si ferma a metà": la capsula è larga 12, mezza capsula + 2)
+        for (let y = a.yAlto + 4; y < a.yBasso - 12; y++) for (let d = 1; d < 8; d++) expect(pieno(a.x - d, y) || pieno(a.x + d, y), `${a.tipo} ${a.x}: muro a ${d} px dall'asse, a y ${y}`).toBe(false);
         for (const p of [...mappa.spawn[0], ...mappa.spawn[1]]) expect(Math.abs(p.x - a.x), `${a.tipo} ${a.x} vicino allo spawn ${p.x}`).toBeGreaterThanOrEqual(40);
       }
     });

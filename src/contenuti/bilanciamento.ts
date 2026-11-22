@@ -70,6 +70,12 @@ export const BIL = {
     spintaPerDanno: 7 / S,
     /** al massimo 5 tick per frame (13 caso 6) */
     tickMaxPerFrame: 5,
+    /**
+     * Tiro vicino (studio v2, Fase 0): se un colpo diretto (cannone) scoppia sul terreno a meno di tanti px da chi
+     * l'ha sparato e non raggiunge nessun altro, chi ha sparato non si fa male e non viene spinto ("pendio vicino").
+     * Sotto la stessa distanza l'HUD avvisa prima del fuoco.
+     */
+    tiroVicinoPx: 60,
     /** bordo bruciato dei crateri (03 §2) */
     bordoBruciato: 3,
     /** moltiplicatore del cratere per materiale, indice = valore della maschera (00 §1.2) */
@@ -103,7 +109,72 @@ export const BIL = {
 
   lapide: { danno: 10, raggio: 25 },
 
+  /**
+   * Macerie (studio v2, PIANO §7; Bilanciamento): un blocco che cade fa 8 PV a pirata, al massimo 20 PV per turno a
+   * pirata; sotto 5 PV il numero non si mostra. Numeri a priori: la sim li userà dalla Fase 3 (il campo si spezza).
+   */
+  macerie: { danno: 8, maxPerTurno: 20, mostraDa: 5, massoDanno: 20, massoSpinta: 4 /* px/tick */ },
+
+  /**
+   * Fase 3, sostegno strutturale (contratto del Lead P1, 22/11/2026). Un pezzo staccato dal fondale e senza sostegni
+   * cade solo se la ricerca si chiude entro pezzoMaxPx (oltre è "corpo dell'isola": resta su). Sotto briciolePx
+   * sparisce in polvere. Anti-frustrazione: niente crolli prima di dalTurno; un pezzo non cade se uno spawn iniziale
+   * sta nella sua zona di caduta (il pezzo prolungato fino al mare) allargata di rispettoSpawnPx per lato.
+   */
+  crolli: { pezzoMaxPx: 6000, briciolePx: 24, rispettoSpawnPx: 24, dalTurno: 2, spintaTorre: 0.6 /* px/tick */, ricercheMax: 8 },
+  /** legno che brucia: tra il bordo del cratere e anello × raggio; 6 PV a fine turno a chi ci sta dentro */
+  fuoco: { durataTick: 4 * S, anello: 1.3, danno: 6 },
+  /** sabbia che frana nei buchi piccoli, al massimo per questi tick */
+  sabbia: { franaMaxTick: 45 },
+
   /** scale e liane distruttibili (richiesta del proprietario, 21/11/2026) */
+  /**
+   * Studio v2, Fase 1 (PIANO §3, game-design §3.4 e 3.6, tecnica §3.4-3.6). CONGELATO dal Lead P1: la sim della
+   * Fase 1 legge da qui, e finché non lo fa questi numeri non cambiano niente. Le velocità sono in px/tick.
+   */
+  movimento: {
+    /** passo corto col tocco breve (come oggi) e corsa a falcate tenendo ◀ ▶ oltre corsaDopoTick */
+    passoVel: 60 / S,
+    corsaVel: 96 / S,
+    corsaDopoTick: Math.round(0.4 * S),
+    /** da ferma a corsaVel in 0,15 s; alla fine la frenata scivola per questi px */
+    corsaAccelTick: Math.round(0.15 * S),
+    frenataPx: 6,
+    /** in salita rallenta fino a −30% a 45°, in discesa accelera altrettanto */
+    pendenzaFrazione: 0.3,
+    /** un evento `passo` ogni tanti px percorsi */
+    passoPx: 14,
+    /** un evento `piolo` ogni tanti px di arrampicata su scale e liane (solo audio e pupazzo, non cambia la sim) */
+    pioloPx: 20,
+    /** scavalco automatico: si issa da solo sui muretti fino a questa altezza (oltre il gradino di 8 px) */
+    scavalcoMax: 28,
+    scavalcoTick: Math.round(0.25 * S),
+    /** controllo in aria durante il salto: px/s² */
+    ariaAccel: 20,
+    /** scivolata sui pendii oltre questi gradi, fino a questa velocità; atterrando in scivolata niente danno da caduta */
+    scivolataGradi: 25,
+    scivolataVelMax: 220 / S,
+    /** salvataggio al bordo: Balzo entro questi tick dall'inizio della caduta, una volta per battaglia a pirata */
+    bordoTick: Math.round(0.5 * S),
+    bordoPerBattaglia: 1,
+    /** scale e liane in un tocco: sale e scende da solo a questa velocità fino in cima o in fondo */
+    scalaVel: 90 / S,
+  },
+  /** Studio v2, Fase 1: ritmo del turno (Bilanciamento, PIANO bozza 2). CONGELATO dal Lead P1, come `movimento`. */
+  ritmo: {
+    /** fuga dopo lo sparo: 1,5 s, si chiude prima col comando 'fatto' o se il pirata resta fermo per fermoFugaTick */
+    fugaTick: Math.round(1.5 * S),
+    fermoFugaTick: Math.round(0.5 * S),
+    /** timer PER SPARO in secondi: normale, con Mozzo e nel Prologo, Timer lungo */
+    timerSparo: 12,
+    timerSparoMozzo: 25,
+    timerSparoLungo: 45,
+    /** il turno dell'IA dura al più 4 s, con la mira ben visibile per 0,8 s prima dello sparo */
+    iaTurnoMaxTick: 4 * S,
+    iaMiraVisibileTick: Math.round(0.8 * S),
+    /** panoramica a inizio turno sul nemico più vicino (solo camera, saltabile con un tocco), in ms */
+    panoramicaMs: 1200,
+  },
   arrampicata: {
     /** px/tick: 40 px/s in su, 60 px/s in giù, uguale per scala e liana (design/comandi/scale-e-liane.md) */
     velocitaSu: 40 / S,
@@ -112,6 +183,10 @@ export const BIL = {
     presa: 8,
     /** un pezzo di appiglio più corto di così sparisce */
     pezzoMinimo: 10,
+    /** in cima il pirata passa dalla scala al piano accanto (e dal piano alla scala, con "scendi") fino a questa distanza dall'asse */
+    passaggioCima: 20,
+    /** "scendi" dall'alto: i piedi stanno sul piano in cima, al più tanto sopra o sotto la cima dell'appiglio */
+    piediCima: 12,
   },
 
   /** barili di polvere già piazzati dal generatore (m1-ritmo §9; 06 §2 Porto e §7.4) */
@@ -157,19 +232,20 @@ export const BIL = {
   /** tratti delle ciurme che valgono in battaglia (00 §2.1) */
   tratti: {
     /** Teschio Rosso: +10% di danno sulle armi esplosive */
-    /** D effettivo = floor(D × (1 + bonus)): cannone 49, granata 44. Non vale sulla lapide. */
+    /** D effettivo = floor(D × (1 + bonus)): cannone 66, granata 57. Non vale sulla lapide. */
     teschioBonusDanno: 0.1,
     teschioArmi: ['cannone', 'granata', 'barile', 'mina', 'pallaSpezzata', 'pappagallo', 'scimmia', 'bordata'] as readonly string[],
   },
 
   /** IA di battaglia (01 §8; 05 n. 19) */
   ia: {
-    /** errorePotenza: errore uniforme inteso sulla GITTATA (±15% di gittata ≈ ±7,5% di potenza, perché la gittata va col
-     *  quadrato della potenza). erroreGradi: uniforme sull'angolo. Taratura finale col simulatore (giocatore batte Mozzo all'85%). */
+    /** errorePotenza: errore uniforme inteso sulla GITTATA (±35% di gittata ≈ ±16% di potenza, perché la gittata va col
+     *  quadrato della potenza). erroreGradi: uniforme sull'angolo. Mozzo ritarato dallo studio v2 (PIANO §7): ±14° e ±35%,
+     *  l'umano medio lo batte circa l'83% delle volte (obiettivo 85%). */
     /** l'IA sceglie solo tra le armi di `armi` che hanno munizioni nella sua Squadra */
     punteggio: { uccisione: 60, annegamento: 80, dannoAmico: -1.5, dannoSe: -2, seInMare: -200, sogliaMinima: 10 },
     livelli: {
-      mozzo: { simulazioni: 40, posizioni: 0, erroreGradi: 8, errorePotenza: 0.15, vento: 0.5, sceltaTraMigliori: 5, armi: ['cannone', 'granata', 'pistola', 'sciabola', 'barile'] },
+      mozzo: { simulazioni: 40, posizioni: 0, erroreGradi: 14, errorePotenza: 0.35, vento: 0.5, sceltaTraMigliori: 5, armi: ['cannone', 'granata', 'pistola', 'sciabola', 'barile'] },
       nostromo: { simulazioni: 200, posizioni: 2, erroreGradi: 3, errorePotenza: 0.06, vento: 1, sceltaTraMigliori: 1, armi: [] },
       capitano: { simulazioni: 600, posizioni: 4, erroreGradi: 1, errorePotenza: 0.02, vento: 1, sceltaTraMigliori: 1, armi: [] },
     } as Record<LivelloIa, { simulazioni: number; posizioni: number; erroreGradi: number; errorePotenza: number; vento: number; sceltaTraMigliori: number; armi: string[] }>,
@@ -178,3 +254,13 @@ export const BIL = {
     animazioneMiraMs: 350, // m1-ritmo §3
   },
 } as const;
+
+/**
+ * Secondi del timer PER SPARO (BIL.ritmo, Fase 1): 12 di norma, 25 contro il Mozzo e nel Prologo, 45 con il
+ * Timer lungo (che vince su tutto). Lo usano Schermaglia e carriera quando preparano la ConfigBattaglia.
+ */
+export function secondiTimer(o: { livelloIa?: LivelloIa; prologo?: boolean; timerLungo?: boolean } = {}): number {
+  if (o.timerLungo) return BIL.ritmo.timerSparoLungo;
+  if (o.prologo || o.livelloIa === 'mozzo') return BIL.ritmo.timerSparoMozzo;
+  return BIL.ritmo.timerSparo;
+}

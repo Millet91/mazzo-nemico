@@ -2,7 +2,7 @@
 // rettangolo toccato, e si caricano sulla GPU al massimo 6 tile per frame (00 §1.2).
 import { Container, Sprite, Texture } from 'pixi.js';
 import type { Terreno } from '../../core/tipi';
-import { COLORI_MATERIALE, LATO_TILE, dipingiRettangolo, rettangoloCratere, tileToccate } from './pittura-terreno';
+import { COLORI_MATERIALE, LATO_TILE, dipingiRettangolo, rettangoloCratere, rettangoloMaschera, tileToccate } from './pittura-terreno';
 
 export const CARICAMENTI_PER_FRAME = 6;
 
@@ -28,6 +28,8 @@ export class TerrenoRender {
   private coda: number[] = [];
   /** grafica dipinta della mappa fatta a mano (RGBA w×h), o null: terreno coi colori dei materiali */
   private arte: Uint8ClampedArray | null = null;
+  /** il terreno HD ha preso il posto di questo: niente più pittura, restano maschera iniziale e colori (zolle) */
+  private spento = false;
 
   constructor(private readonly terreno: Terreno) {
     this.colonne = Math.ceil(terreno.w / LATO_TILE);
@@ -52,9 +54,34 @@ export class TerrenoRender {
     }
   }
 
+  /** Maschera all'inizio della battaglia (serve anche al terreno HD). */
+  get maschera0(): Uint8Array { return this.originale; }
+
+  /**
+   * Il terreno HD è pronto (terreno-hd.ts): le tile dipinte sulla CPU si buttano e i crateri non si ridipingono
+   * più. Restano la maschera iniziale e il quadro a 1× per il colore delle zolle.
+   */
+  spegni(): void {
+    if (this.spento) return;
+    this.spento = true;
+    this.coda = [];
+    for (const t of this.tiles) t.texture.destroy(true);
+    this.radice.destroy({ children: true });
+    this.tiles = [];
+  }
+
   /** Evento `cratere` della sim: segna le tile da ridipingere. */
   cratere(x: number, y: number, raggio: number): void {
-    const [x0, y0, x1, y1] = rettangoloCratere(x, y, raggio);
+    this.sporca(...rettangoloCratere(x, y, raggio));
+  }
+
+  /** Fase 3: la maschera è cambiata nel rettangolo (estremi compresi) senza uno scoppio: si ridipinge da lì. */
+  maschera(x0: number, y0: number, x1: number, y1: number): void {
+    this.sporca(...rettangoloMaschera(x0, y0, x1, y1));
+  }
+
+  private sporca(x0: number, y0: number, x1: number, y1: number): void {
+    if (this.spento) return;
     for (const i of tileToccate(x0, y0, x1, y1, this.colonne, this.righe)) {
       const t = this.tiles[i];
       if (!t.sporco) { t.sporco = [x0, y0, x1, y1]; this.coda.push(i); }
@@ -89,6 +116,7 @@ export class TerrenoRender {
   impostaArte(rgba: Uint8ClampedArray): void {
     if (rgba.length !== this.terreno.w * this.terreno.h * 4) return;
     this.arte = rgba;
+    if (this.spento) return;
     this.tiles.forEach((t, i) => {
       if (!t.sporco) this.coda.push(i);
       t.sporco = [t.tx, t.ty, t.tx + LATO_TILE, t.ty + LATO_TILE];
@@ -96,6 +124,9 @@ export class TerrenoRender {
   }
 
   get inAttesa(): number { return this.coda.length; }
+
+  /** Il quadro a 1× (RGBA, w×h), se la mappa è dipinta e già arrivato: i pezzi che cadono ne ritagliano il colore. */
+  get arteRgba(): Uint8ClampedArray | null { return this.arte; }
 
   /** Colore del materiale che c'era (nella maschera iniziale) attorno a (x, y): serve alle zolle del cratere. */
   coloreOriginale(x: number, y: number, raggio: number): number {
@@ -113,6 +144,7 @@ export class TerrenoRender {
   }
 
   distruggi(): void {
+    if (this.spento) return;
     for (const t of this.tiles) t.texture.destroy(true);
     this.radice.destroy({ children: true });
     this.tiles = [];

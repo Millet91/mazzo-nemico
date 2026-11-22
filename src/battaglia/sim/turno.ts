@@ -1,4 +1,7 @@
-// Ciclo del turno: inquadra → azione → volo → fuga → risoluzione (→ fine).
+// Ciclo del turno (studio v2, Fase 1): inquadra → azione → fuga → volo → risoluzione (→ fine).
+// La fuga parte allo sparo: ci si muove mentre il colpo vola. Dura BIL.ritmo.fugaTick e si chiude prima col comando
+// `fatto` o se il pirata resta fermo per BIL.ritmo.fermoFugaTick. Il volo c'è solo se alla fine della fuga qualcosa
+// vola ancora. Timer per sparo: scorre solo in 'azione'.
 // Timer che parte al primo comando o dopo 2 s, rotazione dei pirati vivi, vento nuovo a ogni turno, mare che
 // sale dal turno 12, fine a tempo al turno 18 (parità al difensore), eliminazione, ritirata dell'attaccante,
 // lapide-barilotto a fine risoluzione, risoluzione forzata dopo 10 s (caso 8).
@@ -8,10 +11,13 @@ import { intero } from '../../core/rng';
 import { daGradi } from '../../core/trig';
 import { ARMA } from '../../contenuti/armi';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
-import { aggiornaPirata, annega, fermo, inAcqua, inGioco } from './pirata';
-import { esplodi } from './esplosione';
+import { annega, fermo, inAcqua, inGioco } from './pirata';
+import { aggiornaPirata, balzo } from './movimento';
+import { esplodi, tiroVicino } from './esplosione';
+import { regoleScontro } from './scontro';
 import { bersagliDi, colpoIstantaneo, durataColpi, fisicaDi, spara, tickColpo } from './armi';
 import { muoviProiettile } from './proiettili';
+import { aggiornaPezzi, frantumaTutti, pezziInCaduta } from './pezzi';
 import { MICCIA_LAPIDE_TICK, VITA_MAX_PROIETTILE } from './costanti';
 import { apriCassa, attivo as proiettileAttivo, bersagliOggetti, centroOggetto, eOggetto, forseCassa, scendiCassa } from './oggetti';
 
@@ -55,7 +61,7 @@ export function iniziaTurno(s: StatoBattaglia, eventi: EventoBattaglia[]): void 
   if (scelto < 0) scelto = 0;
   sq.ultimoPirata = scelto;
   const p = membri[scelto];
-  for (const q of s.pirati) q.dannoNelTurno = 0;
+  for (const q of s.pirati) { q.dannoNelTurno = 0; if (q.macerieNelTurno) q.macerieNelTurno = 0; }
   t.pirata = p.id;
   t.sparato = false;
   t.timerAvviato = false;
@@ -103,6 +109,7 @@ export function concludi(s: StatoBattaglia, vincitore: 0 | 1, motivo: MotivoFine
 /** Porta la battaglia in fase 'fine' (anche dopo una ritirata decisa da eseguiComando). */
 function chiudiBattaglia(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
   s.proiettili = s.proiettili.filter((p) => !proiettileAttivo(p));
+  frantumaTutti(s, eventi);
   s.turno.camminata = 0;
   cambiaFase(s, 'fine', eventi);
   eventi.push({ t: 'fine', esito: s.esito! });
@@ -161,8 +168,8 @@ function ciurmaDi(s: StatoBattaglia, pr: Proiettile) {
   return p ? s.squadre[p.squadra].ciurma : null;
 }
 
-/** Fa scoppiare un proiettile (arma, lapide, barile o cassa). */
-function scoppia(s: StatoBattaglia, pr: Proiettile, x: number, y: number, eventi: EventoBattaglia[]): void {
+/** Fa scoppiare un proiettile (arma, lapide, barile o cassa). `suTerreno` = è scoppiato urtando il terreno. */
+function scoppia(s: StatoBattaglia, pr: Proiettile, x: number, y: number, eventi: EventoBattaglia[], suTerreno = false): void {
   if (pr.tipo === 'cassa') {
     const c = centroOggetto(pr);
     esplodi(s, c.x, c.y, 'cassa', null, eventi, BIL.casse.esplosione);
@@ -170,7 +177,10 @@ function scoppia(s: StatoBattaglia, pr: Proiettile, x: number, y: number, eventi
     const c = centroOggetto(pr);
     esplodi(s, c.x, c.y, 'barile', null, eventi);
   } else {
-    esplodi(s, x, y, pr.arma, ciurmaDi(s, pr), eventi);
+    // tiro vicino: chi spara contro il pendio accanto non si fa male, se il colpo non raggiunge nessun altro
+    const chi = suTerreno && pr.lanciatore >= 0 ? s.pirati.find((q) => q.id === pr.lanciatore && q.stato === 'vivo') : undefined;
+    const risparmia = chi && tiroVicino(pr.arma, chi.x, chi.y, x, y) ? chi.id : -1;
+    esplodi(s, x, y, pr.arma, ciurmaDi(s, pr), eventi, undefined, risparmia);
   }
   dopoEsplosione(s);
 }
@@ -196,7 +206,7 @@ function aggiornaProiettili(s: StatoBattaglia, eventi: EventoBattaglia[]): void 
       if (urto) {
         if (urto.tipo === 'mare') { eventi.push({ t: 'splash', x: urto.x, y: urto.y, grande: false }); tolti.add(pr.id); continue; }
         if (urto.tipo === 'rimbalzo') eventi.push({ t: 'rimbalzo', proiettile: pr.id, x: urto.x, y: urto.y });
-        else { tolti.add(pr.id); scoppia(s, pr, urto.x, urto.y, eventi); continue; }
+        else { tolti.add(pr.id); scoppia(s, pr, urto.x, urto.y, eventi, urto.tipo === 'terreno'); continue; }
       }
     }
     if (pr.tickEsplosione >= 0 && s.tick >= pr.tickEsplosione) { tolti.add(pr.id); scoppia(s, pr, pr.x, pr.y, eventi); continue; }
@@ -225,28 +235,32 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
   }
   s.tick++;
   const attivo = pirataDelTurno(s);
-  const sa = BIL.pirata.saltoAvanti, si = BIL.pirata.saltoIndietro;
-  if (attivo && !attivo.aTerra && attivo.y === attivo.yInizioCaduta && (attivo.vy === sa.vy || attivo.vy === si.vy)
-    && (attivo.vx === sa.vx * attivo.verso || attivo.vx === si.vx * attivo.verso)) {
-    eventi.push({ t: 'salto', pirata: attivo.id }); // salto appena chiesto da eseguiComando
+  // richiesta lasciata da eseguiComando (Balzo o "fatto"): si applica adesso e si cancella
+  const richiesta = t.richiesta;
+  t.richiesta = undefined;
+  if ((richiesta === 'balzo' || richiesta === 'balzoMuro') && attivo && inGioco(attivo) && (t.fase === 'azione' || t.fase === 'fuga')) {
+    balzo(s, attivo, richiesta === 'balzoMuro', eventi); // prima dello sparo, se sono arrivati insieme
   }
   if (t.fase === 'azione' && t.sparato && attivo && inGioco(attivo)) {
-    // fuoco chiesto da eseguiComando: il colpo parte adesso
+    // fuoco chiesto da eseguiComando: il colpo parte adesso, e con lui la fuga
     const mun = s.squadre[t.squadra].munizioni;
     const m = mun[t.arma] ?? 0;
     if (m > 0) mun[t.arma] = m - 1;
     eventi.push({ t: 'sparo', pirata: attivo.id, arma: t.arma });
-    cambiaFase(s, 'volo', eventi);
+    cambiaFase(s, 'fuga', eventi);
     t.inizioFase = s.tick;
     spara(s, attivo, eventi);
   }
-  const puoMuoversi = (t.fase === 'azione' || t.fase === 'fuga') && attivo !== undefined && inGioco(attivo);
+  // in fuga ci si muove solo quando l'arma ha finito di sparare (la pistola spara due colpi da fermo)
+  const puoMuoversi = attivo !== undefined && inGioco(attivo)
+    && (t.fase === 'azione' || (t.fase === 'fuga' && s.tick - t.inizioFase >= durataColpi(t.arma)));
 
   for (const p of s.pirati) {
     const mio = p === attivo && puoMuoversi;
     aggiornaPirata(s, p, mio ? t.camminata : 0, eventi, mio ? t.arrampicata : 0);
   }
   aggiornaProiettili(s, eventi);
+  aggiornaPezzi(s, eventi);
 
   const inFase = s.tick - t.inizioFase;
   const attivoInGioco = attivo !== undefined && inGioco(attivo);
@@ -261,25 +275,40 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
       if (t.timerAvviato && t.tickRimasti === s.config.timerSecondi * TICK_AL_SECONDO) eventi.push({ t: 'timerAvviato' });
       if (t.timerAvviato && --t.tickRimasti <= 0) { t.tickRimasti = 0; cambiaFase(s, 'risoluzione', eventi); }
       break;
-    case 'volo': {
-      // colpi successivi delle armi a più colpi (pistola)
+    case 'fuga': {
+      // colpi successivi delle armi a più colpi (pistola): partono da dove il pirata ha sparato il primo
       const a = ARMA[t.arma];
       if (a.tipo === 'istantanea' && attivoInGioco) {
         for (let k = 1; k < (a.colpi ?? 1); k++) if (inFase === tickColpo(t.arma, k)) colpoIstantaneo(s, attivo!, eventi);
       }
-      if (!s.proiettili.some(proiettileAttivo) && inFase >= durataColpi(t.arma)) cambiaFase(s, attivoInGioco ? 'fuga' : 'risoluzione', eventi);
+      if (inFase < durataColpi(t.arma)) {
+        if (richiesta === 'fatto') t.richiesta = 'fatto'; // la pistola spara ancora: il "fatto" vale appena ha finito
+        break;
+      }
+      let chiudi = !attivoInGioco || inFase >= BIL.ritmo.fugaTick;
+      if (!chiudi && richiesta === 'fatto') { eventi.push({ t: 'fatto', pirata: attivo!.id }); chiudi = true; }
+      if (!chiudi) {
+        // pirata fermo senza comandi: dopo fermoFugaTick il turno passa da solo
+        if (t.camminata === 0 && t.arrampicata === 0 && fermo(attivo!)) {
+          if (t.fermoDa < 0) t.fermoDa = s.tick;
+          if (s.tick - t.fermoDa >= BIL.ritmo.fermoFugaTick) chiudi = true;
+        } else t.fermoDa = -1;
+      }
+      if (chiudi) cambiaFase(s, s.proiettili.some(proiettileAttivo) || pezziInCaduta(s) ? 'volo' : 'risoluzione', eventi);
       break;
     }
-    case 'fuga':
-      if (!attivoInGioco || inFase >= BIL.turno.fugaTick) cambiaFase(s, 'risoluzione', eventi);
+    case 'volo':
+      // il colpo vola ancora dopo la fuga: si aspetta, il pirata non si muove più
+      if (!s.proiettili.some(proiettileAttivo) && !pezziInCaduta(s)) cambiaFase(s, 'risoluzione', eventi);
       break;
     case 'risoluzione': {
       // passa appena tutto è fermo da BIL.turno.risoluzioneFermoTick (m1-ritmo §3)
-      let tuttoFermo = !s.proiettili.some(proiettileAttivo) && s.pirati.every(fermo);
+      let tuttoFermo = !s.proiettili.some(proiettileAttivo) && !pezziInCaduta(s) && s.pirati.every(fermo);
       if (!tuttoFermo && inFase >= BIL.turno.risoluzioneMaxTick) {
         // caso 8: chi vibra si ferma d'ufficio, i proiettili in volo spariscono (barili e casse restano)
         for (const p of s.pirati) if (p.stato === 'vivo') { p.vx = 0; p.vy = 0; p.aTerra = p.appeso < 0; p.yInizioCaduta = p.y; }
         s.proiettili = s.proiettili.filter((p) => !proiettileAttivo(p));
+        frantumaTutti(s, eventi);
         tuttoFermo = true;
         t.fermoDa = s.tick - BIL.turno.risoluzioneFermoTick;
       }
@@ -293,6 +322,8 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
     default:
       break;
   }
+  // regole del tipo di scontro (P2: Bandiera), a battaglia non finita
+  if (!s.esito) regoleScontro(s, eventi, (vincitore, motivo) => concludi(s, vincitore, motivo, eventi));
 }
 
 /** Ritirata (resa) dell'attaccante, dal turno 4: vince il difensore. */

@@ -1,0 +1,42 @@
+// bot: partita intera contro l'IA. uso: node gioca.cjs <w> <seed> [mappa: cala|casuale] [tag]
+const {avvia,S}=require('./lib.cjs');
+const w=+process.argv[2]||800, h=w==800?360:486, seed=+process.argv[3]||1, mappa=process.argv[4]||'cala', tag=process.argv[5]||`g${w}-${seed}`;
+let r=seed; const rnd=()=>{r=(r*1664525+1013904223)>>>0; return r/4294967296;};
+(async()=>{
+  const g=await avvia(w,h); const p=g.p;
+  await p.goto('http://localhost:4173/?prova'); await p.waitForTimeout(1500);
+  await p.locator('#schermaglia').click(); await p.waitForTimeout(300);
+  if(mappa==='casuale') await p.locator('#mappa-casuale').click();
+  await p.locator('#salpa').click();
+  const T0=Date.now(); const log=[];
+  const stamp=()=>((Date.now()-T0)/1000).toFixed(1);
+  let ultimoTurno=0, snap=0, giri=0;
+  while(Date.now()-T0<600000){
+    const v=await g.vista().catch(()=>null);
+    if(!v){ if(log.length && (await p.locator('text=/Vittoria|Sconfitta|Pareggio/i').count())>0) break; await p.waitForTimeout(500); if(Date.now()-T0>40000&&!log.length){console.log('mai partita');break;} continue;}
+    if(v.esito){ await p.waitForTimeout(1500); await p.screenshot({path:S+`${tag}-fine.png`}); log.push({t:stamp(),fine:v.esito, turno:v.numeroTurno, pv:v.squadre.map(s=>s.pvTotali), vivi:v.squadre.map(s=>s.vivi)}); break;}
+    if(v.fase==='azione' && v.tocca==='umano' && v.numeroTurno!==ultimoTurno){
+      ultimoTurno=v.numeroTurno; giri++;
+      const cur=await g.vista();
+      const e={t:stamp(),turno:v.numeroTurno,pvPre:v.squadre.map(s=>s.pvTotali),viviPre:v.squadre.map(s=>s.vivi),arma:v.arma,vento:v.vento,fps:await p.evaluate(()=>window.__kaboom.bus.fps.value)};
+      // cammina un po' (random) verso destra o sinistra
+      const dir=rnd()<0.7?'tasto-destra':'tasto-sinistra'; const ms=Math.floor(rnd()*1500);
+      const c=await g.box(dir); if(c&&ms>200){await g.tocca('touchStart',[{...c,id:7}],ms); await g.tocca('touchEnd',[],200);}
+      const ang=dir==='tasto-destra'?20+rnd()*60:100+rnd()*60, pot=40+rnd()*60;
+      if(v.numeroTurno<=3 && snap<3){await p.screenshot({path:S+`${tag}-t${v.numeroTurno}-a.png`});}
+      await g.mira(ang,pot); e.mira=[Math.round(ang),Math.round(pot)];
+      if(v.numeroTurno<=3 && snap<3){await p.screenshot({path:S+`${tag}-t${v.numeroTurno}-b-mira.png`});}
+      const f=await g.box('tasto-fuoco'); await g.tocca('touchStart',[{...f,id:9}],80); await g.tocca('touchEnd',[],0);
+      if(v.numeroTurno<=3 && snap<3){ for(let k=0;k<3;k++){await p.waitForTimeout(450); await p.screenshot({path:S+`${tag}-t${v.numeroTurno}-c${k}.png`});} snap++; }
+      log.push(e);
+    } else if(v.tocca==='ia' && !log.find(x=>x.ia===v.numeroTurno)){
+      log.push({ia:v.numeroTurno,t:stamp()});
+      if(snap<2) { await p.waitForTimeout(1500); await p.screenshot({path:S+`${tag}-ia${v.numeroTurno}.png`}); }
+    }
+    await p.waitForTimeout(250);
+  }
+  const fin=await g.vista().catch(()=>null);
+  console.log(JSON.stringify({tag,durataS:stamp(),errs:g.errs.slice(0,5),fin:fin&&{esito:fin.esito,turno:fin.numeroTurno,pv:fin.squadre.map(s=>s.pvTotali),vivi:fin.squadre.map(s=>s.vivi)}}));
+  console.log(JSON.stringify(log));
+  await g.b.close();
+})();

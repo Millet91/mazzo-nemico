@@ -6,9 +6,10 @@ import { signal } from '@preact/signals';
 import type { MappaGenerata, Replay } from '../core/tipi';
 import { T } from '../testi/it';
 import { tocco } from '../piattaforma/haptics';
+import { RigaDiagnosticaAudio } from '../audio/RigaDiagnostica';
 
 type ModuloReplay = { rigiocaReplay?: (r: Replay, m: MappaGenerata) => unknown };
-type ModuloFps = { provaFps?: () => Promise<Record<string, number>>; provaSuperata?: (r: never) => boolean };
+type ModuloFps = { provaFps?: () => Promise<Record<string, number> & { disegno?: Record<'zoomNormale' | 'zoomMinimo', { p95: number }> }>; provaSuperata?: (r: never) => boolean };
 
 const REPLAY = import.meta.glob<Replay>('../../tests/replay/*.json', { import: 'default' });
 const MODULI_REPLAY = import.meta.glob<ModuloReplay>('../battaglia/sim/replay.ts');
@@ -48,8 +49,7 @@ async function rigiocaTutti() {
   righe.value = nomi.map((n) => ({ nome: n.split('/').pop()!.replace(/\.json$/, ''), ok: null }));
   try {
     const { rigiocaReplay } = await modulo();
-    const { generaMappa } = await import('../battaglia/gen');
-    const { mappaFatta } = await import('../battaglia/mappe');
+    const { mappaDiConfig } = await import('../battaglia/mappa-config');
     if (!rigiocaReplay) { statoReplay.value = T.diagnostica.nonPronto; return; }
     let ok = 0;
     for (let i = 0; i < nomi.length; i++) {
@@ -58,9 +58,8 @@ async function rigiocaTutti() {
       try {
         const r = await REPLAY[nomi[i]]();
         const c = r.config;
-        // come partita.ts: un replay su una mappa fatta a mano (mappaFissa) non si rigenera col generatore
-        const mappa = (c.mappaFissa ? mappaFatta(c.mappaFissa, c) : null)
-          ?? generaMappa({ seme: c.seme, bioma: c.bioma, variante: c.variante, piratiPerLato: [c.squadre[0].pirati, c.squadre[1].pirati] });
+        // la stessa mappa di partita.ts (mappa fatta a mano, seme della mappa o seme della battaglia)
+        const mappa = mappaDiConfig(c);
         uguale = replayUguale(r, rigiocaReplay(r, mappa));
       } catch (e) { console.error(e); }
       if (uguale) ok++;
@@ -91,7 +90,8 @@ async function provaFps() {
     const voto = superata ? (superata(r as never) ? '✅ ' : '❌ ') : '';
     statoFps.value = voto + T.diagnostica.provaRisultato(
       Math.round(n('medio', 'fpsMedio')), Math.round(n('minimo', 'fpsMinimo')),
-      n('frameLenti', 'lenti', 'frameOltre20ms'), n('msSimPerTick', 'msSim', 'simMs'));
+      n('frameLenti', 'lenti', 'frameOltre20ms'), n('msSimPerTick', 'msSim', 'simMs'))
+      + (r.disegno ? `\n${T.diagnostica.provaDisegno(n('msDisegnoMedio'), r.disegno.zoomNormale.p95, r.disegno.zoomMinimo.p95, n('risoluzione'))}` : '');
   } catch (e) {
     console.error(e);
     statoFps.value = T.diagnostica.errore;
@@ -116,6 +116,7 @@ export function Diagnostica() {
         <p class="nota">{T.diagnostica.provaNota}</p>
         {statoFps.value && <p class="stato" data-testid="stato-fps" role="status">{statoFps.value}</p>}
       </section>
+      <RigaDiagnosticaAudio />
     </div>
   );
 }

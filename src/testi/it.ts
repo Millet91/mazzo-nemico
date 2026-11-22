@@ -29,7 +29,10 @@ export const it = {
     comandiClassiciNota: 'Tasti grandi ◀ ▶ SALTA FUOCO, e ▲ ▼ per la mira fine. Il mirino da trascinare resta.',
     zoomMira: 'Zoom automatico durante la mira',
     zoomMiraNota: 'Mentre miri la visuale si allarga da sola per mostrare dove cade il colpo.',
-    volume: 'Volume',
+    volumeMusica: 'Musica',
+    volumeMusicaNota: 'Nel menu e in battaglia.',
+    volumeEffetti: 'Effetti e voci',
+    volumeEffettiNota: 'Colpi, passi, voci e tasti.',
     volumeValore: (p: number) => (p === 0 ? 'Muto' : `${p}%`),
   },
   schermaglia: {
@@ -42,6 +45,7 @@ export const it = {
     mappa: 'Mappa',
     mappaCasuale: 'Isola a caso',
     mappaCala: 'Cala Pappagallo',
+    mappaCalaNuova: 'Cala nuova (bozza)',
     indietro: 'Indietro',
   },
   diagnostica: {
@@ -56,6 +60,19 @@ export const it = {
     provaInCorso: 'Prova in corso: 60 secondi…',
     provaRisultato: (medio: number, minimo: number, lenti: number, msSim: number) =>
       `${medio} fps medi · minimo ${minimo} · ${lenti} frame lenti · sim ${msSim.toFixed(2)} ms per tick`,
+    /** tempo di disegno per frame (budget 8 ms): medio e p95 a zoom normale e da lontano */
+    provaDisegno: (medio: number, p95Normale: number, p95Lontano: number, risoluzione: number) =>
+      `disegno ${medio.toFixed(1)} ms medi · p95 ${p95Normale.toFixed(1)} ms a zoom normale · ${p95Lontano.toFixed(1)} ms da lontano`
+      + (risoluzione ? ` · risoluzione ${String(risoluzione).replace('.', ',')}` : ''),
+    audio: 'Audio',
+    audioNota: 'Suoni pronti, motore audio e da dove vengono i suoni (calcolati ora o tenuti sul telefono).',
+    /** es. "Audio: 73 su 73 suoni pronti in 5,6 s (calcolati) · motore acceso" */
+    audioStato: (pronti: number, totale: number, secondi: number | null, dalTelefono: boolean, contesto: string) => {
+      const motore = contesto === 'running' ? 'motore acceso' : contesto === 'suspended' ? 'motore in pausa'
+        : contesto === 'assente' ? 'il motore si accende al primo tocco' : `motore ${contesto}`;
+      const quando = secondi === null ? '' : ` in ${secondi.toFixed(1).replace('.', ',')} s (${dalTelefono ? 'tenuti sul telefono' : 'calcolati'})`;
+      return `${pronti} su ${totale} suoni pronti${quando} · ${motore}`;
+    },
     nonPronto: 'Non ancora disponibile in questa build.',
     errore: 'Qualcosa è andato storto. Riprova.',
   },
@@ -66,15 +83,28 @@ export const it = {
     destra: 'Cammina a destra',
     salta: 'SALTA',
     saltaAiuto: 'Salta (doppio tocco: salto all\'indietro)',
-    saltaAiutoV3: 'Salta. Tieni premuto per il salto alto all\'indietro',
+    /** tasto Balzo (comandi v3): il nome cambia con quello che farebbe adesso */
+    balzo: {
+      salto: 'Salta',
+      scavalca: 'Scavalca il muretto',
+      afferra: 'Aggrappati alla scala o alla liana',
+      stacca: 'Salta giù dalla scala o dalla liana',
+      muro: 'Salta via dal muro',
+    },
+    fatto: 'FATTO',
+    fattoAiuto: 'Fatto: passa subito il turno',
     sali: 'Sali sulla scala o sulla liana',
     scendi: 'Scendi dalla scala o dalla liana',
-    suggerimentoMirino: 'Trascina il mirino oro: più lontano, più forte',
+    /** due righe corte, in alto a sinistra */
+    suggerimentoMirino: ['Trascina il mirino oro', 'Più lontano, più forte'] as const,
     su: 'Alza la mira',
     giu: 'Abbassa la mira',
     arma: 'ARMA',
     armaAiuto: 'Scegli l\'arma',
     fuoco: 'FUOCO',
+    avvisoTiro: { danno: '⚠ Ti fai male!', vicino: '⚠ Troppo vicino' },
+    armiBloccate: (n: number) => `+${n} 🔒`,
+    armiBloccateAiuto: (n: number) => `Altre ${n} armi da sbloccare`,
     miccia: (s: number) => `${s} s`,
     micciaAiuto: 'Durata della miccia',
     mira: (gradi: number, potenza: number) => `${gradi}° · ${potenza}%`,
@@ -93,7 +123,6 @@ export const it = {
     veloce: 'Turno dell\'IA più veloce',
     velocita: (f: number) => `×${f}`,
     griglia: 'Armi',
-    bloccata: 'Non disponibile',
     infinite: '∞',
   },
   pausa: {

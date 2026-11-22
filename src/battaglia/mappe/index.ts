@@ -1,16 +1,21 @@
 // Mappe fatte a mano (06 §6): caricatore PURO e deterministico (lo usano sim, worker dell'IA e test).
 // Proprietario: agente Arte/livelli (ramo claude/m1-mappa-arte). I dati li scrive scripts/mappe/costruisci.ts.
-import type { MappaGenerata, RichiestaMappa } from '../../core/tipi';
+import type { MappaGenerata, Rettangolo, RichiestaMappa } from '../../core/tipi';
 import { decodificaMaschera } from './rle';
 import type { DatiMappaFatta } from './tipi';
 import { DATI as CALA_PAPPAGALLO } from './cala-pappagallo.dati';
 import { DATI as CALA_PAPPAGALLO_PROLOGO } from './cala-pappagallo-prologo.dati';
+import { DATI as CALA_V3 } from './cala-pappagallo-v3.dati';
+import { DATI as CALA_V3_PROLOGO } from './cala-pappagallo-v3-prologo.dati';
 
 export type { DatiMappaFatta };
 
 export const MAPPE_FATTE: Record<string, DatiMappaFatta> = {
   [CALA_PAPPAGALLO.id]: CALA_PAPPAGALLO,
   [CALA_PAPPAGALLO_PROLOGO.id]: CALA_PAPPAGALLO_PROLOGO,
+  // Cala v3 (studio v2, Pacchetto 1): pronta per la Fase 2, non ancora nel menu
+  [CALA_V3.id]: CALA_V3,
+  [CALA_V3_PROLOGO.id]: CALA_V3_PROLOGO,
 };
 
 /** La maschera decodificata si tiene in cache: ogni battaglia ne riceve una copia (i crateri la scavano). */
@@ -34,5 +39,7 @@ export function mappaFatta(id: string, r?: Pick<RichiestaMappa, 'bioma' | 'varia
     barili: d.barili.map((p) => ({ ...p })),
     ...(d.appigli ? { appigli: d.appigli.map((a) => ({ ...a })) } : {}),
     arte: d.arte,
+    ...(d.sostegni ? { sostegni: d.sostegni.map((r) => ({ ...r })) } : {}),
+    ...(d.strutture ? { strutture: d.strutture.map((st) => ({ ...st, ...(st.ancoraggi ? { ancoraggi: [{ ...st.ancoraggi[0] }, { ...st.ancoraggi[1] }] as [Rettangolo, Rettangolo] } : {}) })) } : {}),
   };
 }

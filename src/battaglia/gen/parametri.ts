@@ -35,6 +35,9 @@ export const REGOLE = {
   sciabolaVieta: false,
   /** percorso a piedi in un turno (06 §7.2) */
   camminataTurno: 1200,
+  /** raggio del cannone per il campionatore "da ogni spawn si colpisce un nemico" (06 §7.5); la spinta che non
+   *  deve buttare in mare uno spawn è quella vera della battaglia (`spintaAlCentro`, vedi spawn.ts) */
+  cannoneRaggio: 70,
   /** riempimento: solido tra fineCielo e mare (06 §0: 35-50%; Lead design 21/11/2026 per l'Isola: minimo 20%,
    *  perché con la costa aperta e 5 spawn in piano il 30% chiede montagne fino al cielo).
    *  In M1 tutti i biomi usano il terreno dell'Isola: quando arrivano gli altri biomi questi limiti vanno per bioma. */
@@ -57,6 +60,8 @@ export const REGOLE = {
   appiglioLontanoDaSpawn: 40,
   appiglioPiano: 24,
   appiglioCima: 8,
+  /** mappe fatte a mano: il piano in cima può cominciare fino a tanto dall'asse (asse ad almeno 10 px dal muro, capsula larga 12) */
+  appiglioPianoEntro: 14,
 } as const;
 
 /** Parametri del bioma Isola tropicale (06 §2, 00 §2.2). */

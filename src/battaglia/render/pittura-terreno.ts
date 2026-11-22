@@ -32,7 +32,7 @@ const BRUCIATO_RGB = rgb(PALETTE.bordoBruciato);
 const PROFONDA_RGB = rgb(PALETTE.terraProfonda);
 
 /** grana del pixel: −6..+6 su ogni canale, sempre uguale per lo stesso punto */
-function grana(x: number, y: number): number {
+export function grana(x: number, y: number): number {
   let h = Math.imul(x, 73856093) ^ Math.imul(y >> 1, 19349663) ^ Math.imul(x >> 3, 83492791);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h >>> 24) % 13) - 6;
@@ -210,6 +210,12 @@ export function dipingiRettangolo(
 export function rettangoloCratere(x: number, y: number, raggio: number): [number, number, number, number] {
   const m = raggio + BRUCIATO + ERBA + 2;
   return [Math.floor(x - m), Math.floor(y - m), Math.ceil(x + m), Math.ceil(y + m)];
+}
+
+/** Rettangolo da ridipingere dopo un cambio della maschera senza scoppio (Fase 3: pezzo staccato, legno, sabbia). */
+export function rettangoloMaschera(x0: number, y0: number, x1: number, y1: number): [number, number, number, number] {
+  const m = BRUCIATO + ERBA + 2;
+  return [x0 - m, y0 - m, x1 + 1 + m, y1 + 1 + m];
 }
 
 /** Indici delle tile toccate da un rettangolo, in una griglia colonne × righe di lato LATO_TILE. */

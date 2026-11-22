@@ -3,7 +3,35 @@ import type { VistaBattaglia, VistaSquadra } from '../../core/bus';
 import type { StatoBattaglia } from '../../core/tipi';
 import { inGradi } from '../../core/trig';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
-import { appiglioVicino } from '../sim/appigli';
+import { appiglioSotto, appiglioVicino } from '../sim/appigli';
+import { avvisoTiro, balzoPossibile } from '../sim';
+
+// L'avviso sul tiro costa una simulazione del colpo: si ricalcola solo quando cambia qualcosa che lo decide.
+let chiaveAvviso = '';
+let ultimoAvviso: 'vicino' | 'danno' | null = null;
+function avviso(s: StatoBattaglia): 'vicino' | 'danno' | undefined {
+  const t = s.turno;
+  const p = s.pirati.find((x) => x.id === t.pirata);
+  if (!p || s.esito || t.fase !== 'azione' || s.squadre[t.squadra].controllo !== 'umano') return undefined;
+  // mentre si mira il terreno e gli altri pirati non cambiano: bastano il turno, la mira e dove sta chi tira
+  const chiave = `${s.config.seme}|${t.numero}|${t.arma}|${t.mira.mezziGradi}|${t.mira.potenza}|${t.miccia}|${s.vento}|${Math.floor(p.x)}|${Math.floor(p.y)}|${p.aTerra}`;
+  if (chiave !== chiaveAvviso) {
+    chiaveAvviso = chiave;
+    ultimoAvviso = avvisoTiro(s);
+  }
+  return ultimoAvviso ?? undefined;
+}
+
+/**
+ * Fase 1: icona del tasto Balzo e tasto "fatto". Solo nel turno del giocatore (all'IA non servono tasti).
+ * `balzo` è undefined quando il Balzo non farebbe niente (a metà scavalco, sbalzato in volo): il tasto mostra il salto.
+ */
+function balzoEFatto(s: StatoBattaglia): Pick<VistaBattaglia, 'balzo' | 'puoFinire'> {
+  const t = s.turno;
+  // chiavi sempre presenti: visteUguali confronta le chiavi della vista nuova
+  if (s.esito || s.squadre[t.squadra].controllo !== 'umano') return { balzo: undefined, puoFinire: false };
+  return { balzo: balzoPossibile(s), puoFinire: t.fase === 'fuga' };
+}
 
 export function creaVista(s: StatoBattaglia, iaPensa: boolean): VistaBattaglia {
   const t = s.turno;
@@ -12,7 +40,8 @@ export function creaVista(s: StatoBattaglia, iaPensa: boolean): VistaBattaglia {
   const attivo = s.pirati.find((p) => p.id === t.pirata);
   const arrampicata = !attivo || attivo.stato !== 'vivo' ? 'libero'
     : attivo.appeso >= 0 ? 'appeso'
-    : appiglioVicino(s, attivo.x, attivo.y) ? 'vicino' : 'libero';
+    // vicino = può aggrapparsi: lungo l'appiglio, oppure dal piano in cima ("scendi" lo porta sull'asse)
+    : appiglioVicino(s, attivo.x, attivo.y) || appiglioSotto(s, attivo) ? 'vicino' : 'libero';
   const squadra = (i: 0 | 1): VistaSquadra => {
     const pirati = s.pirati.filter((p) => p.squadra === i);
     const vivi = pirati.filter((p) => p.stato === 'vivo');
@@ -45,6 +74,8 @@ export function creaVista(s: StatoBattaglia, iaPensa: boolean): VistaBattaglia {
     iaPensa,
     puoArrendersi: umano >= 0 && s.squadre[umano].ruolo === 'attaccante' && t.numero >= BIL.battaglia.ritirataDalTurno && !s.esito,
     arrampicata,
+    avvisoTiro: avviso(s),
+    ...balzoEFatto(s),
     esito: s.esito,
   };
 }

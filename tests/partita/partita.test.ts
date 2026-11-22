@@ -170,6 +170,22 @@ describe('VistaBattaglia', () => {
     p.s.turno.numero = BIL.battaglia.ritirataDalTurno;
     expect(creaVista(p.s, false).puoArrendersi).toBe(true);
   });
+
+  it('Fase 1: Balzo e FATTO solo nel turno del giocatore; FATTO solo in fuga', () => {
+    const p = new Partita(config(), { ia: iaFinta() });
+    p.s.turno.fase = 'azione';
+    const v = creaVista(p.s, false);
+    expect(v.balzo).toBeDefined();
+    expect(v.puoFinire).toBe(false);
+    p.s.turno.fase = 'fuga';
+    p.s.turno.inizioFase = p.s.tick - 600; // la pistola avrebbe già finito
+    expect(creaVista(p.s, false).puoFinire).toBe(true);
+    // cambiando chiave la vista cambia (le chiavi ci sono sempre, anche vuote)
+    expect(visteUguali(v, creaVista(p.s, false))).toBe(false);
+    const ia = new Partita(config('ia', 'ia'), { ia: iaFinta() });
+    ia.s.turno.fase = 'fuga';
+    expect(creaVista(ia.s, false)).toMatchObject({ balzo: undefined, puoFinire: false });
+  });
 });
 
 describe('Partita · con la sim, le mappe e l\'IA vere', () => {

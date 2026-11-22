@@ -1,11 +1,11 @@
 // Controlla gli appigli della forma sulla maschera: cima alla quota del piano entro 14 px, fondo sul suolo.
 //   npx tsx scripts/mappe/appigli.ts
 import { MATERIALE } from '../../src/core/tipi';
-import { costruisciMaschera, W, APPIGLI } from './cala-pappagallo-forma';
+import { costruisciMaschera, W, appigliDi } from './cala-pappagallo-forma';
 
 const { m } = costruisciMaschera();
 const pieno = (x: number, y: number) => m[y * W + x] !== MATERIALE.aria;
-for (const a of APPIGLI) {
+for (const a of appigliDi(m)) {
   // piano in cima: colonna più vicina all'asse con suolo esattamente a yAlto (pieno sotto, aria sopra)
   let bordo = -1;
   for (let d = 0; d <= 14 && bordo < 0; d++) for (const x of [a.x - d, a.x + d]) if (pieno(x, a.yAlto) && !pieno(x, a.yAlto - 1)) { bordo = d; break; }

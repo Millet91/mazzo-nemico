@@ -111,7 +111,7 @@ export function validaMappa(mappa: MappaGenerata): string[] {
     const aSinistra = ap.filter((a) => a.x < W / 2).length;
     if (aSinistra * 2 !== ap.length) err.push(`scale/liane non uguali per lato: ${aSinistra} a sinistra, ${ap.length - aSinistra} a destra`);
     for (const a of ap) {
-      err.push(...controllaAppiglio(t.maschera, t.mare, a));
+      err.push(...controllaAppiglio(t.maschera, t.mare, a, REGOLE.appiglioPianoEntro));
       for (const p of [...mappa.spawn[0], ...mappa.spawn[1]]) {
         if (distanzaAppiglio(a, p) < R.appiglioLontanoDaSpawn) err.push(`${a.tipo} in x ${a.x} a meno di ${R.appiglioLontanoDaSpawn} px dallo spawn (${p.x}, ${p.y})`);
       }

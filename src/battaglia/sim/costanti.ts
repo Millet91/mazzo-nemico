@@ -33,3 +33,30 @@ export const CASSA_DERIVA_PER_PUNTO = 5 / 60;
 
 /** quota da cui parte la cassa (sopra il bordo alto della mappa) */
 export const CASSA_PARTENZA_Y = -20;
+
+/** chi è stato sbalzato da un colpo resta con la mossa 'aTerra' per questi tick dopo che si è fermato (0,5 s) */
+export const A_TERRA_TICK = 30;
+
+/** la pendenza del suolo si misura sul dislivello a questi px davanti al pirata */
+export const SONDA_PENDENZA_PX = 8;
+
+/** Balzo con la rincorsa: al salto si aggiunge questa parte della velocità di corsa (da fermo 69 px, di corsa circa 105) */
+export const RINCORSA = 0.5;
+
+/** salti dal muro concessi da quando si lascia terra (`Pirata.saltiMuro`) */
+export const SALTI_MURO_MAX = 1;
+
+/** in aria una parete conta come "accanto" entro questi px (per il salto dal muro) */
+export const MURO_ACCANTO_PX = 2;
+
+/** la scivolata misura il pendio su questi px davanti al pirata (due metà, tutte e due in discesa) */
+export const SONDA_SCIVOLATA_PX = 16;
+
+/** una scivolata già partita continua finché il pendio resta oltre questi gradi (sotto i 25° della partenza: niente tremolio) */
+export const SCIVOLATA_FINE_GRADI = 15;
+
+/** salvataggio al bordo: il ciglio si cerca fino a questi px di lato dal pirata che cade */
+export const BORDO_CERCA_PX = 64;
+
+/** salvataggio al bordo: resta appeso al ciglio per questi tick (0,2 s), poi si issa da solo */
+export const BORDO_APPESO_TICK = 12;

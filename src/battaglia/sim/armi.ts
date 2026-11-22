@@ -59,7 +59,7 @@ export function spara(s: StatoBattaglia, p: Pirata, eventi: EventoBattaglia[]): 
     case 'lancio': {
       const b = bocca(s.terreno, p.x, p.y, t.mira.mezziGradi);
       const ciurma = s.squadre[p.squadra].ciurma;
-      if (b.bloccato && a.tipo === 'balistica') { esplodi(s, b.x, b.y, a.id, ciurma, eventi); return; }
+      if (b.bloccato && a.tipo === 'balistica') { esplodi(s, b.x, b.y, a.id, ciurma, eventi, undefined, p.id); return; } // bocca contro il muro: tiro vicino
       const v = velocitaIniziale(t.mira.mezziGradi, a.usaPotenza ? t.mira.potenza : 100);
       const pr: Proiettile = {
         id: s.prossimoId++, tipo: tipoProiettile(a), arma: a.id, x: b.x, y: b.y, vx: v.vx, vy: v.vy,
@@ -95,7 +95,7 @@ export function colpoIstantaneo(s: StatoBattaglia, p: Pirata, eventi: EventoBatt
     const q = s.pirati.find((x) => x.id === r.pirata)!;
     const spinta = ((a.spintaFissa ?? 0) / TICK_AL_SECONDO);
     const dir = direzioneSpinta(p.x, p.y, q.x, q.y);
-    staccaPirata(q, eventi);
+    staccaPirata(q, eventi, s.tick);
     q.vx += dir.x * spinta; q.vy += dir.y * spinta;
     danneggia(q, dannoArma(a.id, s.squadre[p.squadra].ciurma), eventi);
   }
@@ -123,7 +123,7 @@ export function colpoMischia(s: StatoBattaglia, p: Pirata, eventi: EventoBattagl
   eventi.push({ t: 'colpoSciabola', pirata: p.id, colpiti: colpiti.map((q) => q.id) });
   const sp = spintaMischia(a, p.verso);
   for (const q of colpiti) {
-    staccaPirata(q, eventi);
+    staccaPirata(q, eventi, s.tick);
     q.vx += sp.vx; q.vy += sp.vy;
     danneggia(q, dannoArma(a.id, s.squadre[p.squadra].ciurma), eventi);
   }

@@ -5,11 +5,9 @@
 // - si esce con l'azione 'esci' e `richiestaBattaglia = null`; "Rigioca" = 'esci' + una richiesta nuova.
 import { signal, effect } from '@preact/signals';
 import { bus } from '../../core/bus';
-import type { Comando, EventoBattaglia } from '../../core/tipi';
-import type { VistaBattaglia } from '../../core/bus';
-import { bannerDaEventi, configSchermaglia, DURATA_BANNER_MS, semeNuovo, squadraUmana } from './logica';
+import type { Comando } from '../../core/tipi';
+import { bannerDaEventi, configSchermaglia, DURATA_BANNER_MS, semeNuovo } from './logica';
 import { vibraPerEventi } from './vibrazioni';
-import { suona, type Suono } from '../../piattaforma/audio';
 import { mappaSchermaglia, piratiSchermaglia, segnaMappaGiocata } from '../preferenze';
 
 /** schermata di scelta della Schermaglia (1-5 pirati per lato) aperta */
@@ -103,40 +101,7 @@ function prossimoBanner() {
   timerBanner = b === undefined ? undefined : setTimeout(prossimoBanner, DURATA_BANNER_MS);
 }
 
-let esplosioni = 0;
-/** Suoni segnaposto degli eventi di un frame (m1-ritmo §7): uno per tipo, per non sovrapporre lo stesso suono. */
-function suoniPerEventi(eventi: readonly EventoBattaglia[], v: VistaBattaglia | null) {
-  const fatti = new Set<Suono>();
-  const una = (s: Suono) => { if (!fatti.has(s)) { fatti.add(s); suona(s); } };
-  for (const e of eventi) {
-    switch (e.t) {
-      case 'sparo': una('sparo'); break;
-      case 'esplosione': if (!fatti.has('esplosione1') && !fatti.has('esplosione2') && !fatti.has('esplosione3')) una((['esplosione1', 'esplosione2', 'esplosione3'] as const)[esplosioni++ % 3]); break;
-      case 'splash': una('splash'); break;
-      case 'rimbalzo': una('rimbalzo'); break;
-      case 'salto': una('salto'); break;
-      case 'danno': una('danno'); break;
-      case 'cassaCaduta': una('cassa'); break;
-      case 'cassaAperta': una(e.contenuto === 'rum' ? 'rum' : 'esplosione2'); break;
-      case 'fine': if (v) una(e.esito.vincitore === squadraUmana(v) ? 'vittoria' : 'sconfitta'); break;
-      default: break;
-    }
-  }
-}
-
-/** Tic-tac negli ultimi 5 secondi del turno del giocatore. */
-export function avviaTicTac(): () => void {
-  let ultimo = -1;
-  return effect(() => {
-    const v = bus.battaglia.value;
-    if (!v || v.esito || v.tocca !== 'umano' || !v.timerAvviato || v.fase !== 'azione' || bus.battagliaInPausa.value) { ultimo = -1; return; }
-    const s = v.secondiRimasti;
-    if (s !== ultimo && s > 0 && s <= 5) suona('tictac');
-    ultimo = s;
-  });
-}
-
-/** Ascolta gli eventi della battaglia (banner e vibrazioni). Si chiama una volta all'avvio dell'app. */
+/** Ascolta gli eventi della battaglia (banner e vibrazioni; i suoni li sceglie src/audio). Si chiama una volta all'avvio dell'app. */
 export function avviaAscoltoBattaglia(): () => void {
   let ultimi: unknown = null;
   return effect(() => {
@@ -145,7 +110,6 @@ export function avviaAscoltoBattaglia(): () => void {
     if (eventi === ultimi || !eventi.length) return;
     ultimi = eventi;
     vibraPerEventi(eventi);
-    suoniPerEventi(eventi, v);
     if (v) {
       codaBanner.push(...bannerDaEventi(eventi, v));
       if (timerBanner === undefined) prossimoBanner();

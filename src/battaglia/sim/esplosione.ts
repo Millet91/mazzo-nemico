@@ -1,14 +1,16 @@
-// Esplosioni e spinte (00 §1.2 e precisazioni del Lead design): danno max(1, round(D × (1 − d/r))) dentro il raggio, spinta D × 7 px/s con la
+// Esplosioni e spinte (00 §1.2 e precisazioni del Lead design): danno max(1, round(D × (1 − d/r))) dentro il raggio, spinta D × 7 px/s (cannone e granata: `spintaEsplosione`) con la
 // stessa attenuazione, chi spara si fa male. d è la distanza dalla capsula del pirata (0 se l'esplosione è dentro).
 
 import type { EventoBattaglia, IdArma, IdCiurma, StatoBattaglia } from '../../core/tipi';
 import { ARMA } from '../../contenuti/armi';
-import { BIL } from '../../contenuti/bilanciamento';
+import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { distanza2Capsula, scavaCratere, MEZZA_LARGHEZZA_PIRATA } from './terreno';
 import { danneggia, staccaPirata } from './pirata';
 import { tagliaAppigli } from './appigli';
 import { SPINTA_MIN_SU } from './costanti';
 import { accendiOggetti } from './oggetti';
+import { controllaSostegno } from './pezzi';
+import { controllaPonti } from './strutture';
 
 /** Danno di un'arma per una ciurma, con il tratto del Teschio Rosso (+10% sugli esplosivi, per difetto). */
 export function dannoArma(arma: IdArma, ciurma: IdCiurma): number {
@@ -33,6 +35,18 @@ export function direzioneSpinta(ox: number, oy: number, px: number, py: number):
   return { x: dx, y: dy };
 }
 
+/**
+ * Spinta al centro, in px/tick, dell'esplosione di un'arma sparata da `ciurma` (null = nessun tratto).
+ * Se l'arma ha `spintaEsplosione` (cannone, granata) vale quella, cresciuta come il danno (Teschio +10%);
+ * altrimenti danno × BIL.fisica.spintaPerDanno. La usano `esplodi`, `simulaColpo` e il generatore delle coste.
+ */
+export function spintaAlCentro(arma: IdArma, ciurma: IdCiurma | null): number {
+  const a = ARMA[arma];
+  const danno = ciurma ? dannoArma(arma, ciurma) : a.danno;
+  if (a.spintaEsplosione !== undefined && a.danno > 0) return (a.spintaEsplosione / TICK_AL_SECONDO) * (danno / a.danno);
+  return danno * BIL.fisica.spintaPerDanno;
+}
+
 export interface EffettoEsplosione { danno: number; vx: number; vy: number }
 
 /**
@@ -54,33 +68,57 @@ export function effettoEsplosione(
 /**
  * Fa esplodere `arma` in (x, y): cratere, danni e spinte a tutti i pirati in campo (anche a chi ha sparato).
  * `ciurma` = ciurma di chi ha sparato (per il tratto del Teschio); null per la lapide.
+ * `risparmia` = id del pirata che non prende danno né spinta SE l'esplosione non raggiunge nessun altro pirata
+ * (tiro vicino, vedi `tiroVicino`); −1 = nessuno.
  */
 export function esplodi(
   s: StatoBattaglia, x: number, y: number, arma: IdArma | 'lapide' | 'cassa', ciurma: IdCiurma | null, eventi: EventoBattaglia[],
   parametri?: { raggio: number; danno: number },
+  risparmia = -1,
 ): void {
   const p = parametri ?? (arma === 'cassa' ? BIL.casse.esplosione : parametriEsplosione(arma));
   const raggio = p.raggio;
   const base = p.danno;
-  const danno = parametri || arma === 'lapide' || arma === 'cassa' || arma === 'barile' || !ciurma ? base : dannoArma(arma, ciurma);
-  const spinta = base * BIL.fisica.spintaPerDanno;
+  const diArma = !(parametri || arma === 'lapide' || arma === 'cassa' || arma === 'barile');
+  const danno = diArma && ciurma ? dannoArma(arma, ciurma) : base;
+  const spinta = diArma ? spintaAlCentro(arma, ciurma) : base * BIL.fisica.spintaPerDanno;
   eventi.push({ t: 'esplosione', x, y, raggio, arma });
   scavaCratere(s.terreno, x, y, raggio, eventi);
+  // tiro vicino: `risparmia` = id di chi ha sparato contro il terreno lì accanto; si salva solo se il colpo è sprecato
+  const salvo = risparmia >= 0 && !s.pirati.some((q) => q.stato === 'vivo' && q.id !== risparmia && effettoEsplosione(x, y, raggio, danno, spinta, q.x, q.y))
+    ? risparmia : -1;
   for (const q of s.pirati) {
-    if (q.stato !== 'vivo') continue;
+    if (q.stato !== 'vivo' || q.id === salvo) continue;
     const e = effettoEsplosione(x, y, raggio, danno, spinta, q.x, q.y);
     if (!e) continue;
-    staccaPirata(q, eventi);
+    staccaPirata(q, eventi, s.tick);
     q.vx += e.vx; q.vy += e.vy;
     danneggia(q, e.danno, eventi);
   }
   accendiOggetti(s, x, y, raggio);
   tagliaAppigli(s, x, y, raggio, eventi);
+  // Fase 3: i pezzi rimasti senza appoggio attorno al cratere (il cratere arriva a raggio × 1,2 nella sabbia)
+  controllaSostegno(s, x, y, raggio * MOLT_CRATERE_MAX + 2, eventi);
+  controllaPonti(s, x, y, raggio * MOLT_CRATERE_MAX + 2, eventi);
 }
+
+/** il moltiplicatore del cratere più grande tra i materiali */
+const MOLT_CRATERE_MAX = Math.max(...BIL.fisica.moltiplicatoreCratere);
 
 /** Raggio e danno pieno di un'esplosione (senza tratti): armi da ARMA, lapide e barile da BIL. */
 export function parametriEsplosione(arma: IdArma | 'lapide'): { raggio: number; danno: number } {
   if (arma === 'lapide') return { raggio: BIL.lapide.raggio, danno: BIL.lapide.danno };
   if (arma === 'barile') return { raggio: BIL.barili.raggio, danno: BIL.barili.danno };
   return { raggio: ARMA[arma].raggio, danno: ARMA[arma].danno };
+}
+
+/**
+ * Tiro vicino (studio v2, Fase 0; BIL.fisica.tiroVicinoPx): un colpo diretto senza miccia che scoppia sul TERRENO
+ * a meno di 60 px dal centro di chi l'ha sparato. Restituisce true se vale la regola; chi spara si salva solo se
+ * l'esplosione non raggiunge nessun altro (lo decide `esplodi`). Un colpo che gli ricade addosso non conta.
+ */
+export function tiroVicino(arma: IdArma | 'lapide', px: number, py: number, x: number, y: number): boolean {
+  if (arma === 'lapide' || ARMA[arma].tipo !== 'balistica') return false;
+  const dx = x - px, dy = y - py, r = BIL.fisica.tiroVicinoPx;
+  return dx * dx + dy * dy < r * r;
 }

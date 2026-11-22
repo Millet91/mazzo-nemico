@@ -4,6 +4,7 @@
 import type { Pirata, StatoBattaglia } from '../../core/tipi';
 import { MATERIALE } from '../../core/tipi';
 import { BIL } from '../../contenuti/bilanciamento';
+import { pendioDaScivolata } from '../sim/movimento';
 
 /** Il pixel (x, y) è solido? Fuori dalla mappa: aria (ai lati e sopra si cade in mare). */
 export function solido(s: StatoBattaglia, x: number, y: number): boolean {
@@ -28,8 +29,9 @@ export function piedi(p: Pirata): number {
 
 /**
  * Quanti px si possono camminare in direzione `dir` (al massimo `max`) senza:
- * cadere più in basso della soglia del danno da caduta, finire sopra il mare, o sbattere contro un muro
- * più alto del gradino. Stima prudente: la fisica vera la fa la sim.
+ * cadere più in basso della soglia del danno da caduta, finire sopra il mare, sbattere contro un muro
+ * più alto del gradino, o entrare in un pendio da scivolata (la scivolata non si ferma col tasto: l'IA la evita).
+ * Stima prudente: la fisica vera la fa la sim.
  */
 export function passiSicuri(s: StatoBattaglia, p: Pirata, dir: -1 | 1, max: number): number {
   const gradino = BIL.pirata.gradinoMax;
@@ -44,6 +46,7 @@ export function passiSicuri(s: StatoBattaglia, p: Pirata, dir: -1 | 1, max: numb
     if (suolo < y - gradino) break; // muro
     if (suolo - y > BIL.pirata.cadutaSoglia / 2) break; // dirupo: meglio non rischiare
     if (s.terreno.mare - suolo < 40) break; // troppo vicino all'acqua
+    if (suolo > y && pendioDaScivolata(s.terreno, x, suolo - BIL.pirata.capsulaAltezza / 2, dir)) break; // si scivolerebbe
     y = suolo;
     fatti = i;
   }

@@ -91,7 +91,7 @@ async function provaFps() {
     statoFps.value = voto + T.diagnostica.provaRisultato(
       Math.round(n('medio', 'fpsMedio')), Math.round(n('minimo', 'fpsMinimo')),
       n('frameLenti', 'lenti', 'frameOltre20ms'), n('msSimPerTick', 'msSim', 'simMs'))
-      + (r.disegno ? `\n${T.diagnostica.provaDisegno(n('msDisegnoMedio'), r.disegno.zoomNormale.p95, r.disegno.zoomMinimo.p95)}` : '');
+      + (r.disegno ? `\n${T.diagnostica.provaDisegno(n('msDisegnoMedio'), r.disegno.zoomNormale.p95, r.disegno.zoomMinimo.p95, n('risoluzione'))}` : '');
   } catch (e) {
     console.error(e);
     statoFps.value = T.diagnostica.errore;

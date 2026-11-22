@@ -325,6 +325,8 @@ test('Fase 0: avviso sul tiro vicino, tasti trasparenti sopra un pirata, suggeri
 });
 
 test('comandi v3: niente joystick, frecce salto e FUOCO piccoli ai bordi; ARMA nel colore della ciurma', async ({ page }) => {
+  // tre formati di schermo in una prova: sui runner carichi supera i 30 s predefiniti (in CI da 15 a 33 s)
+  test.setTimeout(60000);
   for (const f of FORMATI) {
     await page.setViewportSize({ width: f.width, height: f.height });
     await entraInBattaglia(page, vista({ arma: 'granata' }), false);

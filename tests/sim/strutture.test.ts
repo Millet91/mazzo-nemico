@@ -195,3 +195,40 @@ describe('Ponte che cala', () => {
     expect(s.strutture![0].stato).toBe('caduta');
   });
 });
+
+describe('Struttura che si riappoggia (Pacchetto 2: palma-ponte, carico della gru)', () => {
+  /** Un blocco di legno 60×20 appeso a un pilastro per un collo sottile, sopra il suolo di roccia. */
+  function conCarico(x = 1000): { t: Terreno; st: StrutturaMappa } {
+    const t = terrenoPiatto(MATERIALE.roccia);
+    rettangolo(t, x - 40, SUOLO - 300, x - 20, SUOLO, MATERIALE.roccia); // pilastro
+    rettangolo(t, x - 20, SUOLO - 152, x - 10, SUOLO - 148, MATERIALE.legno); // collo
+    rettangolo(t, x - 10, SUOLO - 160, x + 50, SUOLO - 140, MATERIALE.legno); // carico
+    return { t, st: { tipo: 'cengia', x0: x - 10, y0: SUOLO - 160, x1: x + 49, y1: SUOLO - 141, riappoggia: true } };
+  }
+
+  it('tagliato il collo, cade e torna nella maschera dove tocca; chi era sotto esce in alto, mai incastrato', () => {
+    const { t, st } = conCarico();
+    const s = battaglia(t, [st]);
+    const p = pirata(s, 0);
+    p.x = 1020; p.y = SUOLO - 11; p.aTerra = true; p.yInizioCaduta = p.y;
+    const ev = scoppio(s, 985, SUOLO - 150, 6);
+    expect(eventiDi(ev, 'crollo')).toHaveLength(1);
+    const dopo = avanzaFinche(s, (x) => x.pezzi!.length === 0, 600);
+    expect(eventiDi(dopo, 'macerie')).toEqual([]); // non si frantuma
+    expect(pieno(s.terreno, 1040, SUOLO - 1)).toBe(true); // il carico è sul suolo, nella maschera
+    expect(s.terreno.maschera[(SUOLO - 5) * s.terreno.w + 1040]).toBe(MATERIALE.legno);
+    expect(eventiDi(dopo, 'maschera').length).toBeGreaterThan(0);
+    expect(eventiDi(dopo, 'danno').some((d) => d.pirata === 0 && d.quanto === BIL.macerie.danno)).toBe(true);
+    expect(p.y + 11).toBeLessThanOrEqual(SUOLO - 20); // spinto sopra il carico
+    avanzaFinche(s, () => p.aTerra, 120);
+    expect(Math.floor(p.y) + 11).toBe(SUOLO - 20); // in piedi sul carico
+  });
+
+  it('sopra il mare affonda come gli altri pezzi', () => {
+    const { t, st } = conCarico(1980); // pilastro sul bordo dell'isola, carico sopra il mare
+    const s = battaglia(t, [st]);
+    scoppio(s, 1965, SUOLO - 150, 6);
+    const dopo = avanzaFinche(s, (x) => x.pezzi!.length === 0, 600);
+    expect(eventiDi(dopo, 'macerie')).toEqual([expect.objectContaining({ inMare: true })]);
+  });
+});

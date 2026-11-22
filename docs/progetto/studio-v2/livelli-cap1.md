@@ -133,3 +133,25 @@ npx vitest run tests/mappe/isole-cap1.test.ts
 ```
 
 I profili di ogni isola (cosa cerca nella forma) sono in `scripts/mappe/isole/profili.ts`, le misure in `misure.ts`.
+
+## 7. Fase B: le isole vere
+
+*22/11/2026. Base: i primi crolli della Fase 3 di P1 (P1-contratti §7). Ogni isola vera nasce dal suo seme (forma e partenze eque della Fase A) più il trucco disegnato col kit (`src/battaglia/gen/moduli/`), ed è una **mappa fissa**: `src/battaglia/mappe/isola-<id>.dati.ts`, scritta da `npx tsx scripts/mappe/isole/costruisci-isole.ts`. In `capitolo-1.ts` l'isola passa da `{ seme }` a `{ fissa }`; il seme resta in `battaglia/mappe/isole-cap1.ts`.*
+
+### Cosa permette la sim di oggi (e cosa no)
+- Cade solo un pezzo **staccato da tutto** (fondale, ferro, sostegni) e sotto 6000 px: cade dritto e **si frantuma** dove tocca. Quindi ogni trucco che crolla è appeso all'isola per un solo collo (pali, base sottile) che un colpo taglia.
+- Un pezzo che cade **non si riappoggia**: oggi la palma non può diventare un ponte (1H) e il carico della gru non può riempire la valle (1B). Per quelle due serve un pezzo che si ferma dove cade: è una richiesta per la Fisica di P1, e fino ad allora le progetto diversamente.
+- Il ferro tiene su tutto quello che tocca: niente che deve crollare tocca il ferro.
+- Il cratere del cannone ha raggio 84: una torre deve essere alta **almeno ~95 px** sopra il suolo, sennò un colpo alla base la cancella invece di farla crollare.
+- **I pali tagliano la strada**: un palo alto più di 28 px (lo scavalco) è un muro. Le prove di percorribilità di QA (anche con la Scivolata) lo hanno trovato subito. Le torri vanno dove nessuno deve passare, oppure con una scala per lato così ci si passa sopra.
+
+### Gruppo 1 (round 1): 1D e 1C
+
+![Gruppo 1](img-livelli/fase-b-gruppo1.png)
+
+- **1D Scoglio della Vedetta** (`isola-1d`): due torri di vedetta su pali **sulla spiaggia**, oltre le partenze (sul fianco della punta tagliavano la salita alla Bandiera). Una scala per capo: dal piano si domina la piana, e si passa sopra per arrivare al barile della spiaggia. Un colpo alla base dei pali la fa crollare con chi c'è sopra: misurato **24 e 19 PV** a chi stava sopra (scoppio + caduta), vivo. La torre di destra sta sull'orlo rialzato: sulla riva in pendenza lo scoppio buttava in mare chi stava sopra (provato).
+- **1C Forte Rampino** (`isola-1c`): due muri del bastione sul piano dell'altopiano, larghi 16 px e alti 28: **architrave di ferro** (non si scava) e **portone di legno** sotto (si sfonda). Fanno riparo e si scavalcano. Le garitte su pali dentro il forte le ho tolte: tagliavano la strada tra le partenze.
+- Le scale del generatore troppo vicine a un muro (7 px, il bug "la scalata si ferma a metà") le sposta `scostaAppigli` del kit.
+
+### Test (tests/mappe/isole-cap1.test.ts)
+Per ogni isola vera: i dati sono quelli che lo script costruisce oggi; stesse partenze del seme; validatore; partenze eque; vetta raggiungibile (Bandiera); **niente staccato al tick 0**; nessuna struttura entro 120 px da una partenza né sopra una partenza; un colpo alla base dei pali fa crollare ogni torre e chi c'è sopra resta vivo con ≤ 40 PV di danno; a 1C il portone si sfonda e l'architrave resta. Passano anche le prove di QA per tutte le mappe fisse (scale e liane percorribili, ogni partenza e barile raggiungibile, anche con la Scivolata).

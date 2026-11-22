@@ -28,13 +28,13 @@ const isole: DefIsola[] = [
   },
   {
     id: '1C', nome: 'forteRampino', regione: 'costa', adiacenti: ['1A', '1B', '1D', '1F'],
-    pos: { x: 1420, y: 520 }, raggio: 100, bioma: 'porto', mappa: { seme: 2103 }, trucco: 'bastione',
+    pos: { x: 1420, y: 520 }, raggio: 100, bioma: 'porto', mappa: { fissa: 'isola-1c' }, trucco: 'bastione',
     padroneIniziale: 'marina', piratiIniziali: 2, scontro: { tipo: 'assalto' },
     premi: [{ t: 'arma', arma: 'rampino' }, { t: 'mossa', mossa: 'dondolo' }],
   },
   {
     id: '1D', nome: 'scoglioDellaVedetta', regione: 'costa', adiacenti: ['1B', '1C'],
-    pos: { x: 800, y: 300 }, raggio: 75, bioma: 'isola', mappa: { seme: 2452 }, trucco: 'torre',
+    pos: { x: 800, y: 300 }, raggio: 75, bioma: 'isola', mappa: { fissa: 'isola-1d' }, trucco: 'torre',
     padroneIniziale: 'marina', piratiIniziali: 1, scontro: { tipo: 'bandiera' },
     premi: [{ t: 'mossa', mossa: 'saltoAppoggio' }],
   },

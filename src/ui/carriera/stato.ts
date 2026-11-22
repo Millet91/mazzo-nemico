@@ -63,10 +63,13 @@ export const stato = computed(() => bus.carriera.value);
 // ─── Salvataggio ─────────────────────────────────────────────────────────────────────────────────
 
 /** Legge il salvataggio all'avvio (non cambia schermata). */
-export async function preparaCarriera(): Promise<void> {
-  const { principale, riserva } = await caricaCarriera();
-  bus.carriera.value = R.ripristina(CAP, principale) ?? R.ripristina(CAP, riserva);
-  carrieraCaricata.value = true;
+let lettura: Promise<void> | null = null;
+export function preparaCarriera(): Promise<void> {
+  lettura ??= caricaCarriera().then(({ principale, riserva }) => {
+    bus.carriera.value = R.ripristina(CAP, principale) ?? R.ripristina(CAP, riserva);
+    carrieraCaricata.value = true;
+  });
+  return lettura;
 }
 
 function imposta(s: StatoCarriera, eventi: EventoCampagna[] = []) {
@@ -80,8 +83,8 @@ function imposta(s: StatoCarriera, eventi: EventoCampagna[] = []) {
 
 /** Dal menu: continua la carriera salvata o ne comincia una nuova. */
 export function entraInCarriera(): void {
-  // finché il salvataggio non è letto non si parte (si rischierebbe di sovrascriverlo con una carriera nuova)
-  if (!carrieraCaricata.value) return;
+  // finché il salvataggio non è letto si aspetta (si rischierebbe di sovrascriverlo con una carriera nuova)
+  if (!carrieraCaricata.value) { void preparaCarriera().then(entraInCarriera); return; }
   let s = bus.carriera.value;
   const nuova = !s;
   if (!s) s = R.nuovaCarriera(CAP);
@@ -92,6 +95,19 @@ export function entraInCarriera(): void {
   // zoom 1 = tutto il capitolo
   bus.animaMondo.invia({ t: 'centra', isola: '1A', zoom: 1 });
   mostraScena('c1.inizio');
+}
+
+/** Paywall di fine cap. 1: solo dopo il capitolo vinto. */
+export function apriPaywall(): void {
+  const s = bus.carriera.value;
+  if (!s || R.esitoCapitolo(CAP, s) !== 'vinto') return;
+  bus.schermata.value = 'paywall';
+}
+
+/** Acquisto fatto o ripristinato: la carriera ricorda "Sblocca tutto". */
+export function segnaCompleto(): void {
+  const s = bus.carriera.value;
+  if (s && !s.completo) imposta({ ...s, completo: true });
 }
 
 export function tornaAlMenu(): void {
@@ -404,6 +420,7 @@ export function avviaAscoltoCarriera(): () => void {
 /** Tasto indietro di Android fuori dalla battaglia. false = niente da chiudere qui. */
 export function indietroCarriera(): boolean {
   if (bus.schermata.value === 'menu') return false;
+  if (bus.schermata.value === 'paywall') { bus.schermata.value = 'mondo'; return true; }
   if (avvisi.value[0]) { chiudiAvviso(); return true; }
   if (schedaIsola.value) { schedaIsola.value = null; return true; }
   if (preparazione.value) { annullaPreparazione(); return true; }

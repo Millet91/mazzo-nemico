@@ -47,59 +47,52 @@ async function finisciBattaglia(page: Page, vincitore: 0 | 1, superstiti: [numbe
   }, [vincitore, superstiti] as const);
 }
 
-test('cap. 1 dall\'inizio alla fine con battaglie finte vinte', async ({ page }) => {
-  test.setTimeout(120_000);
+// Il capitolo intero a regole pure è in tests/mondo/regole.test.ts; qui un round vero con la Marina e poi l'ultima
+// isola (stato preparato sul bus), per tenere il test leggero anche nella CI con la grafica software.
+test('round 1 con la Marina, poi l\'ultima isola: fine capitolo, stelle e salvataggio', async ({ page }) => {
+  test.setTimeout(90_000);
   await apri(page);
   await page.click('#carriera');
   await expect(page.getByTestId('car-scena')).toBeVisible();
   await chiudiAvvisi(page);
 
-  for (let giro = 0; giro < 8; giro++) {
-    let s = await stato(page);
-    if (s.fase === 'fine') break;
-    // rinforzi: sull'isola del giocatore con meno pirati
-    for (let n = 0; n < 12 && s.fase === 'rinforzi'; n++) {
-      const mie = Object.entries(s.isole).filter(([, i]: [string, any]) => i.padrone === 'giocatore' && i.pirati < 5)
-        .sort((a: any, b: any) => a[1].pirati - b[1].pirati);
-      if (!mie.length) { await page.click('#car-fine-rinforzi'); break; }
-      await tocca(page, mie[0][0]);
-      s = await stato(page);
-    }
-    await expect(page.getByTestId('car-attacco')).toBeVisible();
-    // attacca tutto quello che si può
-    for (let n = 0; n < 6; n++) {
-      const bersaglio = await page.evaluate(() => (window as unknown as { __kaboom: K }).__kaboom.bus.evidenzaMondo.value.toccabili)
-        .then(async (t: string[]) => { const st = await stato(page); return t.find((id) => st.isole[id].padrone === 'marina'); });
-      if (!bersaglio) break;
-      await tocca(page, bersaglio);
-      await expect(page.getByTestId('car-pannello-attacco')).toBeVisible();
-      await page.click('#car-arrembaggio');
-      await finisciBattaglia(page, 0, [2, 0]);
-      await chiudiAvvisi(page);
-      if ((await stato(page)).fase === 'fine') break;
-    }
-    if ((await stato(page)).fase === 'fine') break;
-    await page.click('#car-fine-turno');
-    if (await page.getByTestId('car-difesa').isVisible()) {
-      await page.click('#car-difendi');
-      await finisciBattaglia(page, 1, [0, 1]);
-    }
-    await chiudiAvvisi(page);
-  }
+  // round 1: rinforzi, conquista di 1C da Porto Teschio, fine turno (round protetto)
+  await tocca(page, '1A');
+  for (let n = 0; n < 2; n++) await tocca(page, '1B');
+  await expect(page.getByTestId('car-attacco')).toBeVisible();
+  await tocca(page, '1A');
+  await tocca(page, '1C');
+  await expect(page.getByTestId('car-pannello-attacco')).toBeVisible();
+  await page.click('#car-arrembaggio');
+  await finisciBattaglia(page, 0, [3, 0]);
+  await chiudiAvvisi(page);
+  expect((await stato(page)).isole['1C'].padrone).toBe('giocatore');
+  await page.click('#car-fine-turno');
+  await expect.poll(async () => (await stato(page)).round).toBe(2);
 
-  const s = await stato(page);
-  expect(s.fase).toBe('fine');
-  expect(Object.values(s.isole).every((i: any) => i.padrone === 'giocatore')).toBe(true);
-  expect(s.armi).toEqual(expect.arrayContaining(['rampino', 'ancora']));
-  expect(s.reclute).toHaveLength(2);
+  // tutto preso tranne 1H: Duello finale da 1G
+  await page.evaluate(() => {
+    const b = (window as unknown as { __kaboom: K }).__kaboom.bus;
+    const s = JSON.parse(JSON.stringify(b.carriera.value));
+    for (const id of Object.keys(s.isole)) if (id !== '1H') s.isole[id] = { padrone: 'giocatore', pirati: 3, presa: true };
+    Object.assign(s, { fase: 'attacco', rinforzi: 0, usate: [], conquisteRound: [], round: 5 });
+    b.carriera.value = s;
+  });
+  await tocca(page, '1H');
+  await expect(page.getByTestId('car-pannello-attacco')).toBeVisible();
+  await page.click('#car-arrembaggio');
+  await finisciBattaglia(page, 0, [1, 0]);
   await chiudiAvvisi(page);
   await expect(page.getByTestId('car-fine')).toBeVisible();
-  expect(s.stelle[1]).toBeGreaterThanOrEqual(2);
+  const s = await stato(page);
+  expect(s.fase).toBe('fine');
+  expect(s.bandiere).toContain('teschioFumante');
+  expect(s.stelle[1]).toBe(3);
   await page.screenshot({ path: 'test-results/carriera-fine.png' });
 
   // il salvataggio sopravvive al riavvio
   await page.reload();
-  await expect(page.locator('#carriera')).toContainText('Continua');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __kaboom: K }).__kaboom.bus.carriera.value?.stelle?.[1])).toBe(3);
 });
 
 test('battaglia lasciata a metà: si torna a prima dell\'attacco', async ({ page }) => {
@@ -163,4 +156,58 @@ test('giro: menu → Carriera → attacco a 1D sulla mappa vera → vittoria →
   expect(s.mosse).toContain('saltoAppoggio');
   await expect.poll(() => animazioni).toContainEqual({ t: 'conquista', isola: '1D' });
   await page.screenshot({ path: 'test-results/carriera-nuovo.png' });
+});
+
+/** Stato preparato: capitolo 1 appena vinto (tutte le isole del giocatore). */
+async function capitoloVinto(page: Page) {
+  await apri(page);
+  await page.click('#carriera');
+  await chiudiAvvisi(page);
+  await page.evaluate(() => {
+    const b = (window as unknown as { __kaboom: K }).__kaboom.bus;
+    const s = JSON.parse(JSON.stringify(b.carriera.value));
+    for (const id of Object.keys(s.isole)) if (id !== '1H') s.isole[id] = { padrone: 'giocatore', pirati: 3, presa: true };
+    Object.assign(s, { fase: 'attacco', rinforzi: 0, usate: [], conquisteRound: [], round: 5 });
+    b.carriera.value = s;
+  });
+  await tocca(page, '1H');
+  await page.click('#car-arrembaggio');
+  await finisciBattaglia(page, 0, [1, 0]);
+  await chiudiAvvisi(page);
+  await expect(page.getByTestId('car-fine')).toBeVisible();
+}
+
+test('paywall a fine cap. 1: «Sblocca tutto» (finto) segna la carriera completa', async ({ page }) => {
+  test.setTimeout(60_000);
+  await capitoloVinto(page);
+  await page.click('#car-continua-viaggio');
+  const pw = page.getByTestId('car-paywall');
+  await expect(pw).toBeVisible();
+  await expect(page.locator('#car-sblocca')).toContainText('1,99');
+  await page.screenshot({ path: 'test-results/carriera-paywall.png' });
+  for (const id of ['#car-sblocca', '#car-gratis', '#car-ripristina']) {
+    const b = await page.locator(id).boundingBox();
+    expect(b!.height).toBeGreaterThanOrEqual(44);
+    expect(b!.y + b!.height).toBeLessThanOrEqual(360);
+  }
+  await page.screenshot({ path: 'test-results/carriera-paywall.png' });
+  // niente da ripristinare prima dell'acquisto
+  await page.click('#car-ripristina');
+  await expect(pw.getByRole('status')).toBeVisible();
+  expect((await stato(page)).completo).toBe(false);
+  await page.click('#car-sblocca');
+  await expect.poll(async () => (await stato(page)).completo).toBe(true);
+  await page.click('#car-paywall-menu');
+  await expect(page.locator('#carriera')).toBeVisible();
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __kaboom: K }).__kaboom.bus.carriera.value?.completo)).toBe(true);
+});
+
+test('paywall: «Continua a giocare gratis» torna al menu senza sbloccare', async ({ page }) => {
+  test.setTimeout(60_000);
+  await capitoloVinto(page);
+  await page.click('#car-continua-viaggio');
+  await page.click('#car-gratis');
+  await expect(page.locator('#carriera')).toBeVisible();
+  expect((await stato(page)).completo).toBe(false);
 });

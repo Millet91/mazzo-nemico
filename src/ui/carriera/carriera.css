@@ -112,3 +112,15 @@
 .car-righe-stelle { list-style: none; margin: 0 auto; padding: 0; font-size: 14px; }
 .car-righe-stelle li { opacity: .45; }
 .car-righe-stelle li.ok { opacity: 1; font-weight: 800; }
+
+/* paywall di fine cap. 1 */
+.car-paywall-fondo { position: fixed; inset: 0; z-index: 6; display: grid; place-items: center; pointer-events: auto; }
+.car-paywall { width: min(720px, 94vw); max-height: 94vh; overflow: auto; text-align: center; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.car-paywall p { margin: 0; }
+.car-paywall-punti { list-style: none; margin: 0; padding: 0; font-weight: 800; font-size: 14px; }
+.car-paywall-corpo { display: flex; gap: 16px; align-items: center; width: 100%; }
+.car-paywall-testo { flex: 1 1 0; display: flex; flex-direction: column; gap: 6px; }
+.car-paywall-pulsanti { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+@media (orientation: portrait) { .car-paywall-corpo { flex-direction: column; } }
+.car-link { background: none; border: 0; color: inherit; text-decoration: underline; font: 700 13px var(--font-testo); min-height: 44px; padding: 0 12px; cursor: pointer; pointer-events: auto; }
+.car-prova { font-style: italic; }

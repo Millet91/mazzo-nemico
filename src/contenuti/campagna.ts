@@ -23,6 +23,19 @@ export const CAMPAGNA = {
     intoccabili: ['1A'] as readonly string[],
   },
 
+  /**
+   * Difficoltà della carriera (15 §1.1). I numeri sopra sono a Nostromo; ogni livello li sposta così.
+   * Mozzo (Lead P2, 22/11): la Marina riceve 1 rinforzo in meno (0 nel cap. 1) e contrattacca solo dal round 3;
+   * il giocatore +1 rinforzo a round. Capitano: Marina +1 rinforzo.
+   */
+  difficolta: {
+    mozzo: { rinforziGiocatore: 1, rinforziMarina: -1, primoAttaccoMarina: 3 },
+    nostromo: { rinforziGiocatore: 0, rinforziMarina: 0, primoAttaccoMarina: 2 },
+    capitano: { rinforziGiocatore: 0, rinforziMarina: 1, primoAttaccoMarina: 2 },
+  },
+  /** finché la scelta della difficoltà non c'è nel menu, la carriera si gioca a Mozzo */
+  difficoltaPredefinita: 'mozzo' as 'mozzo' | 'nostromo' | 'capitano',
+
   stelle: {
     /** ★★: vincere entro questo round */
     roundVeloce: 6,

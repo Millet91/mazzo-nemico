@@ -1,13 +1,17 @@
 // Regole pure del round della carriera (mondo/carriera/regole.ts) sul cap. 1.
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CAPITOLO_1 as C } from '../../src/contenuti/capitolo-1';
 import { CAMPAGNA } from '../../src/contenuti/campagna';
 import type { StatoCarriera } from '../../src/core/carriera';
 import {
   applicaEsito, bersagli, bersagliDa, chiudiRound, controllaAttacco, fineRinforzi, imbarcoProposto, nuovaCarriera,
   piratiInCampo, piazzaRinforzo, preparaAttacco, ripristina, rinforziDelRound, rinforziTeorici, sceltaMarina,
-  stelleCapitolo, turnoMarina,
+  impostaDifficolta, stelleCapitolo, turnoMarina,
 } from '../../src/mondo/carriera/regole';
+
+// i numeri di questi test sono a Nostromo (15 §1.1); Mozzo ha il suo blocco in fondo
+beforeAll(() => impostaDifficolta('nostromo'));
+afterAll(() => impostaDifficolta(CAMPAGNA.difficoltaPredefinita));
 
 const vinta = (sup: [number, number] = [2, 0]) => ({ vincitore: 0 as const, superstiti: sup, motivo: 'eliminazione' });
 const persa = (sup: [number, number] = [0, 1], motivo = 'eliminazione') => ({ vincitore: 1 as const, superstiti: sup, motivo });
@@ -275,5 +279,33 @@ describe('salvataggio', () => {
     const r = ripristina(C, s)!;
     expect(r.usate).toEqual([]);
     expect(r.perditeSfide).toBe(0);
+  });
+});
+
+describe('difficoltà Mozzo (15 §1.1)', () => {
+  beforeAll(() => impostaDifficolta('mozzo'));
+  afterAll(() => impostaDifficolta('nostromo'));
+
+  it('il giocatore riceve 1 rinforzo in più', () => {
+    expect(nuovaCarriera(C).rinforzi).toBe(4);
+  });
+
+  it('round 2: la Marina non riceve rinforzi e non attacca', () => {
+    const s = nuovaCarriera(C);
+    s.round = 2; s.fase = 'attacco';
+    s.isole['1B'].pirati = 1; s.isole['1C'].pirati = 3;
+    const r = turnoMarina(C, s);
+    expect(r.eventi.map((e) => e.t)).toEqual(['nuovoRound']);
+    expect(r.stato.isole['1C'].pirati).toBe(3);
+    expect(r.stato.round).toBe(3);
+  });
+
+  it('dal round 3 contrattacca, sempre senza rinforzi', () => {
+    const s = nuovaCarriera(C);
+    s.round = 3; s.fase = 'attacco';
+    s.isole['1B'].pirati = 1; s.isole['1C'].pirati = 3;
+    const r = turnoMarina(C, s);
+    expect(r.eventi.map((e) => e.t)).toEqual(['marinaAttacca']);
+    expect(r.stato.attacco?.verso).toBe('1B');
   });
 });

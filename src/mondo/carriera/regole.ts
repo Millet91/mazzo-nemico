@@ -7,6 +7,15 @@ import type {
 } from '../../core/carriera';
 import { VERSIONE_SALVATAGGIO } from '../../core/carriera';
 import { CAMPAGNA } from '../../contenuti/campagna';
+import type { LivelloIa } from '../../core/tipi';
+
+// ─── Difficoltà ──────────────────────────────────────────────────────────────────────────────────
+
+let difficolta: LivelloIa = CAMPAGNA.difficoltaPredefinita;
+/** Difficoltà della carriera in uso (finché non è nello stato salvato, vale per tutta l'app). */
+export function impostaDifficolta(d: LivelloIa): void { difficolta = d; }
+export function difficoltaCarriera(): LivelloIa { return difficolta; }
+const leve = () => CAMPAGNA.difficolta[difficolta];
 
 /** Quello che è successo, per banner, scene e animazioni della mappa. */
 export type EventoCampagna =
@@ -58,11 +67,12 @@ function postoLibero(cap: DefCapitolo, s: StatoCarriera): number {
   return isoleDi(cap, s, 'giocatore').reduce((n, id) => n + Math.max(0, CAMPAGNA.tettoIsola - s.isole[id].pirati), 0);
 }
 
-/** Rinforzi del round per il giocatore: max(3, ⌊isole/3⌋) + bonus delle regioni complete (02 §3.1), senza il tetto. */
+/** Rinforzi del round per il giocatore: max(3, ⌊isole/3⌋) + bonus delle regioni complete (02 §3.1) + leva della
+ *  difficoltà (Mozzo +1), senza il tetto. */
 export function rinforziTeorici(cap: DefCapitolo, s: StatoCarriera): number {
   const isole = isoleDi(cap, s, 'giocatore').length;
   const bonus = regioniComplete(cap, s).reduce((n, r) => n + (cap.regioni.find((x) => x.id === r)?.bonus ?? 0), 0);
-  return Math.max(CAMPAGNA.rinforziMinimi, Math.floor(isole / CAMPAGNA.rinforziDivisore)) + bonus;
+  return Math.max(CAMPAGNA.rinforziMinimi, Math.floor(isole / CAMPAGNA.rinforziDivisore)) + bonus + leve().rinforziGiocatore;
 }
 
 /** Rinforzi da piazzare davvero: quelli che non trovano posto (tetto 5) si perdono (nel cap. 1 non ci sono dobloni). */
@@ -386,8 +396,8 @@ export function sceltaMarina(cap: DefCapitolo, s: StatoCarriera): AttaccoInCorso
 }
 
 /**
- * Il giocatore chiude gli attacchi: tocca alla Marina. Nei round protetti non fa niente; poi riceve un rinforzo
- * sull'isola di confine più debole e, se conviene, attacca un'isola del giocatore (difesa giocata: lo stato torna con
+ * Il giocatore chiude gli attacchi: tocca alla Marina. Nei round protetti non fa niente; poi riceve i rinforzi della
+ * difficoltà (a Mozzo nessuno) sull'isola di confine più debole e, dal primo round d'attacco della difficoltà, se conviene, attacca un'isola del giocatore (difesa giocata: lo stato torna con
  * `attacco.difesa = true` e la UI avvia la battaglia). Se non attacca, il round si chiude subito.
  */
 export function turnoMarina(cap: DefCapitolo, s0: StatoCarriera): Risultato {
@@ -400,13 +410,15 @@ export function turnoMarina(cap: DefCapitolo, s0: StatoCarriera): Risultato {
   } else {
     const confini = confiniMarina(cap, s).filter((id) => s.isole[id].pirati < CAMPAGNA.tettoIsola)
       .sort((a, b) => s.isole[a].pirati - s.isole[b].pirati || a.localeCompare(b));
-    if (confini.length && CAMPAGNA.marina.rinforzi > 0) {
+    const rinforzi = Math.max(0, CAMPAGNA.marina.rinforzi + leve().rinforziMarina);
+    if (confini.length && rinforzi > 0) {
       const id = confini[0];
       const da = s.isole[id].pirati;
-      s.isole[id].pirati = Math.min(CAMPAGNA.tettoIsola, da + CAMPAGNA.marina.rinforzi);
+      s.isole[id].pirati = Math.min(CAMPAGNA.tettoIsola, da + rinforzi);
       eventi.push({ t: 'marinaRinforza', isola: id, da, a: s.isole[id].pirati });
     }
-    const att = CAMPAGNA.marina.attacchiPerRound > 0 ? sceltaMarina(cap, s) : null;
+    const puoAttaccare = CAMPAGNA.marina.attacchiPerRound > 0 && s.round >= leve().primoAttaccoMarina;
+    const att = puoAttaccare ? sceltaMarina(cap, s) : null;
     if (att) {
       s.attacco = att;
       eventi.push({ t: 'marinaAttacca', da: att.da.map((d) => d.isola), verso: att.verso });

@@ -80,7 +80,8 @@ function pilotaGiocatore(livello: LivelloIa, r: ConRng, squadra: 0 | 1) {
 
 /** Gioca la battaglia dell'attacco in corso e restituisce l'esito per la carriera. */
 export function giocaBattaglia(s: StatoCarriera, livello: LivelloIa, r: ConRng): { esito: EsitoBattaglia | null; info: Battaglia } {
-  const b = battagliaDaAttacco(C, s, 0)!;
+  // seme nuovo a ogni battaglia, come stato.ts (semeCasuale), ma seminato dalla partita
+  const b = battagliaDaAttacco(C, s, Math.floor(casuale(r) * 0x7fffffff))!;
   const cfg = b.config;
   const umano: 0 | 1 = cfg.squadre[0].controllo === 'umano' ? 0 : 1;
   const st = creaBattaglia(cfg, mappaPer(cfg));
@@ -182,7 +183,7 @@ export function rapporto(partite: Partita[], livello: LivelloIa): string {
   const righe = [
     `# Bot del cap. 1 «Acque di Casa»`,
     ``,
-    `${partite.length} partite, giocatore = IA ${livello} con errore di mira umano (±${RUMORE / 2}°, ±${RUMORE}%), Marina a Mozzo, battaglie vere nel simulatore.`,
+    `${partite.length} partite, giocatore = IA ${livello} con errore di mira umano (±${RUMORE / 2}°, ±${RUMORE}%), Marina a Mozzo, carriera a ${R.difficoltaCarriera()} (limite ${C.limiteRound} round), battaglie vere nel simulatore.`,
     `Tempo stimato = tick/60 + ${SECONDI_MIRA} s di mira per ogni turno del giocatore + pensiero dell'IA + ${MINUTI_ROUND} min per round + ${MINUTI_SCENE} min di scene.`,
     ``,
     `| Misura | Valore | Obiettivo (QA §3.10) |`,
@@ -212,6 +213,7 @@ export function rapporto(partite: Partita[], livello: LivelloIa): string {
 if (process.argv[1]?.endsWith('bot-capitolo.ts')) {
   const n = Number(process.argv[2] ?? 20);
   const livello = (process.argv[3] ?? 'mozzo') as LivelloIa;
+  if (process.env.DIFFICOLTA) R.impostaDifficolta(process.env.DIFFICOLTA as LivelloIa);
   const t0 = Date.now();
   const partite: Partita[] = [];
   for (let i = 1; i <= n; i++) {

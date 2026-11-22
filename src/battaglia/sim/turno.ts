@@ -12,16 +12,13 @@ import { daGradi } from '../../core/trig';
 import { ARMA } from '../../contenuti/armi';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { annega, fermo, inAcqua, inGioco } from './pirata';
-import { aggiornaPirata } from './movimento';
+import { aggiornaPirata, balzo } from './movimento';
 import { esplodi, tiroVicino } from './esplosione';
 import { regoleScontro } from './scontro';
 import { bersagliDi, colpoIstantaneo, durataColpi, fisicaDi, spara, tickColpo } from './armi';
 import { muoviProiettile } from './proiettili';
 import { MICCIA_LAPIDE_TICK, VITA_MAX_PROIETTILE } from './costanti';
 import { apriCassa, attivo as proiettileAttivo, bersagliOggetti, centroOggetto, eOggetto, forseCassa, scendiCassa } from './oggetti';
-
-/** `turno.fermoDa` in fuga: il giocatore ha chiesto di chiudere col comando `fatto` (l'evento esce al tick dopo). */
-export const FATTO = -2;
 
 export function pirataDelTurno(s: StatoBattaglia): Pirata | undefined {
   return s.pirati.find((p) => p.id === s.turno.pirata);
@@ -236,10 +233,11 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
   }
   s.tick++;
   const attivo = pirataDelTurno(s);
-  const sa = BIL.pirata.saltoAvanti, si = BIL.pirata.saltoIndietro;
-  if (attivo && !attivo.aTerra && attivo.y === attivo.yInizioCaduta && (attivo.vy === sa.vy || attivo.vy === si.vy)
-    && (attivo.vx === sa.vx * attivo.verso || attivo.vx === si.vx * attivo.verso)) {
-    eventi.push({ t: 'salto', pirata: attivo.id }); // salto appena chiesto da eseguiComando
+  // richiesta lasciata da eseguiComando (Balzo o "fatto"): si applica adesso e si cancella
+  const richiesta = t.richiesta;
+  t.richiesta = undefined;
+  if ((richiesta === 'balzo' || richiesta === 'balzoMuro') && attivo && inGioco(attivo) && (t.fase === 'azione' || t.fase === 'fuga')) {
+    balzo(s, attivo, richiesta === 'balzoMuro', eventi); // prima dello sparo, se sono arrivati insieme
   }
   if (t.fase === 'azione' && t.sparato && attivo && inGioco(attivo)) {
     // fuoco chiesto da eseguiComando: il colpo parte adesso, e con lui la fuga
@@ -280,9 +278,12 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
       if (a.tipo === 'istantanea' && attivoInGioco) {
         for (let k = 1; k < (a.colpi ?? 1); k++) if (inFase === tickColpo(t.arma, k)) colpoIstantaneo(s, attivo!, eventi);
       }
-      if (inFase < durataColpi(t.arma)) break;
+      if (inFase < durataColpi(t.arma)) {
+        if (richiesta === 'fatto') t.richiesta = 'fatto'; // la pistola spara ancora: il "fatto" vale appena ha finito
+        break;
+      }
       let chiudi = !attivoInGioco || inFase >= BIL.ritmo.fugaTick;
-      if (!chiudi && t.fermoDa === FATTO) { eventi.push({ t: 'fatto', pirata: attivo!.id }); chiudi = true; }
+      if (!chiudi && richiesta === 'fatto') { eventi.push({ t: 'fatto', pirata: attivo!.id }); chiudi = true; }
       if (!chiudi) {
         // pirata fermo senza comandi: dopo fermoFugaTick il turno passa da solo
         if (t.camminata === 0 && t.arrampicata === 0 && fermo(attivo!)) {

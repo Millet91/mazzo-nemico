@@ -38,8 +38,22 @@ npx tsx scripts/mappe/costruisci-v3.ts <cartella>           # controlla che l'al
 
 Il quadro di oggi in `public/assets/mappe/cala-pappagallo-v3/terreno.webp` è una bozza del pittore a 1×: quello
 definitivo a 2× arriva in Fase 2, quando il Render carica il terreno HD. La collisione resta la maschera 2048×1024.
-Le regole in più della v3 le prova `tests/mappe/cala-v3.test.ts`: muretti e casse da 24-32 px, nessuna partenza a meno
-di 120 px da una torre, un colpo diretto del cannone non butta in mare nessuna partenza, nemici del Prologo ad almeno 300 px.
+Le regole in più della v3 le prova `tests/mappe/cala-v3.test.ts`: muretti e casse da 24-32 px (si superano anche da
+sotto la Vedetta), nessuna partenza a meno di 120 px da una torre, un colpo diretto del cannone non butta in mare nessuna partenza, nemici del Prologo ad almeno 300 px.
+
+### Strutture e sostegni (Fase 3, P1-contratti §7)
+
+La parte alta della Cala v3 sono tre masse che non toccano il fondale (Mesa sinistra, Rocca, Mesa destra: le gallerie
+e l'arco le tagliano). Le tengono su i `sostegni` A1-A7 (`SOSTEGNI` nella forma, dati e non byte della maschera): due
+per Mesa e tre per la Rocca. Le `strutture` sono le cose che crollano a modo loro: la torre (poppa del relitto, nel
+Prologo la torre del molo), la Vedetta della Duna su due pali, i due ponti di corda (un ancoraggio per capo, dove le assi
+toccano la roccia), i due massi in bilico sulle cengie basse della Rocca e le loro cengie. Il rettangolo di ogni
+struttura è l'ingombro dei suoi pixel. Ogni struttura è fatta di pezzi con un'etichetta (canale blu della PNG dei
+materiali, 33 pezzi): il pittore dipinge una fuga scura tra un pezzo e l'altro. Il costruttore sceglie le partenze fuori
+dalla zona di caduta di ogni struttura (colonna per colonna, ±`rispettoSpawnPx`) e a 120 px dai massi.
+Le prove sono in `tests/mappe/strutture-fase3.test.ts`: niente di staccato al tick 0 (anche sulle isole generate),
+tre masse con almeno due sostegni pieni, pezzi etichettati, capi dei ponti su assi e roccia, massi appoggiati solo alla
+loro cengia, partenze fuori dalle zone di caduta.
 
 ### Terreno HD (Fase 2, formato concordato con Render: P1-contratti §6)
 

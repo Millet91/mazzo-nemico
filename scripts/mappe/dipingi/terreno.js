@@ -1,5 +1,5 @@
 // Pittore del terreno (gira in Chromium headless, Canvas 2D). Entra la maschera dei materiali (R = materiale × 40,
-// G = etichetta × 30, alfa = solido), esce il quadro con alfa = maschera: quello che si vede è esattamente quello che si colpisce.
+// G = etichetta × 30, B = pezzo di una struttura che crolla (Fase 3, 0 = corpo dell'isola), alfa = solido), esce il quadro con alfa = maschera: quello che si vede è esattamente quello che si colpisce.
 // `scala` 1 = 2048×1024 (un pixel per unità di mondo). `scala` 2 = 4096×2048 per il terreno HD della Fase 2: la sagoma è
 // la stessa maschera ingrandita con i bordi addolciti (scarto < 1 px di mondo), i motivi restano grandi uguali nel mondo
 // e la grana è fatta sui pixel fini. Tutte le misure qui sotto sono in px di mondo: `S` le porta sui pixel del quadro.
@@ -36,13 +36,17 @@
     const x0 = c0.getContext('2d'); x0.drawImage(img, 0, 0);
     const src = x0.getImageData(0, 0, w0, h0).data;
     const mat0 = new Uint8Array(w0 * h0);
-    const tag0 = new Uint8Array(w0 * h0);   // G/30: 1 foglie, 2 edificio, 3 pietra (muretti, rovina), 4 ponte, 5 molo, 6 cassa
-    for (let i = 0; i < w0 * h0; i++) { mat0[i] = src[i * 4 + 3] > 127 ? Math.round(src[i * 4] / 40) : ARIA; tag0[i] = Math.round(src[i * 4 + 1] / 30); }
-    let mat = mat0, tag = tag0;
+    const tag0 = new Uint8Array(w0 * h0);   // G/30: 1 foglie, 2 edificio, 3 pietra (muretti, rovina), 4 ponte, 5 molo, 6 cassa, 7 masso
+    const pez0 = new Uint8Array(w0 * h0);   // B: pezzo di struttura (Fase 3): tra due pezzi diversi si dipinge una fuga
+    for (let i = 0; i < w0 * h0; i++) {
+      mat0[i] = src[i * 4 + 3] > 127 ? Math.round(src[i * 4] / 40) : ARIA; tag0[i] = Math.round(src[i * 4 + 1] / 30);
+      pez0[i] = src[i * 4 + 3] > 127 ? src[i * 4 + 2] : 0;
+    }
+    let mat = mat0, tag = tag0, pez = pez0;
     if (S > 1) {
       // sagoma ingrandita: solido dove la maschera interpolata supera la metà (i gradini diventano smussi a 45°);
       // materiale ed etichetta dal pixel pieno più vicino
-      mat = new Uint8Array(W * H); tag = new Uint8Array(W * H);
+      mat = new Uint8Array(W * H); tag = new Uint8Array(W * H); pez = new Uint8Array(W * H);
       const pieno = (x, y) => (x >= 0 && y >= 0 && x < w0 && y < h0 && mat0[y * w0 + x] ? 1 : 0);
       // la maschera 1× sfocata appena (raggio 1 px di mondo, due passate) toglie i gradini dalle curve: la sagoma HD
       // resta entro mezzo px di mondo dalla maschera, e l'arte sborda comunque oltre (tessere HD, scripts/mappe/tessere-hd.py)
@@ -57,7 +61,7 @@
         let j = -1;
         for (const [qx, qy] of [[nx, ny], [nx === xi ? xi + 1 : xi, ny], [nx, ny === yi ? yi + 1 : yi], [nx === xi ? xi + 1 : xi, ny === yi ? yi + 1 : yi]]) if (pieno(qx, qy)) { j = qy * w0 + qx; break; }
         if (j < 0) continue;
-        mat[y * W + x] = mat0[j]; tag[y * W + x] = tag0[j];
+        mat[y * W + x] = mat0[j]; tag[y * W + x] = tag0[j]; pez[y * W + x] = pez0[j];
       }
     }
     const x0b = S > 1 ? (() => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c.getContext('2d'); })() : x0;
@@ -172,6 +176,11 @@
         const f = n2(x * 1.6, y * 1.6, 7), ff = n3(x, y, 4);
         c = f > 0.62 ? C.foglia1 : f > 0.4 ? mix(C.foglia1, C.foglia2, 0.6) : C.foglia2;
         if (ff < 0.18) c = mix(c, C.foglia3, 0.6);
+      } else if (tag[i] === 7) {
+        // masso in bilico (Fase 3): pietra grigio-calda a chiazze, più chiara di 1 tono della roccia della Rocca
+        const f = n2(x * 1.3 + 50, y * 1.3, 6);
+        c = mix(hx('#D2BFA2'), hx('#8E7A6A'), 0.25 + (nn - 0.5) * 0.6 + (f > 0.66 ? 0.25 : 0));
+        if (n3(x * 2, y * 2, 3) < 0.12) c = mix(c, C.rocciaO, 0.4);
       } else if (m === SABBIA) {
         c = mix(C.sabbia, C.sabbiaO, Math.min(1, d / 40) * 0.6 + (nn - 0.5) * 0.5);
         if (fine > 0.72) c = mix(c, C.sabbiaL, 0.5);
@@ -237,6 +246,8 @@
         if ((asse % 1) < 0.12) c = mix(c, C.legno2, 0.7);
         if (n2(x * 0.3, y * 3, 6) > 0.7) c = mix(c, C.legno2, 0.25);
       } else c = C.ferro;
+      // fuga tra due pezzi di una struttura (o tra un pezzo e l'isola): 1 px di mondo, dipinta dal lato del pezzo
+      if (pez[i]) for (const k of [i - S, i + S, i - S * W, i + S * W]) if (k >= 0 && k < W * H && mat[k] && pez[k] !== pez[i] && (pez[k] === 0 || pez[k] < pez[i])) { c = mix(c, C.contorno, 0.55); break; }
       // grana
       const g = (gr - 0.5) * 14;
       let r = c[0] + g, gg = c[1] + g, b = c[2] + g;

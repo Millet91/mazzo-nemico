@@ -39,6 +39,7 @@ export function mappaFatta(id: string, r?: Pick<RichiestaMappa, 'bioma' | 'varia
     barili: d.barili.map((p) => ({ ...p })),
     ...(d.appigli ? { appigli: d.appigli.map((a) => ({ ...a })) } : {}),
     arte: d.arte,
+    ...(d.arteHd ? { arteHd: d.arteHd } : {}),
     ...(d.sostegni ? { sostegni: d.sostegni.map((r) => ({ ...r })) } : {}),
     ...(d.strutture ? { strutture: d.strutture.map((st) => ({ ...st, ...(st.ancoraggi ? { ancoraggi: [{ ...st.ancoraggi[0] }, { ...st.ancoraggi[1] }] as [Rettangolo, Rettangolo] } : {}) })) } : {}),
   };

@@ -238,7 +238,7 @@ export class ScenaBattaglia {
     if (mappa.arte) {
       // terreno HD: si carica in parallelo agli sfondi; finché non arriva resta il terreno dipinto sulla CPU
       this.cambiHd = [];
-      void TerrenoHd.carica(mappa.arte, s.terreno, this.terreno.maschera0, renderer).then((hd) => {
+      void TerrenoHd.carica(mappa.arte, s.terreno, this.terreno.maschera0, renderer, mappa.arteHd ?? 'hd').then((hd) => {
         const cambi = this.cambiHd ?? [];
         this.cambiHd = null;
         if (!hd) return;

@@ -145,6 +145,9 @@ describe('Cala Pappagallo v3', () => {
       expect(c >= 0 && c < 8 && r >= 0 && r < 4, n).toBe(true);
       expect(existsSync(`${cartella}/hd/${n}.webp`), n).toBe(true);
     }
+    // il Prologo usa la cartella della mappa di battaglia, con le sue tessere (Render legge arteHd)
+    expect([mappaFatta(BASE)!.arte, mappaFatta(BASE)!.arteHd]).toEqual(['cala-pappagallo-v3', undefined]);
+    expect([mappaFatta(PROLOGO)!.arte, mappaFatta(PROLOGO)!.arteHd]).toEqual(['cala-pappagallo-v3', 'hd-prologo']);
     const pr = JSON.parse(readFileSync(`${cartella}/hd-prologo/indice.json`, 'utf8'));
     expect(pr.base).toBe('hd');
     expect(pr.tessere.length).toBeLessThan(hd.tessere.length);

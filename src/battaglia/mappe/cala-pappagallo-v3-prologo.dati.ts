@@ -8,6 +8,8 @@ export const DATI: DatiMappaFatta = {
  "mare": 950,
  "w": 2048,
  "h": 1024,
+ "arte": "cala-pappagallo-v3",
+ "arteHd": "hd-prologo",
  "copione": true,
  "spawn": [
   [

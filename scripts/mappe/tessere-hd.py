@@ -7,8 +7,11 @@
 Scrive public/assets/mappe/<id>/hd/t-<colonna>-<riga>.webp e hd/indice.json:
 - 8x4 tessere, contenuto 512x512 con 2 px di margine per lato (file 516x516, contenuto da (2,2)); sul bordo del
   mondo si ripete l'ultimo pixel;
-- l'arte sborda: oltre la sagoma il colore del pieno vicino si allarga, ad alfa 255, per 8 px del quadro HD
-  (4 px di mondo); più in là resta il quadro com'è (trasparente, o la parete in fondo alle grotte ad alfa 110);
+- l'arte sborda: oltre la sagoma il colore del pieno vicino si allarga, ad alfa 255, per 3 px del quadro HD
+  (1,5 px di mondo: copre il bordo liscio della maschera filtrata nello shader); più in là resta il quadro com'è
+  (trasparente, o la parete in fondo alle grotte ad alfa 110). Lo shader mostra il quadro anche fuori dalla
+  maschera, quindi lo sbordo è quanto il disegno si vede più grande della forma che si colpisce: Fase 2, al
+  massimo 3 px di mondo (con 8 px HD erano 4, e i piedi dei pirati sembravano affondare nell'erba);
 - WebP senza perdita; nell'indice solo le tessere non vuote.
 Con la variante (per esempio il Prologo) scrive in public/assets/mappe/<id>/<cartella-variante>/ solo le tessere
 che cambiano rispetto alla mappa base, anche quelle che nella variante diventano vuote (file trasparente), e il suo
@@ -19,7 +22,7 @@ import json, os, sys
 import numpy as np
 from PIL import Image
 
-W, H, LATO, BORDO, COLONNE, RIGHE, SBORDO = 4096, 2048, 512, 2, 8, 4, 8
+W, H, LATO, BORDO, COLONNE, RIGHE, SBORDO = 4096, 2048, 512, 2, 8, 4, 3
 
 
 def sborda(rgba):

@@ -10,6 +10,8 @@ export interface DatiMappaFatta {
   mare: number;
   /** cartella della grafica in public/assets/mappe/ (assente = terreno dipinto con i colori dei materiali) */
   arte?: string;
+  /** Fase 2: sottocartella delle tessere HD dentro `arte` (assente = 'hd'; il Prologo della Cala v3 usa 'hd-prologo') */
+  arteHd?: string;
   /** lato 0 a sinistra, lato 1 a destra; ogni lato dal più interno al più esterno */
   spawn: [Punto[], Punto[]];
   barili: Punto[];

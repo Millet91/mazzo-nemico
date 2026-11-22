@@ -189,7 +189,9 @@ const intestazione = (script: string) => `// GENERATO da scripts/mappe/${script}
   }
   console.log(`${ID}:`, JSON.stringify({ spawn, appigli: appigli.length, nemicoPiuVicino: Math.round(Math.min(...spawn[0].flatMap((p) => spawn[1].map((n) => Math.hypot(n.x - p.x, n.y - p.y))))) }));
   writeFileSync(`src/battaglia/mappe/${ID}.dati.ts`, `${intestazione('costruisci-v3.ts')}export const DATI: DatiMappaFatta = ${JSON.stringify({
-    id: ID, nome: 'Cala Pappagallo (Prologo)', bioma: 'isola', mare: MARE, w: W, h: H, arte: conArte ? ID : undefined,
+    // arte: la cartella della mappa di battaglia, con le sue tessere HD solo dove la sagoma cambia (hd-prologo)
+    id: ID, nome: 'Cala Pappagallo (Prologo)', bioma: 'isola', mare: MARE, w: W, h: H,
+    arte: conArte ? 'cala-pappagallo-v3' : undefined, arteHd: conArte ? 'hd-prologo' : undefined,
     copione: true, spawn, barili: [], appigli, segnaposti, decorazioni: deco, sostegni: SOSTEGNI, strutture: perIDati(strutture), maschera: codificaMaschera(m),
   }, null, 1)};\n`);
   scriviMateriali(ID, m, tag, pezzo);

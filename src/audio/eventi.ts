@@ -62,6 +62,12 @@ export const MUTI_PER_SCELTA: Partial<Record<EventoBattaglia['t'], string>> = {
   fase: 'cambio di fase interno: i momenti che contano hanno già il loro evento (sparo, turnoIniziato, fine)',
   timerAvviato: 'il timer parte in silenzio; suona solo negli ultimi 5 secondi (tic-tac dalla VistaBattaglia)',
   cratere: 'serve al disegno del terreno: il botto è già nell\'evento esplosione',
+  crollo: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
+  macerie: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
+  fuoco: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
+  frana: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
+  ponteCalato: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
+  maschera: 'serve al disegno del terreno: il suono è già negli eventi crollo, fuoco e frana',
 };
 
 const PASSI: Record<number, { id: IdSuono; intonazione?: number }> = {
@@ -215,6 +221,7 @@ export function suoniPerEventi(eventi: readonly EventoBattaglia[], vista: VistaB
         break;
       }
       case 'fase': case 'timerAvviato': case 'cratere': break;
+      case 'crollo': case 'macerie': case 'maschera': case 'fuoco': case 'frana': case 'ponteCalato': break; // Fase 3: li collega Audio
       default: {
         // un evento nuovo nei contratti deve passare da qui: il compilatore si ferma su questa riga
         const mai: never = e;

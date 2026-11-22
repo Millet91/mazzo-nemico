@@ -113,7 +113,19 @@ export const BIL = {
    * Macerie (studio v2, PIANO §7; Bilanciamento): un blocco che cade fa 8 PV a pirata, al massimo 20 PV per turno a
    * pirata; sotto 5 PV il numero non si mostra. Numeri a priori: la sim li userà dalla Fase 3 (il campo si spezza).
    */
-  macerie: { danno: 8, maxPerTurno: 20, mostraDa: 5 },
+  macerie: { danno: 8, maxPerTurno: 20, mostraDa: 5, massoDanno: 20, massoSpinta: 4 /* px/tick */ },
+
+  /**
+   * Fase 3, sostegno strutturale (contratto del Lead P1, 22/11/2026). Un pezzo staccato dal fondale e senza sostegni
+   * cade solo se la ricerca si chiude entro pezzoMaxPx (oltre è "corpo dell'isola": resta su). Sotto briciolePx
+   * sparisce in polvere. Anti-frustrazione: niente crolli prima di dalTurno; un pezzo non cade se uno spawn iniziale
+   * sta nella sua zona di caduta (il pezzo prolungato fino al mare) allargata di rispettoSpawnPx per lato.
+   */
+  crolli: { pezzoMaxPx: 6000, briciolePx: 24, rispettoSpawnPx: 24, dalTurno: 2, spintaTorre: 0.6 /* px/tick */, ricercheMax: 8 },
+  /** legno che brucia: tra il bordo del cratere e anello × raggio; 6 PV a fine turno a chi ci sta dentro */
+  fuoco: { durataTick: 4 * S, anello: 1.3, danno: 6 },
+  /** sabbia che frana nei buchi piccoli, al massimo per questi tick */
+  sabbia: { franaMaxTick: 45 },
 
   /** scale e liane distruttibili (richiesta del proprietario, 21/11/2026) */
   /**

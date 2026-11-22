@@ -60,6 +60,9 @@ export const it = {
     provaInCorso: 'Prova in corso: 60 secondi…',
     provaRisultato: (medio: number, minimo: number, lenti: number, msSim: number) =>
       `${medio} fps medi · minimo ${minimo} · ${lenti} frame lenti · sim ${msSim.toFixed(2)} ms per tick`,
+    /** tempo di disegno per frame (budget 8 ms): medio e p95 a zoom normale e da lontano */
+    provaDisegno: (medio: number, p95Normale: number, p95Lontano: number) =>
+      `disegno ${medio.toFixed(1)} ms medi · p95 ${p95Normale.toFixed(1)} ms a zoom normale · ${p95Lontano.toFixed(1)} ms da lontano`,
     audio: 'Audio',
     audioNota: 'Suoni pronti, motore audio e da dove vengono i suoni (calcolati ora o tenuti sul telefono).',
     /** es. "Audio: 73 su 73 suoni pronti in 5,6 s (calcolati) · motore acceso" */

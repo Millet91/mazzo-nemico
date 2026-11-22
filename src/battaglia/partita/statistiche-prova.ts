@@ -110,9 +110,10 @@ export function calcolaRisultato(d: DatiProva): RisultatoProvaFps {
 }
 
 /** Battaglia della prova: 5 contro 5, IA Mozzo contro IA Mozzo, seme fisso. */
-export function configProva(seme: number): ConfigBattaglia {
+export function configProva(seme: number, mappaFissa?: string): ConfigBattaglia {
   return {
     versioneRegole: 1, seme, bioma: 'isola', timerSecondi: 20, traiettoriaCompleta: false,
+    ...(mappaFissa ? { mappaFissa } : {}),
     squadre: [
       { ciurma: 'teschio', ruolo: 'attaccante', controllo: 'ia', livelloIa: 'mozzo', pirati: 5 },
       { ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: 5 },

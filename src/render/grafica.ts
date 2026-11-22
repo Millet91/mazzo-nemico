@@ -8,6 +8,8 @@ import { Application } from 'pixi.js';
 // qui: lo controlla tests/render/pipe-pixi.test.ts.
 import 'pixi.js/text';
 import 'pixi.js/sprite-tiling';
+// il terreno HD (render/terreno-hd.ts) disegna le tessere come Mesh con uno shader suo
+import 'pixi.js/mesh';
 import { bus } from '../core/bus';
 import { PALETTE, hex } from '../core/palette';
 import { MisuraFps } from './misura-fps';

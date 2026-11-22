@@ -16,6 +16,7 @@ import { Effetti } from './effetti';
 import { Forme, sprite, type IdForma } from './forme';
 import { TerrenoRender } from './terreno';
 import { TerrenoHd, type MisureHd } from './terreno-hd';
+import { PezziCadenti } from './pezzi-cadenti';
 import { PezziPirata, RigPirata, SCALA_MIN_PUPAZZO } from './pirata-rig';
 import {
   armaPosa, bersaglio, mossaDaStato, nuovaPosa, nuoviParametri, RIALZATA_MS, risolvi, sfuma, SFUMA_MS,
@@ -162,6 +163,8 @@ export class ScenaBattaglia {
   readonly terreno: TerrenoRender;
   /** terreno HD (Fase 2): quando la mappa ha hd/ prende il posto di `terreno` appena le tessere sono caricate */
   private hd: TerrenoHd | null = null;
+  /** Fase 3: i pezzi che si staccano e cadono, con l'arte ritagliata */
+  readonly cadenti: PezziCadenti;
   /** mentre il terreno HD si carica: i rettangoli cambiati nella maschera (estremi compresi), da passargli dopo */
   private cambiHd: [number, number, number, number][] | null = null;
   private distrutta = false;
@@ -238,7 +241,7 @@ export class ScenaBattaglia {
     if (mappa.arte) {
       // terreno HD: si carica in parallelo agli sfondi; finché non arriva resta il terreno dipinto sulla CPU
       this.cambiHd = [];
-      void TerrenoHd.carica(mappa.arte, s.terreno, this.terreno.maschera0, renderer).then((hd) => {
+      void TerrenoHd.carica(mappa.arte, s.terreno, this.terreno.maschera0, renderer, mappa.arteHd).then((hd) => {
         const cambi = this.cambiHd ?? [];
         this.cambiHd = null;
         if (!hd) return;
@@ -270,7 +273,12 @@ export class ScenaBattaglia {
     this.anelloTerra = sprite(this.forme.get('anello'));
     this.anelloTerra.tint = hex(PALETTE.oro);
     this.freccia = sprite(this.forme.get('freccia'));
-    this.mondo.addChild(this.appigli.radice, this.anelloTerra, this.strato.pirati, this.strato.proiettili, this.strato.traiettoria, this.effetti.mondo, this.acqua);
+    this.cadenti = new PezziCadenti({
+      ritaglioHd: () => (this.hd ? (x, y, w, h) => this.hd!.ritaglio(x, y, w, h) : null),
+      arte: () => this.terreno.arteRgba,
+      mondoW: s.terreno.w, mondoH: s.terreno.h,
+    });
+    this.mondo.addChild(this.cadenti.radice, this.appigli.radice, this.anelloTerra, this.strato.pirati, this.strato.proiettili, this.strato.traiettoria, this.effetti.mondo, this.acqua);
 
     // la traiettoria sta nello strato schermo: misura costante a ogni zoom
     for (let i = 0; i < MAX_PUNTINI; i++) {
@@ -403,7 +411,12 @@ export class ScenaBattaglia {
           this.terreno.cratere(e.x, e.y, e.raggio); this.hd?.cratere(e.x, e.y, e.raggio); this.cambiHd?.push([e.x - e.raggio, e.y - e.raggio, e.x + e.raggio, e.y + e.raggio]);
           this.decorazioniSenzaTerra(e.x, e.y, e.raggio);
           break;
-        case 'maschera': this.terreno.maschera(e.x0, e.y0, e.x1, e.y1); this.hd?.maschera(e.x0, e.y0, e.x1, e.y1); this.cambiHd?.push([e.x0, e.y0, e.x1, e.y1]); break; // Fase 3: per ora il pezzo sparisce e basta
+        case 'maschera': this.terreno.maschera(e.x0, e.y0, e.x1, e.y1); this.hd?.maschera(e.x0, e.y0, e.x1, e.y1); this.cambiHd?.push([e.x0, e.y0, e.x1, e.y1]); break;
+        case 'crollo': {
+          const p = this.s.pezzi?.find((x) => x.id === e.pezzo);
+          if (p) this.cadenti.crollo(p);
+          break;
+        }
         case 'esplosione': this.effetti.esplosione(e.x, e.y, e.raggio); break;
         case 'splash': this.effetti.splash(e.x, e.y, e.grande); break;
         case 'colpoPistola': this.effetti.lineaPistola(e.da.x, e.da.y, e.a.x, e.a.y); break;
@@ -500,6 +513,7 @@ export class ScenaBattaglia {
     this.effetti.impostaMare(s.terreno.mare);
     this.animaDecorazioni();
     this.appigli.aggiorna(s.appigli ?? [], deltaMS, this.tempo);
+    this.cadenti.aggiorna(s.pezzi);
 
     const t = s.turno;
     const attivo = s.pirati.find((p) => p.id === t.pirata && p.stato === 'vivo');
@@ -864,6 +878,7 @@ export class ScenaBattaglia {
     this.distrutta = true;
     this.sfondi?.distruggi();
     this.hd?.distruggi();
+    this.cadenti.distruggi();
     this.terreno.distruggi();
     this.effetti.distruggi();
     this.cielo.destroy({ children: true });

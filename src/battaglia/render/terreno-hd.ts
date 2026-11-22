@@ -314,6 +314,10 @@ export class TerrenoHd {
   /** rettangolo da ricaricare sulla GPU, in px di mondo: x0, y0, x1, y1 */
   private sporco: [number, number, number, number] | null = null;
   private readonly tessere: Texture[] = [];
+  /** dove sta ogni tessera nel mondo (px di mondo) e il suo lato: per ritagliare l'arte dei pezzi che cadono */
+  private readonly posizioni: { x: number; y: number; lato: number }[] = [];
+  private scala = 2;
+  private bordo = 2;
   misure: MisureHd = { caricamentoMs: 0, tessere: 0, byteTexture: 0, passoPeggioreMs: 0 };
   private passoPeggiore = 0;
   private distrutto = false;
@@ -352,6 +356,8 @@ export class TerrenoHd {
     const mondoLato = indice.lato / indice.scala;
     const pieno = indice.lato + 2 * indice.bordo;
     lista.forEach((t, i) => hd.aggiungiTessera(caricate[i]!, t.colonna * mondoLato, t.riga * mondoLato, mondoLato, indice.bordo / pieno, (indice.bordo + indice.lato) / pieno));
+    hd.scala = indice.scala;
+    hd.bordo = indice.bordo;
     await hd.precarica();
     hd.misure = {
       caricamentoMs: Math.round(performance.now() - t0),
@@ -372,6 +378,7 @@ export class TerrenoHd {
     // le mipmap le crea Pixi al primo caricamento sulla GPU (se la tessera è già in cache, le ha già)
     s.autoGenerateMipmaps = true;
     this.tessere.push(t);
+    this.posizioni.push({ x, y, lato });
     const geometria = new Geometry({
       attributes: {
         aPosition: [0, 0, lato, 0, lato, lato, 0, lato],
@@ -431,6 +438,27 @@ export class TerrenoHd {
       init(this.tessere[i].source);
     }
     this.passoPeggiore = Math.max(this.passoPeggiore, performance.now() - t);
+  }
+
+  /**
+   * Il quadro HD del rettangolo [x0, x0+w) × [y0, y0+h) del mondo, come canvas a `scala`× (Fase 3: l'arte di un
+   * pezzo che si stacca). Null se le tessere non si possono leggere (risorsa che non è un'immagine).
+   */
+  ritaglio(x0: number, y0: number, w: number, h: number): { canvas: HTMLCanvasElement; scala: number } | null {
+    const k = this.scala;
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.ceil(w * k)); c.height = Math.max(1, Math.ceil(h * k));
+    const g = c.getContext('2d');
+    if (!g) return null;
+    for (let i = 0; i < this.tessere.length; i++) {
+      const p = this.posizioni[i];
+      if (p.x >= x0 + w || p.y >= y0 + h || p.x + p.lato <= x0 || p.y + p.lato <= y0) continue;
+      const img = this.tessere[i].source.resource as CanvasImageSource | undefined;
+      if (!img || typeof (img as { width?: unknown }).width !== 'number') return null;
+      // la tessera intera (senza il bordo) va a (p.x − x0)·k nel canvas
+      g.drawImage(img, this.bordo, this.bordo, p.lato * k, p.lato * k, (p.x - x0) * k, (p.y - y0) * k, p.lato * k, p.lato * k);
+    }
+    return { canvas: c, scala: k };
   }
 
   /** Evento `cratere`: ricalcola i canali nelle colonne toccate e segna il rettangolo da ricaricare. */

@@ -32,7 +32,7 @@ const BRUCIATO_RGB = rgb(PALETTE.bordoBruciato);
 const PROFONDA_RGB = rgb(PALETTE.terraProfonda);
 
 /** grana del pixel: −6..+6 su ogni canale, sempre uguale per lo stesso punto */
-function grana(x: number, y: number): number {
+export function grana(x: number, y: number): number {
   let h = Math.imul(x, 73856093) ^ Math.imul(y >> 1, 19349663) ^ Math.imul(x >> 3, 83492791);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h >>> 24) % 13) - 6;

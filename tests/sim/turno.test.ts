@@ -194,14 +194,16 @@ describe('Comandi di mira e movimento', () => {
     inAzione(s);
     const p = pirata(s);
     eseguiComando(s, { t: 'muovi', dir: 1 });
-    avanza(s, 60);
-    expect(p.x).toBeCloseTo(860, 5);
+    avanza(s, 20);
+    expect(p.x).toBeCloseTo(820, 5); // passo corto: 1 px a tick
+    avanza(s, 40);
+    expect(p.x).toBeGreaterThan(870); // tenendo premuto parte la corsa
     eseguiComando(s, { t: 'muovi', dir: 0 });
     eseguiComando(s, { t: 'salta', indietro: false });
     const ev = avanza(s, 1);
     expect(eventiDi(ev, 'salto')).toEqual([{ t: 'salto', pirata: p.id }]);
     avanzaFinche(s, () => p.aTerra);
-    expect(p.x).toBeGreaterThan(870);
+    expect(p.x).toBeGreaterThan(900);
     const x = p.x;
     eseguiComando(s, { t: 'salta', indietro: true });
     avanza(s, 1);

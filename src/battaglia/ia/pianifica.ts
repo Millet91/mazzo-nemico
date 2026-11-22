@@ -59,8 +59,12 @@ const BALISTICHE: IdArma[] = ['cannone', 'granata'];
 const ALZI_TRACCIA = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80];
 /** Linee per coppia (arma, bersaglio): le migliori secondo la traccia. */
 const LINEE_PER_MIRA = 2;
-/** La fuga dura BIL.ritmo.fugaTick (1,5 s dallo sparo): il tratto di strada da controllare. */
-export const PASSI_FUGA = Math.ceil(BIL.ritmo.fugaTick * BIL.pirata.camminata);
+/**
+ * La fuga dura BIL.ritmo.fugaTick (1,5 s dallo sparo): il tratto di strada da controllare. Tenendo la freccia il
+ * pirata fa i primi corsaDopoTick al passo e poi corre; il 10% in più copre le discese, dove va più svelto.
+ */
+export const PASSI_FUGA = Math.ceil(1.1 * (BIL.movimento.corsaDopoTick * BIL.movimento.passoVel
+  + (BIL.ritmo.fugaTick - BIL.movimento.corsaDopoTick) * BIL.movimento.corsaVel));
 /**
  * Il turno dell'IA deve stare in BIL.ritmo.iaTurnoMaxTick (4 s): tolti l'inquadratura, la mira visibile e la
  * risoluzione, al colpo restano circa 2,5 s di volo. Un tiro più lento si sceglie solo se non c'è di meglio.

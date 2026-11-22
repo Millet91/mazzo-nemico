@@ -1,5 +1,11 @@
 // Pezzi riusati da più ricette.
-import type { Sint } from '../sintesi';
+import { CODA_CICLO, type Sint } from '../sintesi';
+
+/**
+ * Rumore "piatto" per i suoni in ciclo: dura tutto il giro e ANCHE la coda in più che il magazzino ripiega
+ * sull'inizio (`chiudiGiro`), così al punto in cui il giro ricomincia non c'è nessun buco.
+ */
+export const piatto = (durata: number) => ({ durata: durata + CODA_CICLO, attacco: 0.001, tenuta: durata + CODA_CICLO });
 
 /** Campana di bordo: parziali di una campana vera (ronzio, fondamentale, terza minore, quinta, ottava...). */
 export function campana(s: Sint, t: number, base: number, vol: number, coda: number, verso?: AudioNode): void {

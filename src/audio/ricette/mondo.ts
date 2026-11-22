@@ -24,7 +24,7 @@ export const MONDO = {
   },
   /** annegamento: gorgoglio e bolle */
   annega: {
-    canale: 'effetti', volume: 0.5, durata: 1.5,
+    freq: 16000, canale: 'effetti', volume: 0.5, durata: 1.5,
     ricetta(s) {
       s.rumore({ durata: 1.4, vol: 0.3, attacco: 0.1, da: 320 });
       bolle(s, 16, 0.02, 1.35, 0.8, 250, 700);
@@ -32,7 +32,7 @@ export const MONDO = {
   },
   /** il mare sale: rombo d'onda e legni che gemono */
   mare_sale: {
-    canale: 'effetti', volume: 0.8, durata: 2.0,
+    freq: 24000, canale: 'effetti', volume: 0.8, durata: 2.0,
     ricetta(s) {
       s.rumore({ durata: 2.0, vol: 1, attacco: 0.6, tenuta: 0.4, da: 220, a: 520, verso: s.satura(2) });
       s.rumore({ t: 0.2, durata: 1.7, vol: 0.35, attacco: 0.7, filtro: 'bandpass', da: 1400, a: 2600, q: 0.5 });
@@ -42,7 +42,7 @@ export const MONDO = {
   },
   /** una cassa scende dal cielo: la tela del paracadute che sbatte e un fischio che cala */
   cassa_arriva: {
-    canale: 'effetti', volume: 0.2, durata: 0.8,
+    freq: 16000, canale: 'effetti', volume: 0.2, durata: 0.8,
     ricetta(s) {
       s.tono({ da: 1500, a: 720, durata: 0.7, vol: 0.5, attacco: 0.05, tenuta: 0.3, vibrato: { hz: 9, cent: 25 } });
       for (const t of [0.05, 0.22, 0.41, 0.58]) s.rumore({ t, durata: 0.09, vol: 0.6, attacco: 0.02, filtro: 'bandpass', da: 700, a: 1500, q: 1 });
@@ -50,7 +50,7 @@ export const MONDO = {
   },
   /** cassa di rum: due sorsi e un tintinnio contento */
   cassa_rum: {
-    canale: 'effetti', volume: 0.5, durata: 0.9,
+    freq: 16000, canale: 'effetti', volume: 0.5, durata: 0.9,
     ricetta(s) {
       [0, 0.11, 0.22].forEach((t, i) => s.tono({ t, da: 300 + i * 45, a: 560 + i * 60, durata: 0.07, vol: 0.7, attacco: 0.008 }));
       s.modi({ t: 0.36, base: 1047, rapporti: [1, 2, 3.01], code: [0.35, 0.2, 0.12], vol: 0.5 });
@@ -70,7 +70,7 @@ export const MONDO = {
   },
   /** tocca a te: campana di bordo, due rintocchi */
   turno_mio: {
-    canale: 'effetti', volume: 0.45, durata: 1.5, maxIstanze: 1,
+    freq: 16000, canale: 'effetti', volume: 0.45, durata: 1.5, maxIstanze: 1,
     ricetta(s) {
       campana(s, 0, 880, 0.8, 0.7);
       campana(s, 0.24, 880, 1, 0.9);
@@ -78,21 +78,21 @@ export const MONDO = {
   },
   /** tocca al nemico: un rintocco grave */
   turno_nemico: {
-    canale: 'effetti', volume: 0.4, durata: 1.3, maxIstanze: 1,
+    freq: 16000, canale: 'effetti', volume: 0.4, durata: 1.3, maxIstanze: 1,
     ricetta(s) {
       campana(s, 0, 494, 1, 0.85);
     },
   },
   /** un pirata è morto: rintocco lento e basso */
   rintocco_morte: {
-    canale: 'effetti', volume: 0.45, durata: 1.8, maxIstanze: 2,
+    freq: 16000, canale: 'effetti', volume: 0.45, durata: 1.8, maxIstanze: 2,
     ricetta(s) {
       campana(s, 0, 330, 1, 1.2);
     },
   },
   /** bandiera strappata: stoffa che schiocca e tre note in salita */
   bandiera_presa: {
-    canale: 'effetti', volume: 0.6, durata: 1.2,
+    freq: 24000, canale: 'effetti', volume: 0.6, durata: 1.2,
     ricetta(s) {
       s.rumore({ durata: 0.2, vol: 0.7, attacco: 0.03, filtro: 'bandpass', da: 900, a: 2600, q: 0.9 });
       [587, 740, 880].forEach((hz, i) => s.modi({ t: 0.12 + i * 0.13, base: hz, rapporti: [1, 2, 3, 4.02], code: [i === 2 ? 0.7 : 0.25, 0.2, 0.14, 0.1], vol: 0.6 }));
@@ -108,7 +108,7 @@ export const MONDO = {
   },
   /** ambiente: un gabbiano lontano */
   amb_gabbiano: {
-    canale: 'effetti', volume: 0.1, durata: 1.0, varianti: 2, maxIstanze: 1,
+    freq: 16000, canale: 'effetti', volume: 0.1, durata: 1.0, varianti: 2, maxIstanze: 1,
     ricetta(s) {
       const f = s.filtro('bandpass', 2400, 1.2);
       const quanti = 2 + Math.floor(s.rnd() * 2);
@@ -120,7 +120,7 @@ export const MONDO = {
   },
   /** ambiente: un legno che geme */
   amb_legno: {
-    canale: 'effetti', volume: 0.12, durata: 0.9, varianti: 2, maxIstanze: 1,
+    freq: 16000, canale: 'effetti', volume: 0.12, durata: 0.9, varianti: 2, maxIstanze: 1,
     ricetta(s) {
       scricchiolio(s, 0, s.tra(0.5, 0.8), 0.9, s.tra(600, 900));
     },

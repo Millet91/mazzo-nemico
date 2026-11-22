@@ -779,3 +779,25 @@ test('Fase 1: panoramica a inizio turno, frecce rosse per i nemici fuori vista, 
   expect(await page.evaluate(() => (window as any).__kaboom.camera().segui)).not.toBe('pirata');
   await page.mouse.up();
 });
+
+test('Fase 2: Cala Pappagallo v3 col terreno HD: 18 tessere, texture sotto 48 MB, nessun errore', async ({ page }) => {
+  test.setTimeout(60000);
+  const errori: string[] = [];
+  page.on('pageerror', (e) => errori.push(e.message));
+  await page.setViewportSize({ width: 915, height: 412 });
+  await page.goto('/?prova');
+  await page.locator('#schermaglia').click();
+  await page.locator('#mappa-cala-pappagallo-v3').click();
+  await page.locator('#salpa').click();
+  await expect.poll(() => page.evaluate(() => (window as any).__kaboom.terrenoHd?.()), { timeout: 15000 }).toBeTruthy();
+  const m = await page.evaluate(() => (window as any).__kaboom.terrenoHd()) as { tessere: number; caricamentoMs: number; byteTexture: number };
+  expect(m.tessere).toBe(18);
+  expect(m.byteTexture).toBeLessThan(48 * 1024 * 1024);
+  // la camera di prova va dove si chiede (le foto e la prova delle giunture usano vaiA e aSchermo)
+  await page.evaluate(() => (window as any).__kaboom.vaiA(1030, 600, 1.4));
+  await page.waitForTimeout(300);
+  const p = await page.evaluate(() => (window as any).__kaboom.aSchermo(1030, 600)) as { x: number; y: number };
+  expect(Math.abs(p.x - 915 / 2)).toBeLessThan(5);
+  await page.screenshot({ path: 'test-results/screenshot/fase2-terreno-hd.png' });
+  expect(errori).toEqual([]);
+});

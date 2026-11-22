@@ -28,6 +28,7 @@ import { InputBattaglia } from '../render/input';
 import { ScenaBattaglia } from '../render/scena-battaglia';
 import { Partita } from './partita';
 import { creaVista, visteUguali } from './vista';
+import { aspettaRisoluzione, risoluzioneAttuale } from '../../render/risoluzione';
 import { calcolaRisultato, configProva, type FrameDisegno, type RisultatoProvaFps } from './statistiche-prova';
 
 export type { RisultatoProvaFps };
@@ -54,6 +55,8 @@ interface Prova {
   tick: number;
   risolvi: (r: RisultatoProvaFps) => void;
   seme: number;
+  /** mappa fatta a mano della prova (assente = isola generata) */
+  mappa?: string;
 }
 
 /** Il regista attivo (uno solo per app): serve a provaFps della Diagnostica. */
@@ -107,8 +110,18 @@ export class Regista {
       // frecce dei nemici fuori vista e stato della camera, per le prove a schermo
       prova.frecce = () => this.frecce?.ultime ?? [];
       prova.camera = () => ({ x: this.camera.x, y: this.camera.y, segui: this.segui });
+      // terreno HD: misure (caricamento, memoria) e camera puntata su un punto a uno zoom, per le foto
+      (prova as { terrenoHd?: () => unknown }).terrenoHd = () => this.scena?.misureHd ?? null;
+      (prova as { vaiA?: (x: number, y: number, zoom: number) => void }).vaiA = (x, y, zoom) => {
+        this.segui = 'libera'; this.panoramica = null; this.camera.zoomA(zoom); this.camera.vola(x, y, 0);
+      };
+      // dove cade sullo schermo (px CSS) un punto del mondo: per le prove sulle giunture delle tessere HD
+      (prova as { aSchermo?: (x: number, y: number) => { x: number; y: number } | null }).aSchermo = (x, y) => {
+        const g = this.scena?.mondo.toGlobal({ x, y });
+        return g ? { x: g.x, y: g.y } : null;
+      };
       // la "Prova 60 fps" della Diagnostica col risultato intero (tempi di disegno per fascia di zoom)
-      (prova as { provaFps?: (ms: number) => Promise<RisultatoProvaFps> }).provaFps = (ms: number) => this.avviaProva(ms);
+      (prova as { provaFps?: (ms: number, mappa?: string) => Promise<RisultatoProvaFps> }).provaFps = (ms: number, mappa?: string) => this.avviaProva(ms, mappa);
     }
     this.camera.impostaSchermo(app.screen.width, app.screen.height);
     app.renderer.on('resize', (w: number, h: number) => this.camera.impostaSchermo(w, h));
@@ -124,6 +137,8 @@ export class Regista {
   }
 
   private avvia(cfg: ConfigBattaglia): void {
+    // gli scatti della partenza (scena, sfondi, terreno HD) non devono abbassare la risoluzione
+    aspettaRisoluzione();
     this.chiudiPartita();
     this.config = cfg;
     const partita = new Partita(cfg);
@@ -505,14 +520,17 @@ export class Regista {
 
   // ─── Diagnostica: "Prova 60 fps" (piano QA §4) ───
 
-  /** Battaglia dimostrativa 5 contro 5, IA contro IA, con zoom che va dal minimo al massimo. */
-  avviaProva(durataMs: number): Promise<RisultatoProvaFps> {
+  /**
+   * Battaglia dimostrativa 5 contro 5, IA contro IA, con zoom che va dal minimo al massimo. `mappa`: mappa fatta a
+   * mano (solo dal gancio di prova: es. 'cala-pappagallo-v3' per misurare il terreno HD); senza, l'isola generata.
+   */
+  avviaProva(durataMs: number, mappa?: string): Promise<RisultatoProvaFps> {
     if (this.prova) return Promise.reject(new Error('prova già in corso'));
     return new Promise((risolvi) => {
       const seme = 20261121;
       const ora = performance.now();
-      this.prova = { inizio: ora, fine: ora + durataMs, perSecondo: [], secondiAvvio: new Set([0]), delta: [], disegno: [], msSim: 0, tick: 0, risolvi, seme };
-      bus.richiestaBattaglia.value = configProva(seme);
+      this.prova = { inizio: ora, fine: ora + durataMs, perSecondo: [], secondiAvvio: new Set([0]), delta: [], disegno: [], msSim: 0, tick: 0, risolvi, seme, mappa };
+      bus.richiestaBattaglia.value = configProva(seme, mappa);
     });
   }
 
@@ -540,13 +558,14 @@ export class Regista {
       pr.msSim += pa.msSim; pr.tick += pa.tickSimulati;
       pr.seme++;
       pr.secondiAvvio.add(sec); pr.secondiAvvio.add(sec + 1);
-      bus.richiestaBattaglia.value = configProva(pr.seme);
+      bus.richiestaBattaglia.value = configProva(pr.seme, pr.mappa);
       return;
     }
     if (ora < pr.fine) return;
     const r = calcolaRisultato({
       perSecondo: pr.perSecondo, secondiAvvio: pr.secondiAvvio, delta: pr.delta, disegno: pr.disegno,
       msSim: pr.msSim + pa.msSim, tick: pr.tick + pa.tickSimulati, durataMs: ora - pr.inizio,
+      risoluzione: risoluzioneAttuale() ?? this.app.renderer.resolution,
     });
     this.prova = null;
     this.termina();

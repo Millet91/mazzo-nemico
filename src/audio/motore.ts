@@ -11,7 +11,7 @@ import { AUDIO, type IdSuono } from './registro';
 import type { Richiesta } from './eventi';
 import { ATTENUA, db, INTONAZIONE, ISTANZE_PER_SUONO, PAUSA, POLIFONIA_MAX, VOLUME_AMBIENTE, VOLUME_CANALE, type IdAttenua } from './mix';
 import { Polifonia, type Istanza } from './polifonia';
-import { campioni, FREQ_SINTESI } from './magazzino';
+import { campioni, freqDi } from './magazzino';
 import type { VoceAudio } from './tipi';
 
 interface Vivo extends Istanza { sorgente: AudioBufferSourceNode; guadagno: GainNode }
@@ -82,8 +82,9 @@ export class Motore {
     if (b) return b;
     const dati = campioni(id);
     if (!dati) return null;
+    const freq = freqDi(AUDIO[id]);
     b = dati.map((d) => {
-      const buf = this.ctx.createBuffer(1, d.length, FREQ_SINTESI);
+      const buf = this.ctx.createBuffer(1, d.length, freq);
       buf.getChannelData(0).set(d);
       return buf;
     });

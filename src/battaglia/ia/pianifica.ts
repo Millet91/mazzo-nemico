@@ -30,6 +30,8 @@ interface Prova {
   colpo: PianoColpo;
   esito: EsitoColpo;
   punti: number;
+  /** tick dal fuoco allo scoppio, stimati (traccia veloce, o miccia della granata); 0 per pistola e sciabola */
+  volo: number;
 }
 
 /** Una linea di tiro balistica (cannone o granata) verso un bersaglio, con un angolo fisso. */
@@ -45,6 +47,8 @@ interface Linea {
   prove: number;
   ultima?: Prova;
   finita: boolean;
+  /** tick di volo stimati dalla traccia veloce */
+  volo: number;
 }
 
 /** Quante simulazioni tenere da parte per controllare il tiro con l'errore umano. */
@@ -55,8 +59,15 @@ const BALISTICHE: IdArma[] = ['cannone', 'granata'];
 const ALZI_TRACCIA = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80];
 /** Linee per coppia (arma, bersaglio): le migliori secondo la traccia. */
 const LINEE_PER_MIRA = 2;
-/** La fuga dura BIL.turno.fugaTick: il tratto di strada da controllare. */
-const PASSI_FUGA = Math.ceil(BIL.turno.fugaTick * BIL.pirata.camminata);
+/** La fuga dura BIL.ritmo.fugaTick (1,5 s dallo sparo): il tratto di strada da controllare. */
+export const PASSI_FUGA = Math.ceil(BIL.ritmo.fugaTick * BIL.pirata.camminata);
+/**
+ * Il turno dell'IA deve stare in BIL.ritmo.iaTurnoMaxTick (4 s): tolti l'inquadratura, la mira visibile e la
+ * risoluzione, al colpo restano circa 2,5 s di volo. Un tiro più lento si sceglie solo se non c'è di meglio.
+ */
+export const VOLO_IA_MAX = BIL.ritmo.iaTurnoMaxTick - BIL.camera.inquadraTick - BIL.ritmo.iaMiraVisibileTick - BIL.turno.risoluzioneFermoTick - 6;
+/** Un tiro entro il tempo si preferisce se vale almeno questa parte del migliore. */
+const QUOTA_TIRO_RAPIDO = 0.7;
 /** Oltre questa distanza dall'impatto non serve scappare. */
 const DISTANZA_FUGA = 200;
 
@@ -76,10 +87,10 @@ export function decidiCon(s: StatoBattaglia, livello: LivelloIa, simula: Simulat
   const riserva = Math.min(RISERVA_ERRORE, Math.floor(par.simulazioni / 10));
   let rimasti = par.simulazioni - riserva;
   const prove: Prova[] = [];
-  const prova = (colpo: PianoColpo): Prova => {
+  const prova = (colpo: PianoColpo, volo = 0): Prova => {
     rimasti--;
     const esito = simula(vista, colpo);
-    const p: Prova = { colpo, esito, punti: punteggio(s, io, esito) };
+    const p: Prova = { colpo, esito, punti: punteggio(s, io, esito), volo };
     prove.push(p);
     return p;
   };
@@ -119,14 +130,14 @@ export function decidiCon(s: StatoBattaglia, livello: LivelloIa, simula: Simulat
 
   for (const l of linee) {
     if (rimasti <= 0) break;
-    l.ultima = prova(colpoDi(io, l));
+    l.ultima = prova(colpoDi(io, l), tempoDi(l));
     l.prove++;
   }
   while (rimasti > 0) {
     const l = prossimaDaCorreggere(linee);
     if (!l) break;
     if (!correggi(io, l)) { l.finita = true; continue; }
-    l.ultima = prova(colpoDi(io, l));
+    l.ultima = prova(colpoDi(io, l), tempoDi(l));
     l.prove++;
   }
 
@@ -135,7 +146,11 @@ export function decidiCon(s: StatoBattaglia, livello: LivelloIa, simula: Simulat
   const ordinate = prove.slice().sort((a, b) => b.punti - a.punti); // sort stabile: a parità vince l'ordine di prova
   let scelta: Prova | undefined;
   const sicure = ordinate.filter((p) => !suicida(io, p.esito));
-  const buone = sicure.filter((p) => p.punti > soglia).slice(0, par.sceltaTraMigliori);
+  let buone = sicure.filter((p) => p.punti > soglia).slice(0, par.sceltaTraMigliori);
+  // ritmo (BIL.ritmo.iaTurnoMaxTick): se tra i migliori c'è un tiro che arriva in tempo e vale quasi quanto il
+  // primo, si sceglie solo tra quelli rapidi; i pallonetti lenti restano per quando non c'è altro
+  const rapide = buone.filter((p) => p.volo <= VOLO_IA_MAX);
+  if (rapide.length && rapide.length < buone.length && rapide[0].punti >= buone[0].punti * QUOTA_TIRO_RAPIDO) buone = rapide;
   if (buone.length) scelta = buone[Math.floor(casuale(rng) * buone.length)];
   else {
     // nessun tiro utile: almeno quello che cade più vicino a un nemico (non il primo provato, che può essere
@@ -311,10 +326,11 @@ function lineeVerso(s: StatoBattaglia, io: Pirata, b: Punto, arma: IdArma, vento
       p = nuova;
       tr = tracciaTiro(s, io.x, io.y, mezziGradi, p, vento);
     }
-    const mancato = Math.sqrt((tr.fine.x - b.x) ** 2 + (tr.fine.y - b.y) ** 2) + (tr.perso ? 300 : 0);
     const potenza = limita(Math.round(p), 5, 100);
-    const l: Linea = { arma, bersaglio: b, dir, mezziGradi, potenza, prove: 0, finita: false };
+    const l: Linea = { arma, bersaglio: b, dir, mezziGradi, potenza, prove: 0, finita: false, volo: tr.tick };
     if (ARMA[arma].miccia) l.miccia = micciaDaTick(arma, tr.tick);
+    // un tiro che non arriva in tempo (pallonetto alto, miccia lunga) vale come uno caduto 25 px più in là
+    const mancato = Math.sqrt((tr.fine.x - b.x) ** 2 + (tr.fine.y - b.y) ** 2) + (tr.perso ? 300 : 0) + (tempoDi(l) > VOLO_IA_MAX ? 25 : 0);
     out.push({ l, mancato, alzo: gradi });
   }
   // migliori per distanza dal bersaglio; a parità (entro 10 px) l'alzo più vicino a 45°
@@ -334,6 +350,11 @@ function micciaPer(arma: IdArma, dx: number, potenza: number, alzo: number): num
   const vx = (BIL.fisica.velocitaMaxProiettile * potenza / 100) * coseno(alzo);
   const tick = vx > 0 ? dx / vx : 999;
   return limita(Math.ceil(tick / 60), m.min, m.max);
+}
+
+/** Tick dal fuoco allo scoppio di una linea: il volo, o la miccia se l'arma ne ha una. */
+function tempoDi(l: Linea): number {
+  return l.miccia !== undefined ? l.miccia * 60 : l.volo;
 }
 
 function colpoDi(io: Pirata, l: Linea): PianoColpo {

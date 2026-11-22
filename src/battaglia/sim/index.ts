@@ -76,6 +76,11 @@ export function creaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata): Stato
       camminata: 0, arrampicata: 0, sparato: false, fermoDa: -1,
     },
     esito: null,
+    // Fase 3: il campo si spezza
+    pezzi: [], fuochi: [], frane: [],
+    strutture: (mappa.strutture ?? []).map((st) => ({ ...st, stato: 'intera' as const })),
+    sostegni: (mappa.sostegni ?? []).map((r) => ({ ...r })),
+    partenze: pirati.map((p) => ({ x: p.x, y: p.y + MEZZA_ALTEZZA_PIRATA })),
   };
   creaBarili(s, mappa.barili);
   creaAppigli(s, mappa.appigli);

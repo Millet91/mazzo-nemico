@@ -44,15 +44,26 @@ describe('Cala Pappagallo v3', () => {
       }
     });
 
-    it(`${id}: ogni muretto e cassa si supera davvero nei due versi, anche da sotto la tettoia della Duna`, () => {
+    it(`${id}: ogni muretto e cassa si supera davvero nei due versi, anche da sotto la Vedetta della Duna`, () => {
       // con la sim vera: si parte a 40 px dal pezzo, sul suolo accanto (sotto un eventuale tetto) e si tiene la
-      // freccia. Fino a 28 px basta lo scavalco automatico; sopra serve un Balzo, e uno solo.
+      // freccia. Fino a 28 px basta lo scavalco automatico; sopra serve un Balzo, e uno solo. Se prima dei 40 px
+      // c'è un ostacolo all'altezza della testa (il palo ovest della Vedetta), si parte e si arriva più vicino.
       const base = mappaFatta(id)!;
       const { w, maschera } = base.terreno;
       const sup = superficie(maschera);
+      const H = BIL.pirata.capsulaAltezza, L = BIL.pirata.capsulaLarghezza;
+      /** px liberi accanto al pezzo, dal lato `lato`, prima di una colonna piena all'altezza di un pirata (le gobbe del suolo fino a 6 px non contano) */
+      const spazio = (bordo: number, lato: 1 | -1, suolo: number) => {
+        for (let d = 3; d <= 40 + L; d++) for (let y = suolo - H - 6; y < suolo - 6; y++) if (maschera[y * w + bordo + lato * d]) return d;
+        return Infinity;
+      };
       for (const a of APPOGGI) for (const dir of [1, -1] as const) {
         const dove = `${a.tipo} in x ${a.x0} (${a.dove}) verso ${dir > 0 ? 'destra' : 'sinistra'}`;
-        const x0 = dir === 1 ? a.x0 - 40 : a.x1 + 40;
+        const prima = spazio(dir === 1 ? a.x0 : a.x1, (-dir) as 1 | -1, dir === 1 ? sup[a.x0 - 3] : sup[a.x1 + 3]);
+        const dopo = spazio(dir === 1 ? a.x1 : a.x0, dir, dir === 1 ? sup[a.x1 + 3] : sup[a.x0 - 3]);
+        const parti = Math.min(40, prima - L), arriva = Math.min(20, dopo - L);
+        expect(Math.min(parti, arriva), `${dove}: c'è posto per un pirata`).toBeGreaterThanOrEqual(L);
+        const x0 = dir === 1 ? a.x0 - parti : a.x1 + parti;
         let y0 = (dir === 1 ? sup[a.x0 - 3] : sup[a.x1 + 3]) - 20;
         while (maschera[y0 * w + x0] === 0) y0++;
         const s = creaBattaglia(config(1, 1), { ...base, spawn: [[{ x: x0, y: y0 }], [{ x: 1024, y: 272 }]] });
@@ -67,7 +78,7 @@ describe('Cala Pappagallo v3', () => {
           scavalchi += e.filter((x) => x.t === 'scavalco').length;
           fermi = Math.abs(p.x - ultimo) < 0.05 ? fermi + 1 : 0;
           ultimo = p.x;
-          passato = p.aTerra && (dir === 1 ? p.x > a.x1 + 20 : p.x < a.x0 - 20);
+          passato = p.aTerra && (dir === 1 ? p.x > a.x1 + arriva : p.x < a.x0 - arriva);
           if (fermi > 10 && balzi < 3) {
             eseguiComando(s, { t: 'salta', indietro: balzoPossibile(s) === 'muro' });
             eseguiComando(s, { t: 'muovi', dir });

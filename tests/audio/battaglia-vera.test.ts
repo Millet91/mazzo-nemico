@@ -3,7 +3,7 @@
 // intere sulla Cala v3) e ogni tick passa da suoniPerEventi come nel gioco. Si controlla l'ordine dei suoni e che
 // il mix regga: niente evento senza suono, niente raffiche, niente suono in ciclo che resta acceso.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import type { Comando, EventoBattaglia, StatoBattaglia } from '../../src/core/tipi';
 import { MATERIALE } from '../../src/core/tipi';
 import { avanzaTick, balzoPossibile, creaBattaglia, eseguiComando } from '../../src/battaglia/sim';
@@ -61,10 +61,13 @@ class Orecchio {
  * La sim manda già scivolata, bordo e piolo? (Fisica li aggiunge nella Fase 1: finché non ci sono, i test che li
  * aspettano dalla sim vera restano in attesa e gli altri controlli girano lo stesso)
  */
-const SIM = ['index', 'movimento', 'pirata', 'appigli'].map((f) => { try { return readFileSync(`src/battaglia/sim/${f}.ts`, 'utf8'); } catch { return ''; } }).join('\n');
+const SIM = readdirSync('src/battaglia/sim').filter((f) => f.endsWith('.ts')).map((f) => readFileSync(`src/battaglia/sim/${f}`, 'utf8')).join('\n');
 const HA_SCIVOLATA = /t:\s*'scivola'/.test(SIM);
 const HA_BORDO = /t:\s*'bordo'/.test(SIM);
 const HA_PIOLO = /t:\s*'piolo'/.test(SIM);
+/** Fase 3 (Fisica, PR 2 e 4): pezzi che cadono, fuoco, frane */
+const HA_CROLLI = /t:\s*'crollo'/.test(SIM);
+const HA_FUOCO = /t:\s*'fuoco'/.test(SIM);
 
 const salta = (indietro = false): Comando => ({ t: 'salta', indietro });
 
@@ -235,6 +238,18 @@ describe('Audio · battaglie intere sulla Cala v3, ogni tick passa dall\'audio',
     // il controllo "nessun ciclo acceso alla fine" sopra copre già le battaglie intere; qui si guarda che sia successo
     expect(visti.scivola ?? 0).toBeGreaterThan(0);
     expect(sentitiDa.scivola_ciclo ?? 0).toBeGreaterThan(0);
+  });
+
+  it.skipIf(!HA_CROLLI)('crolli veri: ogni pezzo staccato suona quando si stacca e quando arriva giù, ogni masso smette di rotolare', () => {
+    // i controlli per frame (nessun evento muto, al più 8 suoni, nessun ciclo acceso alla fine) valgono già per i crolli
+    expect(visti.crollo ?? 0).toBeGreaterThan(0);
+    expect(Object.keys(sentitiDa).filter((x) => x.startsWith('crollo_')).length).toBeGreaterThan(0);
+    expect(Object.keys(sentitiDa).some((x) => x.startsWith('macerie_') || x.startsWith('splash_'))).toBe(true);
+  });
+
+  it.skipIf(!HA_FUOCO)('fuoco vero: vampata e crepitio, spento col suo evento o a fine battaglia', () => {
+    expect(visti.fuoco ?? 0).toBeGreaterThan(0);
+    expect(sentitiDa.fuoco_accende ?? 0).toBeGreaterThan(0);
   });
 
   it.skipIf(!HA_BORDO)('salvataggio al bordo vero: la presa al bordo suona con lo sforzo', () => {

@@ -101,3 +101,45 @@ export function zoomPigro(attuale: number, ideale: number): number {
   if (ideale < attuale) return ideale;
   return ideale > attuale * INQUADRA.bandaZoom ? ideale : attuale;
 }
+
+/** il compagno conta "sotto i tasti" anche se ci arriva solo vicino (la figura è più larga del suo centro) */
+const MARGINE_COMPAGNI = 16;
+const PASSI_X = [0, -24, 24, -48, 48, -72, 72, -96, 96, -120, 120, -144, 144, -168, 168, -192, 192, -216, 216, -240, 240];
+const PASSI_Y = [0, -15, 15, -30, 30, -45, 45, -60, -75, -90];
+
+/** true se il punto dello schermo sta sotto (o a ridosso de) i tasti di un angolo in basso */
+export function sottoITasti(p: Punto, w: number, h: number, margine = MARGINE_COMPAGNI): boolean {
+  const larga = Math.min(INQUADRA.levaLarga, w / 2 - 40);
+  if (p.y < h - INQUADRA.levaAlta - margine || p.y > h + margine) return false;
+  return (p.x > -margine && p.x < larga + margine) || (p.x < w + margine && p.x > w - larga - margine);
+}
+
+/**
+ * "Compagni mai sotto i tasti" (P1-contratti §6, Render n.5): quanto spostare (px CSS) il pirata di turno dal
+ * centro dello schermo perché nessun compagno resti sotto i tasti degli angoli in basso. Il pirata di turno
+ * resta nella parte libera dello schermo; si sceglie lo spostamento più piccolo, e a parità quello di prima
+ * (niente scatti mentre il pirata cammina). Se non c'è modo di liberarli tutti, quello che ne libera di più.
+ * @param compagni posizione dei compagni rispetto al pirata di turno, in px CSS (mondo × scala)
+ * @param prima lo spostamento in uso
+ */
+export function scartoCompagni(compagni: readonly Punto[], w: number, h: number, prima: Punto = { x: 0, y: 0 }): Punto {
+  const conta = (ox: number, oy: number) => {
+    let n = 0;
+    for (const c of compagni) if (sottoITasti({ x: w / 2 + ox + c.x, y: h / 2 + oy + c.y }, w, h)) n++;
+    return n;
+  };
+  const libero = (ox: number, oy: number) => inZonaLibera({ x: w / 2 + ox, y: h / 2 + oy }, w, h);
+  // lo spostamento di prima va ancora bene ed è ottimo? si tiene (sticky)
+  const nPrima = libero(prima.x, prima.y) ? conta(prima.x, prima.y) : Infinity;
+  if (nPrima === 0 && (prima.x !== 0 || prima.y !== 0) && conta(0, 0) > 0) return prima;
+  let meglio = { x: 0, y: 0, n: libero(0, 0) ? conta(0, 0) : Infinity, d: 0 };
+  if (meglio.n === 0) return { x: 0, y: 0 };
+  for (const oy of PASSI_Y) for (const ox of PASSI_X) {
+    if (!libero(ox, oy)) continue;
+    const n = conta(ox, oy);
+    const d = Math.hypot(ox, oy);
+    if (n < meglio.n || (n === meglio.n && d < meglio.d)) meglio = { x: ox, y: oy, n, d };
+  }
+  if (nPrima <= meglio.n) return prima;
+  return { x: meglio.x, y: meglio.y };
+}

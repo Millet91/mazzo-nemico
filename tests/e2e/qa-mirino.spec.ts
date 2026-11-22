@@ -36,6 +36,9 @@ async function prepara(page: Page, context: BrowserContext) {
   const comandi = () => page.evaluate(() => (window as any).__comandi as { t: string }[]);
   const fase = () => page.evaluate(() => (window as any).__kaboom.bus.battaglia.value.fase as string);
   const testoMira = () => page.getByTestId('mira').innerText();
+  // la panoramica di inizio turno (Fase 1, fino a 1,2 s quando il nemico non si vede) finisce, poi la camera
+  // finisce di inquadrare il pirata
+  await page.waitForFunction(() => (window as any).__kaboom.camera?.().segui !== 'panoramica', null, { timeout: 5000 });
   await page.waitForTimeout(600); // la camera finisce di inquadrare il pirata
   const mira = (await page.evaluate(() => (window as any).__kaboom.mirino())) as { x: number; y: number };
   return { mira, fuoco: await centro('tasto-fuoco'), tocca, comandi, fase, testoMira };

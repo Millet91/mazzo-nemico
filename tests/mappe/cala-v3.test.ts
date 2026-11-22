@@ -6,6 +6,9 @@ import { ARMA } from '../../src/contenuti/armi';
 import { MAPPE_FATTE, mappaFatta } from '../../src/battaglia/mappe';
 import { superficie } from '../../src/battaglia/gen/analisi';
 import { spinto } from '../../src/battaglia/gen/spawn';
+import { avanzaTick, balzoPossibile, creaBattaglia, eseguiComando } from '../../src/battaglia/sim';
+import type { EventoBattaglia } from '../../src/core/tipi';
+import { config } from '../sim/aiuti';
 import { APPOGGI, TORRI_X, DISTANZA_CROLLO, costruisciMaschera, type Variante } from '../../scripts/mappe/cala-v3-forma';
 
 const BASE = 'cala-pappagallo-v3', PROLOGO = 'cala-pappagallo-v3-prologo';
@@ -37,6 +40,43 @@ describe('Cala Pappagallo v3', () => {
         expect(fondo - cima, `${dove}: cima piana`).toBeLessThanOrEqual(2);
         // aria libera sopra, alta come un pirata, per lo scavalco (accordo con Fisica)
         for (let x = a.x0; x <= a.x1; x++) for (let y = cima - BIL.pirata.capsulaAltezza; y < cima; y++) expect(m[y * w + x], `${dove}: aria sopra`).toBe(0);
+      }
+    });
+
+    it(`${id}: ogni muretto e cassa si supera davvero nei due versi, anche da sotto la tettoia della Duna`, () => {
+      // con la sim vera: si parte a 40 px dal pezzo, sul suolo accanto (sotto un eventuale tetto) e si tiene la
+      // freccia. Fino a 28 px basta lo scavalco automatico; sopra serve un Balzo, e uno solo.
+      const base = mappaFatta(id)!;
+      const { w, maschera } = base.terreno;
+      const sup = superficie(maschera);
+      for (const a of APPOGGI) for (const dir of [1, -1] as const) {
+        const dove = `${a.tipo} in x ${a.x0} (${a.dove}) verso ${dir > 0 ? 'destra' : 'sinistra'}`;
+        const x0 = dir === 1 ? a.x0 - 40 : a.x1 + 40;
+        let y0 = (dir === 1 ? sup[a.x0 - 3] : sup[a.x1 + 3]) - 20;
+        while (maschera[y0 * w + x0] === 0) y0++;
+        const s = creaBattaglia(config(1, 1), { ...base, spawn: [[{ x: x0, y: y0 }], [{ x: 1024, y: 272 }]] });
+        const ev: EventoBattaglia[] = [];
+        while (s.turno.fase !== 'azione') avanzaTick(s, ev);
+        const p = s.pirati[0];
+        eseguiComando(s, { t: 'muovi', dir });
+        let fermi = 0, balzi = 0, scavalchi = 0, ultimo = p.x, passato = false;
+        for (let t = 0; t < 400 && !passato; t++) {
+          const e: EventoBattaglia[] = [];
+          avanzaTick(s, e);
+          scavalchi += e.filter((x) => x.t === 'scavalco').length;
+          fermi = Math.abs(p.x - ultimo) < 0.05 ? fermi + 1 : 0;
+          ultimo = p.x;
+          passato = p.aTerra && (dir === 1 ? p.x > a.x1 + 20 : p.x < a.x0 - 20);
+          if (fermi > 10 && balzi < 3) {
+            eseguiComando(s, { t: 'salta', indietro: balzoPossibile(s) === 'muro' });
+            eseguiComando(s, { t: 'muovi', dir });
+            balzi++; fermi = 0;
+          }
+        }
+        expect(passato, dove).toBe(true);
+        expect(p.stato, dove).toBe('vivo');
+        if (a.alto <= BIL.movimento.scavalcoMax) expect([scavalchi >= 1, balzi], `${dove}: scavalco automatico`).toEqual([true, 0]);
+        else expect(balzi, `${dove}: un Balzo`).toBe(1);
       }
     });
 

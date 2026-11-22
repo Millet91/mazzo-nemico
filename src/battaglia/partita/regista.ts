@@ -28,6 +28,7 @@ import { InputBattaglia } from '../render/input';
 import { ScenaBattaglia } from '../render/scena-battaglia';
 import { Partita } from './partita';
 import { creaVista, visteUguali } from './vista';
+import { aspettaRisoluzione, risoluzioneAttuale } from '../../render/risoluzione';
 import { calcolaRisultato, configProva, type FrameDisegno, type RisultatoProvaFps } from './statistiche-prova';
 
 export type { RisultatoProvaFps };
@@ -136,6 +137,8 @@ export class Regista {
   }
 
   private avvia(cfg: ConfigBattaglia): void {
+    // gli scatti della partenza (scena, sfondi, terreno HD) non devono abbassare la risoluzione
+    aspettaRisoluzione();
     this.chiudiPartita();
     this.config = cfg;
     const partita = new Partita(cfg);
@@ -562,6 +565,7 @@ export class Regista {
     const r = calcolaRisultato({
       perSecondo: pr.perSecondo, secondiAvvio: pr.secondiAvvio, delta: pr.delta, disegno: pr.disegno,
       msSim: pr.msSim + pa.msSim, tick: pr.tick + pa.tickSimulati, durataMs: ora - pr.inizio,
+      risoluzione: risoluzioneAttuale() ?? this.app.renderer.resolution,
     });
     this.prova = null;
     this.termina();

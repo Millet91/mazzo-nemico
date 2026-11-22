@@ -30,6 +30,8 @@ export interface RisultatoProvaFps {
   msDisegnoMedio: number;
   msDisegnoPeggiore: number;
   disegno: { tutti: MisuraDisegno; zoomNormale: MisuraDisegno; zoomMinimo: MisuraDisegno };
+  /** risoluzione del canvas alla fine della prova (2, 1,5 o 1,25: render/risoluzione.ts); 0 se non nota */
+  risoluzione: number;
 }
 
 export interface MisuraDisegno { medio: number; p95: number; peggiore: number; frame: number }
@@ -65,6 +67,8 @@ export interface DatiProva {
   tick: number;
   /** durata della prova in ms */
   durataMs: number;
+  /** risoluzione del canvas alla fine */
+  risoluzione?: number;
   /** tempo di disegno di ogni frame (facoltativo: le prove vecchie non l'hanno) */
   disegno?: readonly FrameDisegno[];
 }
@@ -98,6 +102,7 @@ export function calcolaRisultato(d: DatiProva): RisultatoProvaFps {
       zoomNormale: misuraDisegno(disegno.filter((f) => f.zoom >= ZOOM_NORMALE[0] && f.zoom <= ZOOM_NORMALE[1]).map((f) => f.ms)),
       zoomMinimo: misuraDisegno(disegno.filter((f) => f.zoom <= ZOOM_MINIMO).map((f) => f.ms)),
     },
+    risoluzione: d.risoluzione ?? 0,
     fpsMedio: secondi > 0 ? Math.round((frame / secondi) * 10) / 10 : 0,
     fpsMinimo: validi.length ? Math.min(...validi) : frame,
     frameLenti: d.delta.filter((x) => x > 20).length,

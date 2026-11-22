@@ -21,6 +21,7 @@ import { MATERIALE } from '../../core/tipi';
 import { PALETTE, hex } from '../../core/palette';
 import { BIL } from '../../contenuti/bilanciamento';
 import { fondoOriginale } from './pittura-terreno';
+import { aspettaRisoluzione } from '../../render/risoluzione';
 
 export interface IndiceHd {
   /** px del quadro per px di mondo (2) */
@@ -398,6 +399,7 @@ export class TerrenoHd {
    * container (e ~150 ms di calcolo dei canali tutto in una volta).
    */
   private async precarica(): Promise<void> {
+    aspettaRisoluzione();
     const { w, h, maschera } = this.terreno;
     let t = performance.now();
     const frame = () => {

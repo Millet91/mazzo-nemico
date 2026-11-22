@@ -6,7 +6,7 @@ Chi sta fuori da questa cartella usa solo `avviaAudio()` (una volta, all'avvio) 
 | File | Cosa c'è |
 |---|---|
 | `registro.ts` | `AUDIO`: ogni suono con canale, volume, varianti e ricetta sintetica. Compilando `sample` si userà il file (08 §4). |
-| `ricette/*.ts` | le ricette sintetiche (segnaposto fatti in casa, niente file); `crolli.ts` = Fase 3: crolli, macerie, masso, fuoco, frana, ponte |
+| `ricette/*.ts` | le ricette sintetiche (segnaposto fatti in casa, niente file); `crolli.ts` = Fase 3: crolli, macerie, masso, fuoco, frana, ponte; `attrezzi.ts` = Fase 4: rampino, barile, palla incatenata, arpione, taglio di corda, secondo sparo pronto |
 | `sintesi.ts` | gli attrezzi delle ricette: toni, rumore filtrato, corpi che risuonano (legno, ferro, campane), voce a formanti |
 | `eventi.ts` | **funzioni pure**: eventi della sim e `VistaBattaglia` → richieste di suono. Qui si decide "quale suono per quale evento" |
 | `polifonia.ts` | funzioni pure: massimo 24 voci, 3 per suono (si ruba la più vecchia) |
@@ -42,3 +42,14 @@ Come si lavora:
   `PEZZO_GRANDE` in `eventi.ts`); masso e fuoco girano in ciclo. A turno nuovo si fermano i cicli tranne i fuochi
   (bruciano anche nel turno dopo e si spengono col loro evento). Ascolto: `/mnt/project-files/audio-p1/fase3-crolli-fuoco-frane-23s.mp3`.
 - Niente "boing" e "sproing": i pirati non sono vermi (decisione dello studio v2).
+- **Frequenza per suono** (`freq` in `tipi.ts`): 32 kHz di base; 24 kHz se sopra i 12 kHz c'è meno di −25 dB
+  dell'energia, 16 kHz se sopra gli 8 kHz c'è meno di −30 dB (misurato rendendo a 32 kHz con quattro passa-alto in
+  fila). `secondiTotali()` conta i secondi pesati sui campioni (a 16 kHz valgono la metà) e la coda dei cicli.
+  Decisione del Lead P1: non alzare il tetto di prova dei 75 s. Un test controlla che un suono a frequenza bassa non
+  chieda toni sopra la metà della sua frequenza.
+- **Cicli senza buco**: un suono in ciclo si calcola con `CODA_CICLO` (0,15 s) in più, e `chiudiGiro` in
+  `magazzino.ts` ripiega la coda sull'inizio con una dissolvenza di 0,1 s: niente silenzio né scatto a ogni giro.
+  Il rumore di fondo dei cicli usa `piatto()` di `comuni.ts`, che dura anche la coda.
+- **Fase 4** (`ricette/attrezzi.ts`): solo registro, si collegano a `eventi.ts` quando il Lead congela gli eventi.
+  Ascolto: `/mnt/project-files/audio-p1/fase4-attrezzi-e-prima-dopo.mp3` (alla fine quattro suoni prima a 32 kHz e
+  poi alla frequenza nuova).

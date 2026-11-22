@@ -3,10 +3,7 @@
 // (anche ghiaccio e ferro, con l'intonazione) e sabbia (anche terra). Niente sotto i 55 Hz: il telefono non li suona.
 import type { Ricettario } from '../tipi';
 import type { Sint } from '../sintesi';
-import { detriti, scricchiolio } from './comuni';
-
-/** rumore "piatto" che dura tutto il suono: per i cicli, così il giro non ha buchi */
-const piatto = (durata: number) => ({ durata, attacco: 0.001, tenuta: durata * 0.99 });
+import { detriti, piatto, scricchiolio } from './comuni';
 
 /** un colpo sordo, con le armoniche della saturazione al posto dei bassi che il telefono non fa */
 function tonfo(s: Sint, t: number, hz: number, durata: number, vol: number): void {
@@ -17,7 +14,7 @@ export const CROLLI = {
   // ── il pezzo si stacca ──
   /** legno che cede: schiocchi secchi, la trave che geme, lo strappo */
   crollo_legno: {
-    canale: 'effetti', volume: 0.6, durata: 0.75,
+    freq: 24000, canale: 'effetti', volume: 0.6, durata: 0.75,
     ricetta(s) {
       detriti(s, 6, 0, 0.18, 0.8, 1800, 3400, 7);
       scricchiolio(s, 0.04, 0.4, 0.8, 700);
@@ -28,7 +25,7 @@ export const CROLLI = {
   },
   /** roccia che si spacca: la crepa e poi la pietra che stride mentre scivola via */
   crollo_roccia: {
-    canale: 'effetti', volume: 0.65, durata: 0.8,
+    freq: 24000, canale: 'effetti', volume: 0.65, durata: 0.8,
     ricetta(s) {
       s.rumore({ durata: 0.05, vol: 1, filtro: 'bandpass', da: 2600, q: 2 });
       s.modi({ base: 780, rapporti: [1, 1.6, 2.7], code: [0.09, 0.06, 0.04], vol: 0.5 });
@@ -47,7 +44,7 @@ export const CROLLI = {
   },
   /** il masso che rotola giù: brontolio e colpi della pietra sul terreno (gira in tondo finché non si ferma) */
   masso_rotola: {
-    canale: 'effetti', volume: 0.5, durata: 1.0, ciclo: true, maxIstanze: 2,
+    freq: 24000, canale: 'effetti', volume: 0.5, durata: 1.0, ciclo: true, maxIstanze: 2,
     ricetta(s) {
       s.rumore({ ...piatto(1.0), vol: 0.7, filtro: 'lowpass', da: 380, verso: s.satura(1.8) });
       s.rumore({ ...piatto(1.0), vol: 0.2, filtro: 'bandpass', da: 1300, q: 0.7 });
@@ -61,7 +58,7 @@ export const CROLLI = {
 
   // ── il pezzo arriva giù e si frantuma ──
   macerie_legno: {
-    canale: 'effetti', volume: 0.6, durata: 0.8,
+    freq: 16000, canale: 'effetti', volume: 0.6, durata: 0.8,
     ricetta(s) {
       tonfo(s, 0, 170, 0.14, 0.8);
       // assi che rimbalzano e si accatastano
@@ -73,7 +70,7 @@ export const CROLLI = {
     },
   },
   macerie_roccia: {
-    canale: 'effetti', volume: 0.7, durata: 0.9,
+    freq: 16000, canale: 'effetti', volume: 0.7, durata: 0.9,
     ricetta(s) {
       tonfo(s, 0, 130, 0.3, 1);
       s.rumore({ durata: 0.25, vol: 0.8, filtro: 'lowpass', da: 1400, a: 300 });
@@ -102,7 +99,7 @@ export const CROLLI = {
   },
   /** il fuoco che crepita finché dura (in ciclo): un respiro basso e gli schiocchi del legno */
   fuoco_ciclo: {
-    canale: 'effetti', volume: 0.32, durata: 1.6, ciclo: true, maxIstanze: 3,
+    freq: 24000, canale: 'effetti', volume: 0.32, durata: 1.6, ciclo: true, maxIstanze: 3,
     ricetta(s) {
       s.rumore({ ...piatto(1.6), vol: 0.45, filtro: 'lowpass', da: 700 });
       s.rumore({ ...piatto(1.6), vol: 0.12, filtro: 'bandpass', da: 2500, q: 0.6 });

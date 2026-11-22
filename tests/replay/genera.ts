@@ -47,8 +47,8 @@ for (let seme = 1; seme <= 60; seme++) {
 }
 // mappe fatte a mano (#41): almeno un replay d'oro per ognuna (tag mappa:<id> in COPERTURA_M1)
 for (let seme = 1; seme <= 20; seme++) {
-  candidati.push(candidato(`cala-ia-3v3-${seme}`, configCaso(seme + 4000, [3, 3], 'cala-pappagallo'), pilotaIa()));
-  candidati.push(candidato(`cala-misto-3v3-${seme}`, configCaso(seme + 5000, [3, 3], 'cala-pappagallo'), misto(seme)));
+  candidati.push(candidato(`cala-ia-3v3-${seme}`, configCaso(seme + 4000, [3, 3], 'cala-pappagallo-v3'), pilotaIa()));
+  candidati.push(candidato(`cala-misto-3v3-${seme}`, configCaso(seme + 5000, [3, 3], 'cala-pappagallo-v3'), misto(seme)));
 }
 
 // scelta golosa: a ogni passo il candidato che copre più tag mancanti; a parità il più corto

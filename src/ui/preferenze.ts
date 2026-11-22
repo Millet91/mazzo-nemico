@@ -20,9 +20,11 @@ export const mirinoUsato = signal(false);
 /** pirati per lato nella Schermaglia (giocatore, Marina) */
 export const piratiSchermaglia = signal<[number, number]>([PIRATI_PREDEFINITI, PIRATI_PREDEFINITI]);
 
+/** Cala Pappagallo nel menu: dalla Fase 2 la v3 (la Cala di prima resta solo nei dati) */
+export const CALA = 'cala-pappagallo-v3';
 /** mappa della Schermaglia: '' = generata dal seme, altrimenti l'id di una mappa fatta a mano (battaglia/mappe).
  *  Lead design 21/11/2026: la prima Schermaglia è Cala Pappagallo, poi la scelta predefinita torna "Isola a caso". */
-export const mappaSchermaglia = signal<string>('cala-pappagallo');
+export const mappaSchermaglia = signal<string>(CALA);
 /** Cala Pappagallo già giocata almeno una volta su questo telefono */
 let calaVista = false;
 
@@ -72,7 +74,7 @@ export async function impostaPiratiSchermaglia(p: [number, number]): Promise<voi
 
 /** Dopo la prima battaglia su Cala Pappagallo la scelta predefinita diventa "Isola a caso" (resta selezionabile). */
 export async function segnaMappaGiocata(id: string): Promise<void> {
-  if (calaVista || id !== 'cala-pappagallo') return;
+  if (calaVista || id !== CALA) return;
   calaVista = true;
   mappaSchermaglia.value = '';
   await salva();

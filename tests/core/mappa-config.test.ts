@@ -31,8 +31,8 @@ describe('mappaDiConfig', () => {
   });
 
   it('con una mappa fatta a mano semeMappa non conta', () => {
-    const a = mappaDiConfig(configCaso(7, [3, 3], 'cala-pappagallo'));
-    const b = mappaDiConfig({ ...configCaso(7, [3, 3], 'cala-pappagallo'), semeMappa: 99 });
+    const a = mappaDiConfig(configCaso(7, [3, 3], 'cala-pappagallo-v3'));
+    const b = mappaDiConfig({ ...configCaso(7, [3, 3], 'cala-pappagallo-v3'), semeMappa: 99 });
     expect(b.spawn).toEqual(a.spawn);
   });
 });

@@ -111,7 +111,7 @@ describe('QA · ritmo del turno (BIL.ritmo)', () => {
   });
 
   it('Cala Pappagallo: turno dell\'IA di mediana entro 4,5 s (tiri più alti per scavalcare la Rocca)', () => {
-    const r = misura(8, 'cala-pappagallo');
+    const r = misura(8, 'cala-pappagallo-v3');
     console.log(`ritmo Cala: turno IA mediana ${r.mediana.toFixed(2)} s, p90 ${r.p90.toFixed(2)} s; battaglia ${r.turniMedi.toFixed(1)} turni, ${r.secondi.toFixed(0)} s tra due IA`);
     expect(r.mediana).toBeLessThanOrEqual(4.5);
     expect(r.p90).toBeLessThanOrEqual(6.5);
@@ -123,7 +123,7 @@ describe('QA · ritmo del turno (BIL.ritmo)', () => {
   // Bilanciamento (limite turni, due spari in Fase 4), non della fisica. RITMO_DETTAGLI=1 stampa ogni battaglia.
   it('persona contro IA, 3 contro 3: turno della persona entro 10 s (e quanto dura la battaglia)', () => {
     const righe: string[] = [];
-    for (const [modo, mappa] of [['bravo', undefined], ['bravo', 'cala-pappagallo'], ['bot', undefined]] as const) {
+    for (const [modo, mappa] of [['bravo', undefined], ['bravo', 'cala-pappagallo-v3'], ['bot', undefined]] as const) {
       const r = misuraPersona(10, modo, 3, mappa);
       righe.push(`${modo} ${mappa ?? 'isola'}: turno persona mediana ${r.turnoMediana.toFixed(1)} s, p90 ${r.turnoP90.toFixed(1)} s; ` +
         `battaglia mediana ${(r.battagliaMediana / 60).toFixed(1)} min (da ${(r.battagliaMin / 60).toFixed(1)} a ${(r.battagliaMax / 60).toFixed(1)})`);

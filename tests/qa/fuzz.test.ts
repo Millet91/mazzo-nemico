@@ -61,7 +61,7 @@ describe('QA · IA contro IA', () => {
   it('Cala Pappagallo (mappa fatta a mano): da 1 a 5 per lato, IA e comandi casuali, senza violazioni', () => {
     for (const [seme, n] of [[1, 1], [2, 3], [3, 5], [4, 2]] as const) {
       for (const pilota of [pilotaIa(), pilotaCasuale(seme)]) {
-        const p = gioca(configCaso(seme + 6000, [n, n], 'cala-pappagallo'), pilota);
+        const p = gioca(configCaso(seme + 6000, [n, n], 'cala-pappagallo-v3'), pilota);
         expect(p.violazioni, `seme ${seme}, ${n}v${n}`).toEqual([]);
         if (!SIM_SEGNAPOSTO) expect(p.stato.esito, `seme ${seme}`).not.toBeNull();
       }
@@ -73,7 +73,7 @@ describe('QA · scale e liane (#47)', () => {
   it('con una scala o liana su ogni nascita e comandi arrampica casuali: nessuna violazione, e ci si aggrappa davvero', () => {
     const visti: Record<string, number> = {};
     for (let seme = 1; seme <= 24; seme++) {
-      const cfg = configCaso(seme + 7000, undefined, seme % 4 === 0 ? 'cala-pappagallo' : undefined);
+      const cfg = configCaso(seme + 7000, undefined, seme % 4 === 0 ? 'cala-pappagallo-v3' : undefined);
       const p = gioca(cfg, pilotaScalatore(seme), true, conAppigli(mappaPer(cfg)));
       expect(p.violazioni, `seme ${seme}`).toEqual([]);
       if (!SIM_SEGNAPOSTO) expect(p.stato.esito, `seme ${seme}`).not.toBeNull();

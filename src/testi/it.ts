@@ -45,7 +45,6 @@ export const it = {
     mappa: 'Mappa',
     mappaCasuale: 'Isola a caso',
     mappaCala: 'Cala Pappagallo',
-    mappaCalaNuova: 'Cala nuova (bozza)',
     indietro: 'Indietro',
   },
   diagnostica: {

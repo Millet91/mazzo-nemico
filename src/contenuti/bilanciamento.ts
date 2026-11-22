@@ -132,6 +132,8 @@ export const BIL = {
     pendenzaFrazione: 0.3,
     /** un evento `passo` ogni tanti px percorsi */
     passoPx: 14,
+    /** un evento `piolo` ogni tanti px di arrampicata su scale e liane (solo audio e pupazzo, non cambia la sim) */
+    pioloPx: 20,
     /** scavalco automatico: si issa da solo sui muretti fino a questa altezza (oltre il gradino di 8 px) */
     scavalcoMax: 28,
     scavalcoTick: Math.round(0.25 * S),
@@ -240,3 +242,13 @@ export const BIL = {
     animazioneMiraMs: 350, // m1-ritmo §3
   },
 } as const;
+
+/**
+ * Secondi del timer PER SPARO (BIL.ritmo, Fase 1): 12 di norma, 25 contro il Mozzo e nel Prologo, 45 con il
+ * Timer lungo (che vince su tutto). Lo usano Schermaglia e carriera quando preparano la ConfigBattaglia.
+ */
+export function secondiTimer(o: { livelloIa?: LivelloIa; prologo?: boolean; timerLungo?: boolean } = {}): number {
+  if (o.timerLungo) return BIL.ritmo.timerSparoLungo;
+  if (o.prologo || o.livelloIa === 'mozzo') return BIL.ritmo.timerSparoMozzo;
+  return BIL.ritmo.timerSparo;
+}

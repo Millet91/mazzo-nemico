@@ -4,7 +4,7 @@ import type { StatoBattaglia } from '../../core/tipi';
 import { inGradi } from '../../core/trig';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { appiglioSotto, appiglioVicino } from '../sim/appigli';
-import { avvisoTiro } from '../sim';
+import { avvisoTiro, balzoPossibile } from '../sim';
 
 // L'avviso sul tiro costa una simulazione del colpo: si ricalcola solo quando cambia qualcosa che lo decide.
 let chiaveAvviso = '';
@@ -20,6 +20,17 @@ function avviso(s: StatoBattaglia): 'vicino' | 'danno' | undefined {
     ultimoAvviso = avvisoTiro(s);
   }
   return ultimoAvviso ?? undefined;
+}
+
+/**
+ * Fase 1: icona del tasto Balzo e tasto "fatto". Solo nel turno del giocatore (all'IA non servono tasti).
+ * `balzo` è undefined quando il Balzo non farebbe niente (a metà scavalco, sbalzato in volo): il tasto mostra il salto.
+ */
+function balzoEFatto(s: StatoBattaglia): Pick<VistaBattaglia, 'balzo' | 'puoFinire'> {
+  const t = s.turno;
+  // chiavi sempre presenti: visteUguali confronta le chiavi della vista nuova
+  if (s.esito || s.squadre[t.squadra].controllo !== 'umano') return { balzo: undefined, puoFinire: false };
+  return { balzo: balzoPossibile(s), puoFinire: t.fase === 'fuga' };
 }
 
 export function creaVista(s: StatoBattaglia, iaPensa: boolean): VistaBattaglia {
@@ -64,6 +75,7 @@ export function creaVista(s: StatoBattaglia, iaPensa: boolean): VistaBattaglia {
     puoArrendersi: umano >= 0 && s.squadre[umano].ruolo === 'attaccante' && t.numero >= BIL.battaglia.ritirataDalTurno && !s.esito,
     arrampicata,
     avvisoTiro: avviso(s),
+    ...balzoEFatto(s),
     esito: s.esito,
   };
 }

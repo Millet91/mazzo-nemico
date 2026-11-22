@@ -38,6 +38,7 @@ const ESEMPI: { [K in EventoBattaglia['t']]: Extract<EventoBattaglia, { t: K }> 
   bordo: { t: 'bordo', pirata: 0 },
   saltoMuro: { t: 'saltoMuro', pirata: 0 },
   fatto: { t: 'fatto', pirata: 0 },
+  piolo: { t: 'piolo', pirata: 0, x: 0, y: 0, liana: false },
   bandieraPresa: { t: 'bandieraPresa', pirata: 0 },
   fine: { t: 'fine', esito: esito(0) },
 };

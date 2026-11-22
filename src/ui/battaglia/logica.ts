@@ -2,7 +2,7 @@
 // Qui stanno: la configurazione della Schermaglia di M1, le conversioni per i numeri mostrati,
 // i tasti "tenuti premuti" (◀ ▶ ▲ ▼), il doppio tocco di SALTA, la protezione di FUOCO e i banner.
 // Il mirino da trascinare sta in battaglia/render/mirino.ts; qui i tasti dei comandi v3 (frecce, salto, FUOCO).
-import type { Comando, ConfigBattaglia, EventoBattaglia, IdArma, LivelloIa } from '../../core/tipi';
+import type { Comando, ConfigBattaglia, EventoBattaglia, IdArma } from '../../core/tipi';
 import { VERSIONE_REGOLE } from '../../core/tipi';
 import type { VistaBattaglia } from '../../core/bus';
 import { BIL } from '../../contenuti/bilanciamento';
@@ -32,15 +32,9 @@ export function configSchermaglia(seme: number, pirati: [number, number] = [PIRA
   };
 }
 
-/**
- * Secondi del timer PER SPARO (BIL.ritmo, Fase 1): 12 di norma, 25 contro il Mozzo e nel Prologo, 45 con il
- * Timer lungo (che vince su tutto). Lo usano Schermaglia e carriera quando preparano la ConfigBattaglia.
- */
-export function secondiTimer(o: { livelloIa?: LivelloIa; prologo?: boolean; timerLungo?: boolean } = {}): number {
-  if (o.timerLungo) return BIL.ritmo.timerSparoLungo;
-  if (o.prologo || o.livelloIa === 'mozzo') return BIL.ritmo.timerSparoMozzo;
-  return BIL.ritmo.timerSparo;
-}
+/** Spostata in contenuti/bilanciamento.ts perché la usa anche la carriera (pura); qui resta riesportata. */
+export { secondiTimer } from '../../contenuti/bilanciamento';
+import { secondiTimer } from '../../contenuti/bilanciamento';
 
 /** Seme nuovo a ogni partita (fuori dalla sim la casualità del sistema va bene). */
 export function semeNuovo(): number {

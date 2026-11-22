@@ -87,7 +87,7 @@ describe('scale e liane si percorrono tutte, su e giù (QA §3.1)', () => {
 });
 
 /** Barili che si colpiscono ma non si raggiungono a piedi, per scelta (x del barile). */
-const BARILI_IN_VETTA: Record<string, number[]> = { 'cala-pappagallo': [1052] }; // in cima alla Rocca
+const BARILI_IN_VETTA: Record<string, number[]> = { 'cala-pappagallo': [1052], 'cala-pappagallo-v3': [1052] }; // in cima alla Rocca
 
 describe('dagli spawn si arriva a piedi dove serve (QA §3.2)', () => {
   for (const id of Object.keys(MAPPE_FATTE)) {
@@ -110,7 +110,8 @@ describe('dagli spawn si arriva a piedi dove serve (QA §3.2)', () => {
           expect(r.arriva(b.x, b.y, 40), `${chi}: non arriva al barile in x ${b.x}`).toBe(true);
         }
         for (const [nome, p] of Object.entries(MAPPE_FATTE[id].segnaposti ?? {})) {
-          if (nome !== 'cassa' && nome !== 'gradino') continue; // gli altri sono in mare o sono i marinai
+          // le stazioni a piedi del Prologo (gli altri segnaposti sono in mare, sono i marinai o sono anelli in aria)
+          if (!['cassa', 'gradino', 'muretto', 'oltreMuretto', 'torre', 'ponte', 'liana', 'rocca'].includes(nome)) continue;
           expect(r.arriva(p.x, p.y, 12), `${chi}: non arriva a "${nome}"`).toBe(true);
         }
       }

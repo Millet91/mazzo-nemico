@@ -1,0 +1,85 @@
+// Cala Pappagallo v3 (studio v2, P1-contratti §4): le regole in più della sagoma nuova, controllate sui dati che
+// finiscono nel gioco. Percorribilità, scale e liane ed equità le provano già mappe-fatte e percorribilita.
+import { describe, expect, it } from 'vitest';
+import { BIL } from '../../src/contenuti/bilanciamento';
+import { ARMA } from '../../src/contenuti/armi';
+import { MAPPE_FATTE, mappaFatta } from '../../src/battaglia/mappe';
+import { superficie } from '../../src/battaglia/gen/analisi';
+import { spinto } from '../../src/battaglia/gen/spawn';
+import { APPOGGI, TORRI_X, DISTANZA_CROLLO, costruisciMaschera, type Variante } from '../../scripts/mappe/cala-v3-forma';
+
+const BASE = 'cala-pappagallo-v3', PROLOGO = 'cala-pappagallo-v3-prologo';
+/** colpo diretto del cannone col +10% del Teschio: il caso peggiore (PIANO §7: danno 60) */
+const spintaCannone = Math.floor(Math.max(ARMA.cannone.danno, 60) * (1 + BIL.tratti.teschioBonusDanno)) * BIL.fisica.spintaPerDanno;
+
+describe('Cala Pappagallo v3', () => {
+  for (const [id, variante] of [[BASE, 'base'], [PROLOGO, 'prologo']] as [string, Variante][]) {
+    it(`${id}: i dati nel gioco sono quelli della forma disegnata`, () => {
+      const m = mappaFatta(id)!.terreno.maschera, forma = costruisciMaschera(variante).m;
+      let diversi = 0;
+      for (let i = 0; i < m.length; i++) if (m[i] !== forma[i]) diversi++;
+      // la mappa di battaglia spiana la base dei tre barili: qualche centinaio di pixel
+      expect(diversi).toBeLessThanOrEqual(variante === 'base' ? 600 : 0);
+    });
+
+    it(`${id}: muretti e casse sono alti 24-32 px, larghi almeno 12, con aria sopra`, () => {
+      const { w, maschera: m } = mappaFatta(id)!.terreno;
+      const sup = superficie(m);
+      for (const a of APPOGGI) {
+        const largo = a.x1 - a.x0 + 1;
+        const accanto = Math.min(sup[a.x0 - 3], sup[a.x1 + 3]);
+        let cima = Infinity, fondo = -Infinity;
+        for (let x = a.x0; x <= a.x1; x++) { cima = Math.min(cima, sup[x]); fondo = Math.max(fondo, sup[x]); }
+        const dove = `${a.tipo} in x ${a.x0} (${a.dove})`;
+        expect(largo, dove).toBeGreaterThanOrEqual(12);
+        expect(accanto - cima, `${dove}: altezza`).toBeGreaterThanOrEqual(24);
+        expect(accanto - cima, `${dove}: altezza`).toBeLessThanOrEqual(32);
+        expect(fondo - cima, `${dove}: cima piana`).toBeLessThanOrEqual(2);
+        // aria libera sopra, alta come un pirata, per lo scavalco (accordo con Fisica)
+        for (let x = a.x0; x <= a.x1; x++) for (let y = cima - BIL.pirata.capsulaAltezza; y < cima; y++) expect(m[y * w + x], `${dove}: aria sopra`).toBe(0);
+      }
+    });
+
+    it(`${id}: un colpo diretto del cannone non butta in mare chi parte`, () => {
+      const mappa = mappaFatta(id)!;
+      const { maschera: m, mare } = mappa.terreno;
+      // nel Prologo contano i pirati del giocatore: i marinai stanno dove dice la scena
+      const chi = MAPPE_FATTE[id].copione ? mappa.spawn[0] : [...mappa.spawn[0], ...mappa.spawn[1]];
+      for (const p of chi) for (const dir of [-1, 1] as const) {
+        expect(spinto(m, mare, p, spintaCannone, 90, dir).tipo, `da (${p.x}, ${p.y}) verso ${dir}`).toBe('terra');
+      }
+    });
+
+    it(`${id}: nessuna partenza a meno di ${DISTANZA_CROLLO} px da una torre che crollerà`, () => {
+      const mappa = mappaFatta(id)!;
+      const chi = MAPPE_FATTE[id].copione ? [] : [...mappa.spawn[0], ...mappa.spawn[1]];
+      for (const p of chi) for (const [x0, x1] of TORRI_X[variante]) {
+        expect(p.x < x0 - DISTANZA_CROLLO || p.x > x1 + DISTANZA_CROLLO, `spawn in x ${p.x}, torre ${x0}-${x1}`).toBe(true);
+      }
+    });
+  }
+
+  it('la mappa di battaglia non è uno specchio: tre appigli per lato, a destra due liane', () => {
+    const ap = mappaFatta(BASE)!.appigli!;
+    const sx = ap.filter((a) => a.x < 1024), dx = ap.filter((a) => a.x >= 1024);
+    expect(sx.map((a) => a.tipo).sort()).toEqual(['liana', 'scala', 'scala']);
+    expect(dx.map((a) => a.tipo).sort()).toEqual(['liana', 'liana', 'scala']);
+  });
+
+  it('Prologo: i marinai stanno ad almeno 300 px dai pirati del giocatore', () => {
+    const [noi, loro] = mappaFatta(PROLOGO)!.spawn;
+    expect(noi).toHaveLength(2);
+    for (const p of noi) for (const n of loro) expect(Math.hypot(n.x - p.x, n.y - p.y)).toBeGreaterThanOrEqual(300);
+  });
+
+  it('Prologo: le stazioni del percorso stanno sul suolo', () => {
+    const { w, maschera: m } = mappaFatta(PROLOGO)!.terreno;
+    const s = MAPPE_FATTE[PROLOGO].segnaposti!;
+    for (const nome of ['muretto', 'oltreMuretto', 'cassa', 'torre', 'ponte', 'liana', 'rocca', 'grotta']) {
+      const p = s[nome];
+      expect(p, nome).toBeDefined();
+      expect(m[p.y * w + p.x], `${nome}: sotto i piedi`).not.toBe(0);
+      expect(m[(p.y - 1) * w + p.x], `${nome}: sopra`).toBe(0);
+    }
+  });
+});

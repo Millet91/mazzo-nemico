@@ -72,7 +72,8 @@ export const CAPITOLO_1: DefCapitolo = {
     { id: 'costa', nome: 'costaDelTeschio', bonus: 2, isole: ['1A', '1B', '1C', '1D'] },
     { id: 'lagune', nome: 'lagune', bonus: 2, isole: ['1E', '1F', '1G', '1H'] },
   ],
-  limiteRound: 8,
+  // 10 round (15 §1.2): con 8 il bot a Mozzo vinceva il capitolo solo nel 45-58% dei casi (studio-v2/campagna/bot-cap1.md)
+  limiteRound: 10,
   roundProtetti: 1,
   partenzaViaggio: 'cala',
   piratiMaxPerLato: 5,

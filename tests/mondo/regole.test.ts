@@ -227,9 +227,9 @@ describe('fine del capitolo', () => {
     expect(stelleCapitolo({ ...s, round: 7 })).toBe(2);
   });
 
-  it('oltre il limite di 8 round il capitolo è perso', () => {
+  it('oltre il limite di round del capitolo il capitolo è perso', () => {
     const s = nuovaCarriera(C);
-    s.round = 8; s.fase = 'marina';
+    s.round = C.limiteRound; s.fase = 'marina';
     expect(chiudiRound(C, s).eventi).toEqual([{ t: 'capitoloPerso', motivo: 'round' }]);
   });
 

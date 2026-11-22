@@ -10,12 +10,12 @@ import { MATERIALE } from '../../core/tipi';
 import { BIL } from '../../contenuti/bilanciamento';
 import { pezziStaccati, staccaDallaMaschera, type PezzoStaccato } from './crolli';
 import { danneggia, staccaPirata } from './pirata';
-import { MEZZA_ALTEZZA_PIRATA, MEZZA_LARGHEZZA_PIRATA } from './terreno';
+import { capsulaUrta, MEZZA_ALTEZZA_PIRATA, MEZZA_LARGHEZZA_PIRATA } from './terreno';
 
 /** velocità massima di caduta di un pezzo (px/tick): quella di un colpo a piena potenza */
 const VEL_MAX = BIL.fisica.velocitaMaxProiettile;
 
-/** Ci sono pezzi in caduta? (il volo e la risoluzione li aspettano) */
+/** Ci sono pezzi in caduta? (il volo e la risoluzione li aspettano; le frane le aspetta solo la fine del turno) */
 export function pezziInCaduta(s: StatoBattaglia): boolean {
   return s.pezzi !== undefined && s.pezzi.length > 0;
 }
@@ -181,7 +181,11 @@ function muovi(s: StatoBattaglia, p: PezzoCadente, eventi: EventoBattaglia[]): b
   for (let k = 0; k < passi; k++) {
     const nx = p.x + dx, ny = p.y + dy;
     if (Math.floor(nx) !== Math.floor(p.x) || Math.floor(ny) !== Math.floor(p.y)) {
-      if (tocca(s, p, Math.floor(nx), Math.floor(ny))) { frantuma(p, false, eventi); return true; }
+      if (tocca(s, p, Math.floor(nx), Math.floor(ny))) {
+        if (p.struttura >= 0 && s.strutture?.[p.struttura]?.riappoggia) riappoggia(s, p, eventi);
+        else frantuma(p, false, eventi);
+        return true;
+      }
     }
     p.x = nx; p.y = ny;
     colpisci(s, p, eventi);
@@ -282,6 +286,37 @@ function colpisciMasso(s: StatoBattaglia, p: PezzoCadente, cx: number, cy: numbe
   }
 }
 
+/**
+ * Struttura con `riappoggia` (palma-ponte, carico della gru): il pezzo arrivato a terra torna nella maschera dov'è,
+ * col suo materiale, invece di frantumarsi. I pirati vivi che si trovano dentro vengono spinti fuori in alto.
+ */
+function riappoggia(s: StatoBattaglia, p: PezzoCadente, eventi: EventoBattaglia[]): void {
+  const t = s.terreno;
+  const ix = Math.floor(p.x), iy = Math.floor(p.y);
+  let x0 = t.w, y0 = t.h, x1 = -1, y1 = -1;
+  for (let r = 0; r < p.h; r++) {
+    const y = iy + r;
+    if (y < 0 || y >= t.h) continue;
+    for (let c = 0; c < p.w; c++) {
+      const m = p.maschera[r * p.w + c];
+      const x = ix + c;
+      if (m === 0 || x < 0 || x >= t.w || t.maschera[y * t.w + x] !== MATERIALE.aria) continue;
+      t.maschera[y * t.w + x] = m;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < 0) return;
+  eventi.push({ t: 'maschera', x0, y0, x1, y1 });
+  for (const q of s.pirati) {
+    if (q.stato !== 'vivo' || !capsulaUrta(t, q.x, q.y)) continue;
+    let y = q.y;
+    const limite = q.y - p.h - 2 * MEZZA_ALTEZZA_PIRATA;
+    while (y > limite && capsulaUrta(t, q.x, y)) y--;
+    staccaPirata(q, eventi, s.tick);
+    q.y = y; q.yInizioCaduta = y; q.vx = 0; q.vy = 0;
+  }
+}
+
 /** Riga più bassa con almeno un pixel pieno (rispetto all'angolo in alto). */
 function fondo(p: PezzoCadente): number {
   for (let r = p.h - 1; r >= 0; r--) for (let c = 0; c < p.w; c++) if (p.maschera[r * p.w + c] !== 0) return r;
@@ -351,8 +386,9 @@ function frantuma(p: PezzoCadente, inMare: boolean, eventi: EventoBattaglia[]): 
   });
 }
 
-/** Fine forzata (risoluzione oltre il tetto, battaglia finita): tutti i pezzi in caduta si frantumano dove sono. */
+/** Fine forzata (risoluzione oltre il tetto, battaglia finita): i pezzi in caduta si frantumano dove sono, le frane si fermano. */
 export function frantumaTutti(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
+  if (s.frane && s.frane.length) s.frane = [];
   if (!s.pezzi || s.pezzi.length === 0) return;
   for (const p of s.pezzi) frantuma(p, false, eventi);
   s.pezzi = [];

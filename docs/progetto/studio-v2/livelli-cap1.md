@@ -22,15 +22,15 @@
 
 Ordine consigliato di gioco (progressione.md): round 1 → 1D e 1C; round 2 → 1E; round 3 → 1F e 1G; round 4 → 1H. 1A e 1B sono del giocatore dall'inizio: la loro mappa si vede solo quando la Marina le contrattacca, quindi il loro trucco è pensato **in difesa**.
 
-### 1D Scoglio della Vedetta — torre di vedetta (Bandiera) · seme 2002
-- **Forma:** una sola punta alta e stretta (cima a y 321, larga 52 px), due piane basse ai lati. È la vetta più alta tra 3000 semi validi. Due scale portano sull'altopiano sotto la punta.
+### 1D Scoglio della Vedetta — torre di vedetta (Bandiera) · seme 2452
+- **Forma:** una sola punta alta e stretta (cima a y 355, larga 74 px), due piane ai lati alla stessa quota. Due scale portano sull'altopiano sotto la punta e la vetta si raggiunge da tutti e due i lati (provato, §3).
 - **Trucco:** la **bandiera della Marina** sta sulla punta di roccia. Su ogni spalla della punta c'è una **torre di vedetta** di legno a 2 piani (moduli *torre* + *scala* + *anello*): è la via più veloce verso la vetta. Due pali per torre: se ne tagli uno con un colpo la torre crolla **verso il colpo** (tempo 2) e porta giù chi c'è sopra.
 - **Perché funziona:** è la prima battaglia. Insegna la scala (tutorial di progressione.md) e dà il primo «wow» di distruzione entro 5 minuti (business). La scelta: salire veloce sulla torre o abbatterla sotto al nemico che sale.
 - **Equità:** una torre per lato, stessa altezza. La bandiera resta sulla roccia: il crollo non la sposta mai.
 - **Serve:** sostegno strutturale tempo 2 (P1 Fase 3), regola Bandiera (P1 §4 delle richieste di P2-contratti).
 
-### 1C Forte Rampino — bastione di ferro con portone · seme 650
-- **Forma:** una collina sola con l'altopiano più largo (370 px), grotte sotto i fianchi.
+### 1C Forte Rampino — bastione di ferro con portone · seme 2103
+- **Forma:** una collina sola con un altopiano largo 322 px, una grotta sotto il fianco del difensore.
 - **Trucco:** sull'altopiano il **bastione della Marina**: muri di **ferro** alti 64 px (non si scavano) su tre lati, il **portone di legno** sul lato dell'attaccante, il tetto aperto. Si entra in tre modi: sfondare il portone (2 cannonate, o il legno che brucia), **scavalcare** con le liane già sui fianchi, o **far crollare il pavimento** scavando dalle grotte sotto (il ferro regge, la terra sotto no: il bastione si inclina e i difensori scivolano fuori). Due **anelli di ferro** sui muri anticipano il Rampino, che è il premio dell'isola.
 - **Anti-frustrazione:** il tetto è aperto, quindi l'area non è mai chiusa dal ferro (06 §7.5). Ferro totale ≈ 2.000 px, sotto il 3%.
 - **Serve:** solo materiali che esistono già (ferro, legno) e il tempo 1 per il portone. **È il trucco più facile**: si può costruire per primo in Fase B.
@@ -40,10 +40,10 @@ Ordine consigliato di gioco (progressione.md): round 1 → 1D e 1C; round 2 → 
 - **Trucco:** due **archi di roccia** per lato (modulo *arco*) sopra le grotte: ci si cammina sopra e ci si ripara sotto. Un colpo sul pilastro fa cadere l'arco **intero** (tempo 2, 20-30 danni) e lo trasforma in una rampa di macerie. Così chi è sopra cade e chi era sotto resta schiacciato o trova un nuovo passaggio.
 - **Serve:** tempo 2.
 
-### 1F Laguna Nera — stalattiti (grotta, notturna) · seme 334
-- **Forma:** la mappa con le grotte più grandi e dal tetto più spesso (30.000 px di grotta, tetto sottile zero).
+### 1F Laguna Nera — stalattiti (grotta, notturna) · seme 1420
+- **Forma:** due colline basse e grotte grandi dal tetto spesso (32.000 px di grotta), una proprio sotto la valle centrale.
 - **Trucco:** dalle volte delle grotte pendono **stalattiti** di roccia larghe 16-24 px. Un'esplosione entro 40 px le stacca (tempo 1): cadono dritte, fanno 20 danni a chi c'è sotto e restano piantate come **stalagmiti**, cioè un riparo nuovo. Di notte si vedono solo alla luce delle lanterne: chi spara alla lanterna giusta illumina la trappola.
-- **Limite di oggi:** il generatore di oggi fa solo il terreno dell'Isola. Una vera Grotta ha il **soffitto** su tutta la mappa (06 §2): va fatta in Fase B, ed è il lavoro più grosso del generatore. Il seme 334 resta valido finché il bioma Grotta non esiste.
+- **Limite di oggi:** il generatore di oggi fa solo il terreno dell'Isola. Una vera Grotta ha il **soffitto** su tutta la mappa (06 §2): va fatta in Fase B, ed è il lavoro più grosso del generatore. Il seme 1420 resta valido finché il bioma Grotta non esiste.
 - **Serve:** tempo 1, bioma Grotta col soffitto, notte (P1).
 
 ### 1G Secca del Barile — dune e marea · seme 1886
@@ -52,14 +52,14 @@ Ordine consigliato di gioco (progressione.md): round 1 → 1D e 1C; round 2 → 
 - **Problema da decidere (Lead P2 e Bilanciamento):** lo scontro chiede `bariliExtra: 5`, ma con 5 posti di spawn per lato **su questa mappa c'è un solo posto libero in più** a ≥ 200 px da tutti gli spawn (provato anche sui semi di riserva 430 e 1432: zero posti). E il validatore accetta solo 3-4 barili (`BIL.barili.max`). Proposta: i 5 barili extra stanno sulle dune e contano la distanza solo dagli spawn **usati** (la Marina ne usa 1), e non si accendono nel turno 1. In alternativa: 2 barili extra invece di 5.
 - **Serve:** marea a ciclo nella sim (nuovo, piccolo: un numero di `mare` che cambia a fine round), sabbia che frana (P1).
 
-### 1H Isolotto delle Cozze — palma che fa da ponte (Duello) · seme 165
-- **Forma:** due colline con una valle stretta in mezzo (178 px di larghezza, 90 di profondità) e una liana su ogni bordo.
+### 1H Isolotto delle Cozze — palma che fa da ponte (Duello) · seme 140
+- **Forma:** due colline alte con una valle stretta in mezzo (156 px di larghezza, 82 di profondità) e una scala su ogni bordo.
 - **Trucco:** su ogni bordo della valle c'è una **palma** alta 220 px. Un colpo alla base la abbatte: cade **dentro la valle** e diventa un **ponte di legno** tra le due colline (20 danni a chi c'è sotto). Nel duello 1 contro 1 con Rigidini il ponte è la strada per arrivare alla sciabola, o una trappola se lo fai cadere sul nemico.
 - **Caduta a copione:** la palma non rotola davvero. Si anima una rotazione di 0,6 s e alla fine si stampa nella maschera un tronco di legno spesso 16 px, sempre nella stessa posizione. È deterministico e costa zero alla fisica.
 - **Serve:** tempo 1 per la base, la stampa del tronco (piccola, P2).
 
-### 1B Baia dei Corvi — gru con il carico (porto, in difesa) · seme 467
-- **Forma:** due colline con la valle più profonda (245 px), a V.
+### 1B Baia dei Corvi — gru con il carico (porto, in difesa) · seme 256
+- **Forma:** due colline con una valle profonda (150 px), a U.
 - **Trucco:** una **gru di legno** su una collina con il braccio sopra la valle. Dalla fune pende un **carico** (cassa di palle di cannone, 64×48 legno e ferro). Tagli la fune (con la sciabola o con un colpo entro 12 px) e il carico cade nella V: fa 30 danni a chi c'è sotto e **riempie la valle**, diventando un ponte tra le due colline. La gru stessa è legno: se ne tagli il palo cade (tempo 2).
 - **Perché in difesa:** 1B è del giocatore. Quando la Marina la attacca, la gru è dalla parte del giocatore: impara a usarla mentre difende.
 - **Serve:** fune tagliabile (game-design dec. 9: sciabola che taglia le funi), tempo 2.
@@ -73,19 +73,29 @@ Ordine consigliato di gioco (progressione.md): round 1 → 1D e 1C; round 2 → 
 
 Tutti **validi al primo tentativo** (nessun seme+1, nessuna riserva), scelti fra **3000 semi** (2129 validi) con `scripts/mappe/isole/scegli-semi.ts`. Prima si scelgono le isole con la forma più rara.
 
-| Isola | Trucco | Seme | Forma cercata | Semi adatti | Riserve |
-|---|---|---|---|---|---|
-| 1D | torre | **2002** | una cima, la più alta e stretta | 1495 | 745, 2922, 794 |
-| 1H | palmaPonte | **165** | valle larga ~170, profonda ~90 | 450 | 1664, 814, 923 |
-| 1B | gru | **467** | valle più profonda | 160 | 778, 65, 1307 |
-| 1C | bastione | **650** | altopiano più largo | 1494 | 1398, 1156, 2523 |
-| 1E | archi | **1103** | grotte col tetto sottile | 1680 | 626, 2318, 2599 |
-| 1F | stalattiti | **334** | grotte grandi col tetto spesso | 1735 | 1420, 188, 1065 |
-| 1G | dune | **1886** | piatta, regge il mare a 900 | 2123 | 430, 1432, 2604 |
-| 1A | palafitte | **2991** | riva bassa lunga, due colline | 632 | 799, 2940, 2040 |
+**Secondo giro (22/11/2026), partenze eque.** Il bot della Campagna (`studio-v2/campagna/bot-cap1.md`) ha visto che su 1D i pirati del giocatore partivano più in basso del marinaio e annegavano quando sale il mare (4 contro 1 vinto 16 volte su 40). Ora ogni seme deve rispettare anche:
+- **l'attaccante non parte più in basso del difensore**: per ogni numero di pirati per lato (la sim usa i primi n posti, dal più interno), la media delle y dell'attaccante supera quella del difensore di **20 px al massimo**;
+- **nessun attaccante parte sotto y 790** (il mare che sale dal turno 12 arriva a ~825 nelle battaglie lunghe);
+- su **1A e 1B**, che il giocatore difende e poi riprende, il vincolo vale **nei due sensi**;
+- su **1D** (Bandiera) la **vetta si raggiunge** a piedi, saltando e con scale e liane da tutti e due i lati (`raggiunte` in `misure.ts`).
 
-- I semi sono scritti in `src/contenuti/capitolo-1.ts` (campo `mappa`). Perché in battaglia esca proprio la mappa scelta, la Campagna deve passare `mappa.seme` come `ConfigBattaglia.seme`.
-- `tests/mappe/isole-cap1.test.ts` rigenera ogni isola e controlla: primo tentativo, validatore vuoto, forma ancora adatta al trucco, semi tutti diversi, 1G valida fino al mare 900. **Se il generatore cambia, il test cade**: si rilancia lo script e si aggiornano i semi.
+Restano uguali 1A, 1E e 1G, che rispettavano già il vincolo. Cambiano 1B, 1C, 1D, 1F e 1H.
+
+| Isola | Trucco | Seme | Prima | Forma cercata | Scarto partenze (px) | Semi adatti | Riserve |
+|---|---|---|---|---|---|---|---|
+| 1D | torre | **2452** | 2002 | una cima alta e stretta, vetta raggiungibile | 10 | 483 | 2277, 659, 509 |
+| 1H | palmaPonte | **140** | 165 | valle larga ~170, profonda ~90 | −28 | 145 | 165, 1664, 2161 |
+| 1B | gru | **256** | 467 | valle più profonda | 0 (difesa 19) | 6 | 139, 625, 61 |
+| 1C | bastione | **2103** | 650 | altopiano più largo | −7 | 511 | 2324, 2769, 1818 |
+| 1E | archi | **1103** | = | grotte col tetto sottile | 15 | 580 | 626, 2599, 613 |
+| 1F | stalattiti | **1420** | 334 | grotte grandi col tetto spesso | 2 | 597 | 188, 847, 1145 |
+| 1G | dune | **1886** | = | piatta, regge il mare a 900 | 18 | 728 | 1907, 975, 2639 |
+| 1A | palafitte | **2991** | = | riva bassa lunga, due colline | 11 (difesa 10) | 40 | 372, 1688, 354 |
+
+*Scarto partenze = caso peggiore di (media y attaccante − media y difensore) sui primi n posti; negativo = l'attaccante parte più in alto.*
+
+- I semi sono scritti in `src/contenuti/capitolo-1.ts` (campo `mappa`). La Campagna li passa come `ConfigBattaglia.semeMappa`: la forma dell'isola resta fissa, vento e casse cambiano a ogni tentativo.
+- `tests/mappe/isole-cap1.test.ts` rigenera ogni isola e controlla: primo tentativo, validatore vuoto, partenze eque, vetta raggiungibile sulla Bandiera, forma ancora adatta al trucco, semi tutti diversi, 1G valida fino al mare 900. **Se il generatore cambia, il test cade**: si rilancia lo script e si aggiornano i semi.
 - Il bioma non cambia il terreno di oggi (tutti usano l'Isola): i semi restano validi anche con `porto`, `scogliera` e `grotta`. Quando in Fase B arrivano i moduli e il bioma Grotta, i semi vanno riscelti.
 
 ## 4. Il kit di 12 moduli: chi usa cosa (per la Fase B)

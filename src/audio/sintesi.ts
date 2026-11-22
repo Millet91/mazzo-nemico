@@ -14,16 +14,20 @@ export function generatore(seme: number): () => number {
   };
 }
 
-const rumori = new WeakMap<BaseAudioContext, AudioBuffer>();
-/** 2 s di rumore bianco, uno per contesto. */
+const rumori = new Map<number, AudioBuffer>();
+/**
+ * 2 s di rumore bianco, uno per frequenza di campionamento. Un AudioBuffer si può usare in qualsiasi contesto:
+ * prima se ne faceva uno per contesto, cioè uno per ogni suono preparato (100 volte 64 000 numeri a caso sul filo
+ * principale, all'avvio). Il rumore è lo stesso di prima (stesso seme), quindi i suoni non cambiano.
+ */
 export function rumoreBianco(ctx: BaseAudioContext): AudioBuffer {
-  let b = rumori.get(ctx);
+  let b = rumori.get(ctx.sampleRate);
   if (!b) {
     b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 2), ctx.sampleRate);
     const d = b.getChannelData(0);
     const r = generatore(0x5eed);
     for (let i = 0; i < d.length; i++) d[i] = r() * 2 - 1;
-    rumori.set(ctx, b);
+    rumori.set(ctx.sampleRate, b);
   }
   return b;
 }

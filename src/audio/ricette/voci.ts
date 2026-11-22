@@ -55,7 +55,7 @@ function costruisci(): Record<IdVoce, VoceAudio> {
   for (const timbro of ['a', 'b'] as const) {
     for (const [nome, v] of Object.entries(VERSI)) {
       r[`vox_${timbro}_${nome}` as IdVoce] = {
-        canale: 'voci', volume: v.volume, durata: v.durata, maxIstanze: 1,
+        canale: 'voci', freq: 16000, volume: v.volume, durata: v.durata, maxIstanze: 1,
         ricetta: (s) => v.verso(s, TIMBRI[timbro]),
       };
     }

@@ -2,7 +2,7 @@
 // Niente "boing" e niente "sproing".
 import type { Ricettario, VoceAudio } from '../tipi';
 import type { Sint } from '../sintesi';
-import { detriti, scricchiolio } from './comuni';
+import { detriti, piatto, scricchiolio } from './comuni';
 
 /** Tonfo sordo di uno stivale. */
 function stivale(s: Sint, t: number, vol: number, hz = 130): void {
@@ -15,7 +15,7 @@ const passo = (ricetta: (s: Sint) => void, varianti = 3, volume = 0.34): VoceAud
 export const PIRATA = {
   /** colpo preso: tonfo sul corpo e stoffa (non più il "boing") */
   pirata_colpito: {
-    canale: 'effetti', volume: 0.65, durata: 0.3, varianti: 2,
+    freq: 24000, canale: 'effetti', volume: 0.65, durata: 0.3, varianti: 2,
     ricetta(s) {
       const k = s.tra(0.9, 1.1);
       s.tono({ da: 175 * k, a: 68, durata: 0.15, vol: 0.8 });
@@ -35,7 +35,7 @@ export const PIRATA = {
   },
   /** la lapide che si pianta nel terreno */
   lapide: {
-    canale: 'effetti', volume: 0.55, durata: 0.35,
+    freq: 16000, canale: 'effetti', volume: 0.55, durata: 0.35,
     ricetta(s) {
       s.tono({ da: 145, a: 78, durata: 0.13, vol: 0.7 });
       s.modi({ base: 330, rapporti: [1, 2.1, 3.4], code: [0.11, 0.07, 0.04], vol: 0.9 });
@@ -44,7 +44,7 @@ export const PIRATA = {
   },
   /** caduta che fa male */
   caduta_tonfo: {
-    canale: 'effetti', volume: 0.7, durata: 0.4,
+    freq: 16000, canale: 'effetti', volume: 0.7, durata: 0.4,
     ricetta(s) {
       s.tono({ da: 125, a: 45, durata: 0.26, vol: 1, verso: s.satura(2) });
       s.rumore({ durata: 0.16, vol: 0.7, da: 750 });
@@ -106,9 +106,8 @@ export const PIRATA = {
   scivola_ciclo: {
     canale: 'effetti', volume: 0.35, durata: 1.0, ciclo: true, maxIstanze: 2,
     ricetta(s) {
-      const piatto = { durata: 1.0, attacco: 0.001, tenuta: 0.99 };
-      s.rumore({ ...piatto, vol: 0.6, filtro: 'bandpass', da: 1900, q: 0.5 });
-      s.rumore({ ...piatto, vol: 0.25, filtro: 'highpass', da: 4500 });
+      s.rumore({ ...piatto(1.0), vol: 0.6, filtro: 'bandpass', da: 1900, q: 0.5 });
+      s.rumore({ ...piatto(1.0), vol: 0.25, filtro: 'highpass', da: 4500 });
       detriti(s, 14, 0, 0.95, 0.6, 1200, 3000);
     },
   },
@@ -122,7 +121,7 @@ export const PIRATA = {
   },
   /** presa su scala o liana: la mano che afferra e la corda che si tende */
   presa: {
-    canale: 'effetti', volume: 0.4, durata: 0.3, varianti: 2,
+    freq: 16000, canale: 'effetti', volume: 0.4, durata: 0.3, varianti: 2,
     ricetta(s) {
       s.rumore({ durata: 0.035, vol: 0.7, da: 1700 });
       scricchiolio(s, 0.02, 0.24, 0.9, 1100);

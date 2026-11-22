@@ -26,10 +26,10 @@ export const ESPLOSIONI = {
   /** raggio da 48 a 75 px: cannone, granata */
   esp_media: { canale: 'effetti', volume: 0.95, durata: 1.3, varianti: 2, ricetta: (s) => botto(s, 1) },
   /** raggio oltre 75 px: barile di polvere */
-  esp_grande: { canale: 'effetti', volume: 1, durata: 2.0, varianti: 2, ricetta: (s) => botto(s, 1.6) },
+  esp_grande: { freq: 24000, canale: 'effetti', volume: 1, durata: 2.0, varianti: 2, ricetta: (s) => botto(s, 1.6) },
   /** pioggia di terra e schegge dopo il botto */
   esp_coda: {
-    canale: 'effetti', volume: 0.4, durata: 1.3, varianti: 2,
+    freq: 24000, canale: 'effetti', volume: 0.4, durata: 1.3, varianti: 2,
     ricetta(s) {
       s.rumore({ t: 0.05, durata: 1.1, vol: 0.25, attacco: 0.15, da: 1800, a: 500 });
       detriti(s, 16, 0.1, 1.15, 0.9, 700, 3200);
@@ -45,7 +45,7 @@ export const ESPLOSIONI = {
   },
   /** strato materiale: legno che si spacca */
   imp_legno: {
-    canale: 'effetti', volume: 0.6, durata: 0.5,
+    freq: 24000, canale: 'effetti', volume: 0.6, durata: 0.5,
     ricetta(s) {
       s.modi({ base: 410, rapporti: [1, 2.3, 3.9, 5.1], code: [0.14, 0.09, 0.06, 0.04], vol: 0.7 });
       s.rumore({ durata: 0.03, vol: 0.9, filtro: 'bandpass', da: 1900, q: 1.5 });
@@ -54,7 +54,7 @@ export const ESPLOSIONI = {
   },
   /** strato materiale: roccia, schiocco duro e sassi */
   imp_roccia: {
-    canale: 'effetti', volume: 0.6, durata: 0.5,
+    freq: 24000, canale: 'effetti', volume: 0.6, durata: 0.5,
     ricetta(s) {
       s.rumore({ durata: 0.05, vol: 1, filtro: 'bandpass', da: 2300, q: 1.8 });
       s.modi({ base: 900, rapporti: [1, 1.7, 2.9], code: [0.07, 0.05, 0.03], vol: 0.5 });

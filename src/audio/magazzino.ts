@@ -1,12 +1,14 @@
 // I suoni pronti: ogni voce del registro viene sintetizzata UNA volta (con OfflineAudioContext, fuori dal filo
-// principale) e tenuta in memoria come campione mono a 32 kHz. In battaglia suonare costa poco: niente sintesi dal vivo.
+// principale) e tenuta in memoria come campione mono a 32 kHz (24 o 16 kHz per i suoni lunghi senza acuti). In battaglia suonare costa poco: niente sintesi dal vivo.
 import { AUDIO, ID_SUONI, type IdSuono } from './registro';
 import type { VoceAudio } from './tipi';
-import { creaSint } from './sintesi';
+import { CODA_CICLO, creaSint } from './sintesi';
 import { a16, chiaveBuild, da16, leggi, scrivi, type Conservato } from './cache';
 
 /** 32 kHz: basta per l'altoparlante del telefono e tiene bassa la memoria (circa 7 MB in tutto). */
 export const FREQ_SINTESI = 32000;
+/** frequenza di campionamento di una voce del registro */
+export function freqDi(v: VoceAudio): number { return v.freq ?? FREQ_SINTESI; }
 /** picco di ogni suono dopo la normalizzazione (−1 dB) */
 export const PICCO = 0.89;
 
@@ -24,6 +26,24 @@ export function normalizza(d: Float32Array, picco = PICCO, sfumaFine = true, fre
   return d;
 }
 
+/** quanto dura la dissolvenza che chiude un giro (dentro CODA_CICLO) */
+export const CROCE_CICLO = 0.1;
+
+/**
+ * Chiude un suono in ciclo: `d` è il giro (`giro` campioni) più la coda calcolata dopo. I primi `croce` campioni
+ * passano piano dalla coda (che continua la fine del giro) all'inizio vero, a potenza costante: l'ultimo campione
+ * del giro si attacca al primo senza salti, e il rumore di fondo non ha buchi.
+ */
+export function chiudiGiro(d: Float32Array, giro: number, croce: number): Float32Array {
+  const out = d.slice(0, giro);
+  const n = Math.min(croce, giro, d.length - giro);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * (Math.PI / 2);
+    out[i] = d[i] * Math.sin(a) + d[giro + i] * Math.cos(a);
+  }
+  return out;
+}
+
 /** Seme stabile per id e variante: lo stesso suono esce sempre uguale. */
 export function semeDi(id: string, variante: number): number {
   let h = 2166136261;
@@ -33,7 +53,9 @@ export function semeDi(id: string, variante: number): number {
 
 /** Sintetizza una variante di una voce del registro. */
 export async function sintetizza(id: string, v: VoceAudio, variante: number, Offline: CostruttoreOffline): Promise<Float32Array> {
-  const off = new Offline(1, Math.ceil(v.durata * FREQ_SINTESI), FREQ_SINTESI);
+  const freq = freqDi(v);
+  const giro = Math.ceil(v.durata * freq);
+  const off = new Offline(1, v.ciclo ? giro + Math.ceil(CODA_CICLO * freq) : giro, freq);
   // sotto i 55 Hz il telefono non suona: toglierli lascia più spazio al resto
   const hp = off.createBiquadFilter();
   hp.type = 'highpass';
@@ -41,7 +63,8 @@ export async function sintetizza(id: string, v: VoceAudio, variante: number, Off
   hp.connect(off.destination);
   v.ricetta(creaSint(off, hp, semeDi(id, variante)), variante);
   const reso = await off.startRendering();
-  return normalizza(reso.getChannelData(0).slice(), PICCO, !v.ciclo);
+  const d = reso.getChannelData(0).slice();
+  return normalizza(v.ciclo ? chiudiGiro(d, giro, Math.round(CROCE_CICLO * freq)) : d, PICCO, !v.ciclo, freq);
 }
 
 const pronti = new Map<string, Float32Array[]>();
@@ -89,7 +112,7 @@ export function preparaSuoni(): Promise<void> {
     for (const id of ordineDiPreparazione()) {
       const n = (AUDIO[id] as VoceAudio).varianti ?? 1;
       const salvate = cassetto ? Array.from({ length: n }, (_, k) => cassetto.get(`${id}#${k}`)) : [];
-      if (salvate.length === n && salvate.every((c) => c && c.freq === FREQ_SINTESI)) { pronti.set(id, salvate.map((c) => da16(c!.dati))); info.daCassetto++; }
+      if (salvate.length === n && salvate.every((c) => c && c.freq === freqDi(AUDIO[id]))) { pronti.set(id, salvate.map((c) => da16(c!.dati))); info.daCassetto++; }
       else coda.push(id);
     }
     if (!coda.length) { info.ms = performance.now() - info.inizio; return; }
@@ -109,7 +132,7 @@ export function preparaSuoni(): Promise<void> {
     info.ms = performance.now() - info.inizio;
     // nel cassetto per il prossimo avvio (in sottofondo: il gioco non lo aspetta)
     const voci = new Map<string, Conservato>();
-    for (const [id, varianti] of pronti) varianti.forEach((d, k) => voci.set(`${id}#${k}`, { dati: a16(d), freq: FREQ_SINTESI }));
+    for (const [id, varianti] of pronti) varianti.forEach((d, k) => voci.set(`${id}#${k}`, { dati: a16(d), freq: freqDi(AUDIO[id as IdSuono]) }));
     void scrivi('suoni', chiave, voci);
   })();
   return lavoro;

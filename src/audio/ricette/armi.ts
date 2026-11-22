@@ -4,7 +4,7 @@ import type { Ricettario } from '../tipi';
 export const ARMI = {
   /** cannone a mano: schiocco, botto rotondo e sbuffo d'aria */
   arma_cannone: {
-    canale: 'effetti', volume: 0.85, durata: 0.8, varianti: 2,
+    freq: 24000, canale: 'effetti', volume: 0.85, durata: 0.8, varianti: 2,
     ricetta(s) {
       const k = s.tra(0.92, 1.08);
       const sat = s.satura(2.5);
@@ -25,7 +25,7 @@ export const ARMI = {
   },
   /** la granata (palla di ferro) che rimbalza sul terreno */
   arma_granata_rimbalzo: {
-    canale: 'effetti', volume: 0.45, durata: 0.2, varianti: 2,
+    freq: 16000, canale: 'effetti', volume: 0.45, durata: 0.2, varianti: 2,
     ricetta(s) {
       const k = s.tra(0.9, 1.12);
       s.tono({ da: 300 * k, a: 170, durata: 0.06, vol: 0.9 });

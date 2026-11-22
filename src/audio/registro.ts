@@ -9,8 +9,9 @@ import { MONDO } from './ricette/mondo';
 import { UI } from './ricette/ui';
 import { VOCI } from './ricette/voci';
 import { JINGLE } from './ricette/jingle';
+import { CROLLI } from './ricette/crolli';
 
-export const AUDIO = { ...UI, ...ARMI, ...ESPLOSIONI, ...PIRATA, ...MONDO, ...VOCI, ...JINGLE };
+export const AUDIO = { ...UI, ...ARMI, ...ESPLOSIONI, ...PIRATA, ...MONDO, ...CROLLI, ...VOCI, ...JINGLE };
 
 export type IdSuono = keyof typeof AUDIO;
 

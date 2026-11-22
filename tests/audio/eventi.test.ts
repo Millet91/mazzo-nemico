@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EventoBattaglia, EsitoBattaglia } from '../../src/core/tipi';
 import { MATERIALE } from '../../src/core/tipi';
-import { memoriaNuova, MUTI_PER_SCELTA, suoniPerEventi, suoniPerVista, vocePirata, type Richiesta } from '../../src/audio/eventi';
+import { memoriaNuova, MUTI_PER_SCELTA, PEZZO_GRANDE, PEZZO_PICCOLO, suoniPerEventi, suoniPerVista, vocePirata, type Richiesta } from '../../src/audio/eventi';
 import { AUDIO, ID_SUONI } from '../../src/audio/registro';
 import { PAN_MAX } from '../../src/audio/mix';
 import { vistaFinta } from './copione';
@@ -270,5 +270,97 @@ describe('Audio · suoni dalla VistaBattaglia', () => {
     const pericolo = vistaFinta({ avvisoTiro: 'danno' });
     expect(id(suoniPerVista(a, pericolo, mem, false))).toEqual(['ui_avviso']);
     expect(suoniPerVista(pericolo, vistaFinta({ avvisoTiro: 'danno' }), mem, false)).toEqual([]);
+  });
+});
+
+describe('Audio · Fase 3: crolli, macerie, fuoco, frane e ponti', () => {
+  const crollo = (materiale: number, w: number, h: number, tipo: 'blocco' | 'masso' = 'blocco', pezzo = 7): EventoBattaglia =>
+    ({ t: 'crollo', pezzo, tipo, x: 900, y: 400, w, h, materiale });
+  const macerie = (pezzo: number, materiale: number, inMare = false): EventoBattaglia => ({ t: 'macerie', pezzo, x: 950, y: 600, inMare, materiale });
+
+  it('il pezzo che si stacca suona per materiale: legno, roccia (ghiaccio più acuto, ferro più cupo), sabbia (terra più cupa)', () => {
+    const r = (m: number) => suoni([crollo(m, 30, 30)]).suoni[0];
+    expect(r(MATERIALE.legno).id).toBe('crollo_legno');
+    expect(r(MATERIALE.roccia).id).toBe('crollo_roccia');
+    expect(r(MATERIALE.sabbia).id).toBe('crollo_sabbia');
+    expect(r(MATERIALE.ghiaccio).id).toBe('crollo_roccia');
+    expect(r(MATERIALE.ghiaccio).intonazione!).toBeGreaterThan(r(MATERIALE.roccia).intonazione!);
+    expect(r(MATERIALE.ferro).intonazione!).toBeLessThan(r(MATERIALE.roccia).intonazione!);
+    expect(r(MATERIALE.terra).id).toBe('crollo_sabbia');
+    expect(r(MATERIALE.terra).intonazione!).toBeLessThan(r(MATERIALE.sabbia).intonazione!);
+  });
+
+  it('per grandezza: il pezzo grande è più cupo e più forte e abbassa la musica, il piccolo è più acuto e più piano', () => {
+    const piccolo = suoni([crollo(MATERIALE.roccia, 20, 20)]).suoni[0];
+    const medio = suoni([crollo(MATERIALE.roccia, 40, 40)]).suoni[0];
+    const grande = suoni([crollo(MATERIALE.roccia, 60, 60)]).suoni[0];
+    expect(20 * 20).toBeLessThan(PEZZO_PICCOLO);
+    expect(60 * 60).toBeGreaterThanOrEqual(PEZZO_GRANDE);
+    expect(piccolo.intonazione!).toBeGreaterThan(medio.intonazione!);
+    expect(grande.intonazione!).toBeLessThan(medio.intonazione!);
+    expect(piccolo.volume!).toBeLessThan(grande.volume!);
+    expect(grande.attenua).toBe('botto_medio');
+    expect(medio.attenua).toBeUndefined();
+  });
+
+  it('le macerie a terra suonano col materiale e la grandezza del pezzo; in mare un tuffo, grande se il pezzo era grande', () => {
+    const mem = memoriaNuova();
+    suoniPerEventi([crollo(MATERIALE.legno, 60, 60, 'blocco', 3), crollo(MATERIALE.roccia, 10, 10, 'blocco', 4)], vistaFinta(), mem, 0);
+    const legno = suoniPerEventi([macerie(3, MATERIALE.legno)], vistaFinta(), mem, 100).suoni;
+    expect(id(legno)).toEqual(['macerie_legno']);
+    expect(legno[0].attenua).toBe('botto_medio');
+    expect(id(suoniPerEventi([macerie(4, MATERIALE.roccia, true)], vistaFinta(), mem, 200).suoni)).toEqual(['splash_piccolo']);
+    suoniPerEventi([crollo(MATERIALE.roccia, 70, 70, 'blocco', 5)], vistaFinta(), mem, 300);
+    expect(id(suoniPerEventi([macerie(5, MATERIALE.roccia, true)], vistaFinta(), mem, 400).suoni)).toEqual(['splash_grande']);
+    expect(mem.pezzi.size).toBe(0);
+    // un pezzo che l'audio non ha visto staccarsi suona come uno piccolo, senza rompersi
+    expect(id(suoniPerEventi([macerie(99, MATERIALE.sabbia)], vistaFinta(), memoriaNuova(), 0).suoni)).toEqual(['macerie_sabbia']);
+  });
+
+  it('dieci pezzi che arrivano giù nello stesso frame: un suono di macerie solo', () => {
+    const ev = Array.from({ length: 10 }, (_, i) => macerie(i, MATERIALE.roccia));
+    expect(id(suoni(ev).suoni)).toEqual(['macerie_roccia']);
+  });
+
+  it('il masso rotola in ciclo dal distacco fino alle sue macerie', () => {
+    const mem = memoriaNuova();
+    const via = suoniPerEventi([crollo(MATERIALE.roccia, 40, 40, 'masso', 8)], vistaFinta(), mem, 0);
+    expect(id(via.suoni)).toEqual(['crollo_roccia', 'masso_rotola']);
+    expect(via.suoni[1].ciclo).toBe('masso:8');
+    const giu = suoniPerEventi([macerie(8, MATERIALE.roccia)], vistaFinta(), mem, 2000);
+    expect(giu.ferma).toEqual(['masso:8']);
+    expect(id(giu.suoni)).toEqual(['macerie_roccia']);
+  });
+
+  it('il fuoco: vampata e crepitio in ciclo finché dura; spento, si sbriciola', () => {
+    const mem = memoriaNuova();
+    const acceso = suoniPerEventi([{ t: 'fuoco', fuoco: 2, x: 600, y: 500, r: 40, inizio: true }], vistaFinta(), mem, 0);
+    expect(id(acceso.suoni)).toEqual(['fuoco_accende', 'fuoco_ciclo']);
+    expect(acceso.suoni[1].ciclo).toBe('fuoco:2');
+    const spento = suoniPerEventi([{ t: 'fuoco', fuoco: 2, x: 600, y: 500, r: 40, inizio: false }], vistaFinta(), mem, 4000);
+    expect(spento.ferma).toEqual(['fuoco:2']);
+    expect(id(spento.suoni)).toEqual(['fuoco_spegne']);
+  });
+
+  it('a turno nuovo si fermano scivolata e masso, ma il fuoco continua (brucia anche nel turno dopo); a fine battaglia tutto', () => {
+    const mem = memoriaNuova();
+    suoniPerEventi([
+      { t: 'fuoco', fuoco: 1, x: 600, y: 500, r: 40, inizio: true },
+      crollo(MATERIALE.roccia, 40, 40, 'masso', 9),
+      { t: 'scivola', pirata: 0, inizio: true, materiale: MATERIALE.sabbia },
+    ], vistaFinta(), mem, 0);
+    const turno = suoniPerEventi([ESEMPI.turnoIniziato], vistaFinta(), mem, 5000);
+    expect(turno.ferma.sort()).toEqual(['masso:9', 'scivola:0']);
+    expect([...mem.cicli]).toEqual(['fuoco:1']);
+    const fine = suoniPerEventi([ESEMPI.fine], vistaFinta(), mem, 9000);
+    expect(fine.ferma).toContain('*');
+    expect(mem.cicli.size).toBe(0);
+  });
+
+  it('frana di sabbia e ponte che resta appeso a un capo', () => {
+    expect(id(suoni([ESEMPI.frana]).suoni)).toEqual(['frana']);
+    const ponte = suoni([ESEMPI.ponteCalato]).suoni;
+    expect(id(ponte)).toEqual(['ponte_calato']);
+    expect(ponte[0].attenua).toBe('botto_medio');
   });
 });

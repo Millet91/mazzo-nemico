@@ -1,4 +1,7 @@
-// Ciclo del turno: inquadra → azione → volo → fuga → risoluzione (→ fine).
+// Ciclo del turno (studio v2, Fase 1): inquadra → azione → fuga → volo → risoluzione (→ fine).
+// La fuga parte allo sparo: ci si muove mentre il colpo vola. Dura BIL.ritmo.fugaTick e si chiude prima col comando
+// `fatto` o se il pirata resta fermo per BIL.ritmo.fermoFugaTick. Il volo c'è solo se alla fine della fuga qualcosa
+// vola ancora. Timer per sparo: scorre solo in 'azione'.
 // Timer che parte al primo comando o dopo 2 s, rotazione dei pirati vivi, vento nuovo a ogni turno, mare che
 // sale dal turno 12, fine a tempo al turno 18 (parità al difensore), eliminazione, ritirata dell'attaccante,
 // lapide-barilotto a fine risoluzione, risoluzione forzata dopo 10 s (caso 8).
@@ -15,6 +18,9 @@ import { bersagliDi, colpoIstantaneo, durataColpi, fisicaDi, spara, tickColpo } 
 import { muoviProiettile } from './proiettili';
 import { MICCIA_LAPIDE_TICK, VITA_MAX_PROIETTILE } from './costanti';
 import { apriCassa, attivo as proiettileAttivo, bersagliOggetti, centroOggetto, eOggetto, forseCassa, scendiCassa } from './oggetti';
+
+/** `turno.fermoDa` in fuga: il giocatore ha chiesto di chiudere col comando `fatto` (l'evento esce al tick dopo). */
+export const FATTO = -2;
 
 export function pirataDelTurno(s: StatoBattaglia): Pirata | undefined {
   return s.pirati.find((p) => p.id === s.turno.pirata);
@@ -235,16 +241,18 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
     eventi.push({ t: 'salto', pirata: attivo.id }); // salto appena chiesto da eseguiComando
   }
   if (t.fase === 'azione' && t.sparato && attivo && inGioco(attivo)) {
-    // fuoco chiesto da eseguiComando: il colpo parte adesso
+    // fuoco chiesto da eseguiComando: il colpo parte adesso, e con lui la fuga
     const mun = s.squadre[t.squadra].munizioni;
     const m = mun[t.arma] ?? 0;
     if (m > 0) mun[t.arma] = m - 1;
     eventi.push({ t: 'sparo', pirata: attivo.id, arma: t.arma });
-    cambiaFase(s, 'volo', eventi);
+    cambiaFase(s, 'fuga', eventi);
     t.inizioFase = s.tick;
     spara(s, attivo, eventi);
   }
-  const puoMuoversi = (t.fase === 'azione' || t.fase === 'fuga') && attivo !== undefined && inGioco(attivo);
+  // in fuga ci si muove solo quando l'arma ha finito di sparare (la pistola spara due colpi da fermo)
+  const puoMuoversi = attivo !== undefined && inGioco(attivo)
+    && (t.fase === 'azione' || (t.fase === 'fuga' && s.tick - t.inizioFase >= durataColpi(t.arma)));
 
   for (const p of s.pirati) {
     const mio = p === attivo && puoMuoversi;
@@ -265,17 +273,28 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
       if (t.timerAvviato && t.tickRimasti === s.config.timerSecondi * TICK_AL_SECONDO) eventi.push({ t: 'timerAvviato' });
       if (t.timerAvviato && --t.tickRimasti <= 0) { t.tickRimasti = 0; cambiaFase(s, 'risoluzione', eventi); }
       break;
-    case 'volo': {
-      // colpi successivi delle armi a più colpi (pistola)
+    case 'fuga': {
+      // colpi successivi delle armi a più colpi (pistola): partono da dove il pirata ha sparato il primo
       const a = ARMA[t.arma];
       if (a.tipo === 'istantanea' && attivoInGioco) {
         for (let k = 1; k < (a.colpi ?? 1); k++) if (inFase === tickColpo(t.arma, k)) colpoIstantaneo(s, attivo!, eventi);
       }
-      if (!s.proiettili.some(proiettileAttivo) && inFase >= durataColpi(t.arma)) cambiaFase(s, attivoInGioco ? 'fuga' : 'risoluzione', eventi);
+      if (inFase < durataColpi(t.arma)) break;
+      let chiudi = !attivoInGioco || inFase >= BIL.ritmo.fugaTick;
+      if (!chiudi && t.fermoDa === FATTO) { eventi.push({ t: 'fatto', pirata: attivo!.id }); chiudi = true; }
+      if (!chiudi) {
+        // pirata fermo senza comandi: dopo fermoFugaTick il turno passa da solo
+        if (t.camminata === 0 && t.arrampicata === 0 && fermo(attivo!)) {
+          if (t.fermoDa < 0) t.fermoDa = s.tick;
+          if (s.tick - t.fermoDa >= BIL.ritmo.fermoFugaTick) chiudi = true;
+        } else t.fermoDa = -1;
+      }
+      if (chiudi) cambiaFase(s, s.proiettili.some(proiettileAttivo) ? 'volo' : 'risoluzione', eventi);
       break;
     }
-    case 'fuga':
-      if (!attivoInGioco || inFase >= BIL.turno.fugaTick) cambiaFase(s, 'risoluzione', eventi);
+    case 'volo':
+      // il colpo vola ancora dopo la fuga: si aspetta, il pirata non si muove più
+      if (!s.proiettili.some(proiettileAttivo)) cambiaFase(s, 'risoluzione', eventi);
       break;
     case 'risoluzione': {
       // passa appena tutto è fermo da BIL.turno.risoluzioneFermoTick (m1-ritmo §3)

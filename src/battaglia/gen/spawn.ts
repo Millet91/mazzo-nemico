@@ -23,10 +23,13 @@ export function petto(p: Punto): Punto {
   return { x: p.x, y: p.y - ALTEZZA_CAPSULA / 2 };
 }
 
-/** Velocità (px/tick) di una spinta: colpo diretto di cannone (col +10% del Teschio, il caso peggiore) e sciabola. */
+/**
+ * Velocità (px/tick) di una spinta: colpo diretto di cannone (col +10% del Teschio, il caso peggiore) e sciabola.
+ * Il cannone è quello di REGOLE.cannoneDanno (regole v1), non ARMA: vedi parametri.ts.
+ */
 export function spinte(): { cannone: number; sciabola: number; angoloSciabola: number } {
   const t = BIL.tratti;
-  const dannoCannone = Math.floor(ARMA.cannone.danno * (1 + t.teschioBonusDanno));
+  const dannoCannone = Math.floor(REGOLE.cannoneDanno * (1 + t.teschioBonusDanno));
   return {
     cannone: dannoCannone * BIL.fisica.spintaPerDanno,
     sciabola: (ARMA.sciabola.spintaFissa ?? 0) / TICK_AL_SECONDO,
@@ -129,7 +132,7 @@ export function distanzaMare(sup: Int32Array, mare: number, p: Punto): number {
 export function puoColpire(m: Uint8Array, mare: number, p: Punto, nemici: Punto[]): boolean {
   const da = petto(p);
   const bersagli = nemici.map(petto);
-  const raggio = ARMA.cannone.raggio * 0.8;
+  const raggio = REGOLE.cannoneRaggio * 0.8;
   const dir = bersagli.reduce((s, b) => s + (b.x - da.x), 0) >= 0 ? 1 : -1;
   const vMax = BIL.fisica.velocitaMaxProiettile;
   let xMin = Infinity, xMax = -Infinity;

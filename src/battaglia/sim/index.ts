@@ -25,10 +25,11 @@ import { ARMA, dotazioneIniziale } from '../../contenuti/armi';
 import { T } from '../../testi/it';
 import { MEZZA_ALTEZZA_PIRATA } from './terreno';
 import { inGioco, stacca } from './pirata';
-import { avanza, iniziaTurno, miraIniziale, pirataDelTurno, ritirata } from './turno';
+import { avanza, FATTO, iniziaTurno, miraIniziale, pirataDelTurno, ritirata } from './turno';
 import { hashDi } from './hash';
 import { creaBarili } from './oggetti';
 import { creaAppigli } from './appigli';
+import { durataColpi } from './armi';
 import { avvisoTiro as avviso, simulaColpo as simula, traiettoria as linea } from './simula';
 
 /** Crea lo stato iniziale. La mappa arriva dal generatore (battaglia/gen). Il turno 1 parte in fase 'inquadra'. */
@@ -112,6 +113,7 @@ export function eseguiComando(s: StatoBattaglia, c: Comando): void {
       break;
     }
     case 'salta': {
+      if (!inAzione && s.tick - t.inizioFase < durataColpi(t.arma)) break; // la pistola sta ancora sparando
       if (!p.aTerra && p.appeso < 0) break;
       const sa = c.indietro ? BIL.pirata.saltoIndietro : BIL.pirata.saltoAvanti;
       stacca(p);
@@ -143,6 +145,11 @@ export function eseguiComando(s: StatoBattaglia, c: Comando): void {
       if (!inAzione) break;
       const lim = ARMA.granata.miccia!;
       t.miccia = Math.max(lim.min, Math.min(lim.max, Math.round(c.secondi)));
+      break;
+    }
+    case 'fatto': {
+      // in fuga chiude subito il turno: la fase cambia (con l'evento `fatto`) al prossimo avanzaTick
+      if (t.fase === 'fuga') t.fermoDa = FATTO;
       break;
     }
     case 'fuoco': {

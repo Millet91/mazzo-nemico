@@ -132,7 +132,7 @@ describe('Fase 0 · sicurezza del tiro', () => {
     eseguiComando(s, { t: 'mira', mezziGradi: 2 * 37, potenza: 73 });
     expect(avvisoTiro(s)).toBe('vicino');
     eseguiComando(s, { t: 'fuoco' });
-    const ev = avanzaFinche(s, (x) => x.turno.fase === 'fuga' || x.turno.fase === 'risoluzione', 600);
+    const ev = avanzaFinche(s, (x) => x.turno.fase === 'risoluzione', 600);
     expect(eventiDi(ev, 'esplosione')).toHaveLength(1);
     expect(p.vita).toBe(BIL.pirata.pv);
     expect(eventiDi(ev, 'danno')).toHaveLength(0);
@@ -147,7 +147,7 @@ describe('Fase 0 · sicurezza del tiro', () => {
     eseguiComando(s, { t: 'mira', mezziGradi: 2 * 37, potenza: 73 }); // lo stesso tiro contro il pendio
     expect(avvisoTiro(s)).toBe('danno');
     eseguiComando(s, { t: 'fuoco' });
-    avanzaFinche(s, (x) => x.turno.fase === 'fuga' || x.turno.fase === 'risoluzione', 600);
+    avanzaFinche(s, (x) => x.turno.fase === 'risoluzione', 600);
     expect(nemico.vita).toBeLessThan(nemico.vitaMax);
     expect(p.vita).toBeLessThan(BIL.pirata.pv);
   });
@@ -161,7 +161,7 @@ describe('Fase 0 · sicurezza del tiro', () => {
     eseguiComando(s, { t: 'mira', mezziGradi: 2 * 80, potenza: 5 });
     expect(avvisoTiro(s)).toBe('danno');
     eseguiComando(s, { t: 'fuoco' });
-    avanzaFinche(s, (x) => x.turno.fase === 'fuga' || x.turno.fase === 'risoluzione', 600);
+    avanzaFinche(s, (x) => x.turno.fase === 'risoluzione', 600);
     expect(p.vita).toBeLessThan(BIL.pirata.pv);
   });
 

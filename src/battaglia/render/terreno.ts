@@ -125,6 +125,9 @@ export class TerrenoRender {
 
   get inAttesa(): number { return this.coda.length; }
 
+  /** Il quadro a 1× (RGBA, w×h), se la mappa è dipinta e già arrivato: i pezzi che cadono ne ritagliano il colore. */
+  get arteRgba(): Uint8ClampedArray | null { return this.arte; }
+
   /** Colore del materiale che c'era (nella maschera iniziale) attorno a (x, y): serve alle zolle del cratere. */
   coloreOriginale(x: number, y: number, raggio: number): number {
     const { w, h } = this.terreno;

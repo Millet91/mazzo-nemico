@@ -29,6 +29,7 @@ import { ScenaBattaglia } from '../render/scena-battaglia';
 import { Partita } from './partita';
 import { creaVista, visteUguali } from './vista';
 import { aspettaRisoluzione, risoluzioneAttuale } from '../../render/risoluzione';
+import { esplodi } from '../sim/esplosione';
 import { calcolaRisultato, configProva, type FrameDisegno, type RisultatoProvaFps } from './statistiche-prova';
 
 export type { RisultatoProvaFps };
@@ -93,6 +94,8 @@ export class Regista {
   private mirinoPreso = false;
   private eraInPausa = false;
   private prova: Prova | null = null;
+  /** eventi di uno `scoppio` di prova (?prova), da dare alla scena al prossimo frame */
+  private eventiProva: EventoBattaglia[] = [];
   /** ms di fermo immagine rimasti */
   private fermoMs = 0;
   private readonly frame = (tk: Ticker) => this.aggiorna(tk.deltaMS);
@@ -120,6 +123,22 @@ export class Regista {
         const g = this.scena?.mondo.toGlobal({ x, y });
         return g ? { x: g.x, y: g.y } : null;
       };
+      // Fase 3: uno scoppio senza danni in (x, y), dal turno dei crolli: per vedere e misurare pezzi che cadono.
+      // Cambia la sim fuori dai comandi: solo con ?prova (la battaglia non torna più col suo replay).
+      (prova as { scoppio?: (x: number, y: number, raggio: number) => number }).scoppio = (x, y, raggio) => {
+        const st = this.partita?.s;
+        if (!st) return 0;
+        st.turno.numero = Math.max(st.turno.numero, BIL.crolli.dalTurno);
+        const ev: EventoBattaglia[] = [];
+        esplodi(st, x, y, 'cassa', null, ev, { raggio, danno: 0 });
+        this.eventiProva.push(...ev);
+        return ev.filter((e) => e.t === 'crollo').length;
+      };
+      // pezzi che cadono: nella sim (posizione, misura) e quanti ne disegna la scena
+      (prova as { pezzi?: () => unknown }).pezzi = () => ({
+        sim: (this.partita?.s.pezzi ?? []).map((p) => ({ id: p.id, tipo: p.tipo, x: Math.round(p.x), y: Math.round(p.y), w: p.w, h: p.h })),
+        disegnati: this.scena?.cadenti.quanti ?? 0,
+      });
       // la "Prova 60 fps" della Diagnostica col risultato intero (tempi di disegno per fascia di zoom)
       (prova as { provaFps?: (ms: number, mappa?: string) => Promise<RisultatoProvaFps> }).provaFps = (ms: number, mappa?: string) => this.avviaProva(ms, mappa);
     }
@@ -346,6 +365,7 @@ export class Regista {
     let eventi: EventoBattaglia[] = [];
     if (this.fermoMs > 0) this.fermoMs -= delta;
     else eventi = pa.aggiorna(delta);
+    if (this.eventiProva.length) { eventi = [...this.eventiProva, ...eventi]; this.eventiProva = []; }
     if (eventi.length) {
       this.impatto(eventi);
       scena.eventi(eventi);

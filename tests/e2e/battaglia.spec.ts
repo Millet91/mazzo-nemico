@@ -801,3 +801,24 @@ test('Fase 2: Cala Pappagallo v3 col terreno HD: 18 tessere, texture sotto 48 MB
   await page.screenshot({ path: 'test-results/screenshot/fase2-terreno-hd.png' });
   expect(errori).toEqual([]);
 });
+
+test('Fase 3: i pezzi che si staccano si disegnano (blocco e masso) finché la sim li tiene, poi spariscono', async ({ page }) => {
+  test.setTimeout(60000);
+  const errori: string[] = [];
+  page.on('pageerror', (e) => errori.push(e.message));
+  await page.setViewportSize({ width: 915, height: 412 });
+  await page.goto('/?prova');
+  await page.locator('#schermaglia').click();
+  await page.locator('#mappa-cala-pappagallo-v3').click();
+  await page.locator('#salpa').click();
+  await expect.poll(() => page.evaluate(() => (window as any).__kaboom.terrenoHd?.()), { timeout: 15000 }).toBeTruthy();
+  // sotto la cengia di destra: si staccano un blocco e il masso, che rotola giù per qualche secondo
+  const crolli = await page.evaluate(() => (window as any).__kaboom.scoppio(1120, 670, 26));
+  expect(crolli).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => (window as any).__kaboom.pezzi().disegnati), { timeout: 2000 }).toBeGreaterThan(0);
+  const p = await page.evaluate(() => (window as any).__kaboom.pezzi()) as { sim: { tipo: string }[]; disegnati: number };
+  expect(p.disegnati).toBe(p.sim.length);
+  await page.screenshot({ path: 'test-results/screenshot/fase3-pezzi.png' });
+  await expect.poll(() => page.evaluate(() => (window as any).__kaboom.pezzi().disegnati), { timeout: 10000 }).toBe(0);
+  expect(errori).toEqual([]);
+});

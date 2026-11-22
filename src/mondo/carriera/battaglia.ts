@@ -4,7 +4,7 @@ import type { BattagliaCarriera } from '../../core/bus';
 import type { DefCapitolo, StatoCarriera } from '../../core/carriera';
 import type { ConfigBattaglia } from '../../core/tipi';
 import { VERSIONE_REGOLE } from '../../core/tipi';
-import { BIL } from '../../contenuti/bilanciamento';
+import { secondiTimer } from '../../contenuti/bilanciamento';
 import { piratiInCampo } from './regole';
 
 /** Battaglie del capitolo col timer lungo di Mozzo (15 §5: 30 s nelle prime 2, poi 20). */
@@ -35,10 +35,8 @@ export function battagliaDaAttacco(cap: DefCapitolo, s: StatoCarriera, seme: num
         ? { ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: dif }
         : { ciurma: 'teschio', ruolo: 'difensore', controllo: 'umano', pirati: dif },
     ],
-    // timer per sparo (P1, BIL.ritmo): stessa regola di secondiTimer() in ui/battaglia/logica.ts, qui ripetuta
-    // perché questa cartella è pura e non importa ui/. Timer di Mozzo nelle prime battaglie e a difficoltà Mozzo.
-    timerSecondi: s.battaglieGiocate < BATTAGLIE_TIMER_LUNGO || (s.difficolta ?? 'mozzo') === 'mozzo'
-      ? BIL.ritmo.timerSparoMozzo : BIL.ritmo.timerSparo,
+    // timer per sparo (P1): timer di Mozzo nelle prime battaglie del capitolo, poi secondo la difficoltà
+    timerSecondi: secondiTimer({ livelloIa: s.battaglieGiocate < BATTAGLIE_TIMER_LUNGO ? 'mozzo' : (s.difficolta ?? 'mozzo') }),
     traiettoriaCompleta: true,
   };
   return { carriera: { isola: a.verso, scontro }, config };

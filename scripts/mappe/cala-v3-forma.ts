@@ -119,7 +119,7 @@ export const BALCONI = [
 export const NIDO = { x0: 938, x1: 978, y: 430 };
 /** Cengie: piccole mensole di roccia sui fianchi della Rocca e sul dirupo (contorni, riparo dai tiri tesi). [x0, x1, y, spessore] */
 export const CENGE: [number, number, number, number][] = [
-  [892, 908, 706, 10], [1142, 1160, 664, 10],     // fianchi bassi della Rocca, a quote diverse
+  [892, 908, 706, 10], [1134, 1156, 664, 10],     // fianchi bassi della Rocca, a quote diverse (attaccate al fianco)
   [803, 822, 772, 12],                             // tettoia sopra lo sbocco della galleria sinistra
 ];
 /**
@@ -131,6 +131,12 @@ export const RELITTO = { poppa0: 106, poppa1: 172, cima: 730, coperta0: 866, cop
 export const MOLO = { x0: 108, x1: 218, piano: 868, spessore: 12, torre0: 72, torre1: 108, cima: 760 };
 /** Tettoie di legno in cima alle due torri (riparo dai tiri a parabola): muro verso il mare e tetto a sbalzo. */
 const TETTOIA = { muro: 6, alto: 38, tetto: 6, sbalzo: 42 };
+/**
+ * Sbalzo della tettoia della Vedetta sulla Duna: più corto, perché chi sta sotto il tetto deve poter scavalcare il
+ * muretto del pianoro (x 1882-1895). Con 42 px il tetto arrivava a x 1905 e copriva il posto accanto al muretto:
+ * niente aria sopra la testa, quindi niente scavalco né Balzo verso sinistra. Con 30 px il tetto parte da x 1917.
+ */
+export const SBALZO_DUNA = 30;
 /** Scoglio del Granchio: il cuore di roccia della Duna della Vedetta. */
 export const SCOGLIO = { x: 1908, y: 850, rx: 58, ry: 104 };
 export const DUNA = { piede: 1700, pianoro0: 1874, pianoro1: 1946, quota: 730 };
@@ -155,8 +161,8 @@ export const CESPUGLI = [
 ];
 /** Elementi di legno che crolleranno in Fase 3 (torri): [x0, x1]. Nessuna partenza entro DISTANZA_CROLLO px. */
 export const TORRI_X: Record<Variante, [number, number][]> = {
-  base: [[RELITTO.poppa0, RELITTO.poppa1], [DUNA.pianoro1 - TETTOIA.sbalzo, DUNA.pianoro1]],
-  prologo: [[MOLO.torre0, MOLO.torre1], [DUNA.pianoro1 - TETTOIA.sbalzo, DUNA.pianoro1]],
+  base: [[RELITTO.poppa0, RELITTO.poppa1], [DUNA.pianoro1 - SBALZO_DUNA, DUNA.pianoro1]],
+  prologo: [[MOLO.torre0, MOLO.torre1], [DUNA.pianoro1 - SBALZO_DUNA, DUNA.pianoro1]],
 };
 export const DISTANZA_CROLLO = 120;
 /** Anelli di ferro per il rampino (Fase 4): solo posti prenotati, 120-260 px sopra il suolo. Non sono nella maschera. */
@@ -288,9 +294,9 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
   }
 
   // ── tettoia di una torre: muro dal lato del mare e tetto a sbalzo verso terra ──
-  const tettoia = (xMare: number, verso: 1 | -1, cima: number) => {
+  const tettoia = (xMare: number, verso: 1 | -1, cima: number, sbalzo = TETTOIA.sbalzo) => {
     for (let k = 0; k < TETTOIA.muro; k++) for (let y = cima - TETTOIA.alto; y < cima; y++) metti(xMare + verso * k, y, MATERIALE.legno, TAG.edificio);
-    for (let k = 0; k < TETTOIA.sbalzo; k++) for (let y = cima - TETTOIA.alto - TETTOIA.tetto; y < cima - TETTOIA.alto; y++) metti(xMare + verso * k, y, MATERIALE.legno, TAG.edificio);
+    for (let k = 0; k < sbalzo; k++) for (let y = cima - TETTOIA.alto - TETTOIA.tetto; y < cima - TETTOIA.alto; y++) metti(xMare + verso * k, y, MATERIALE.legno, TAG.edificio);
   };
 
   if (variante === 'base') {
@@ -325,7 +331,7 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
     tettoia(M.torre0, 1, M.cima);
   }
   // ── tettoia della Vedetta sulla Duna (muro verso il mare, a destra) ──
-  tettoia(DUNA.pianoro1, -1, suolo(DUNA.pianoro1 - 3));
+  tettoia(DUNA.pianoro1, -1, suolo(DUNA.pianoro1 - 3), SBALZO_DUNA);
 
   // ── muretti e casse ──
   for (const a of APPOGGI) {
@@ -345,5 +351,24 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
     const n = Math.sin(x * 0.7) * 0.08 + Math.cos(y * 0.9) * 0.08;
     if (((x - b.x) / b.rx) ** 2 + ((y - b.y) / b.ry) ** 2 <= 1 + n) metti(x, y, MATERIALE.terra, TAG.foglie);
   }
+  // ── niente briciole sospese: i pezzetti di solido staccati da tutto (meno di BRICIOLA px, per esempio le
+  //    colonnine di 1 px che restano tra il dirupo e la bocca di una galleria) tornano aria ──
+  togliBriciole(m, tag);
   return { m, sup, tag };
+}
+
+/** Pezzi di solido più piccoli di così, staccati dal resto (4 vicini), sono briciole da togliere. */
+export const BRICIOLA = 400;
+function togliBriciole(m: Uint8Array, tag: Uint8Array): void {
+  const vis = new Uint8Array(W * H), pila: number[] = [], pezzo: number[] = [];
+  for (let i = 0; i < W * H; i++) {
+    if (!m[i] || vis[i]) continue;
+    pezzo.length = 0; vis[i] = 1; pila.push(i);
+    while (pila.length) {
+      const j = pila.pop()!; pezzo.push(j);
+      const x = j % W;
+      for (const k of [x > 0 ? j - 1 : -1, x < W - 1 ? j + 1 : -1, j - W, j + W]) if (k >= 0 && k < W * H && m[k] && !vis[k]) { vis[k] = 1; pila.push(k); }
+    }
+    if (pezzo.length < BRICIOLA) for (const j of pezzo) { m[j] = MATERIALE.aria; tag[j] = 0; }
+  }
 }

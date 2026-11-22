@@ -477,12 +477,19 @@ test('comandi v3 · mirino sulla battaglia vera: si trascina sul canvas, resta d
   expect(comandi.length).toBeGreaterThan(0);
   expect(comandi.every((c) => c.t === 'mira')).toBe(true);
   expect(comandi.at(-1)!.mezziGradi).toBeLessThan(90); // tirato in basso a destra: l'angolo scende
-  const testo = await page.getByTestId('mira').innerText();
-  expect(testo).not.toBe('45° · 60%');
+  // I comandi si applicano al tick dopo e l'HUD li mostra un frame più tardi: su una macchina lenta, subito dopo
+  // il rilascio, la scritta può mostrare ancora una mira di passaggio. Si aspetta che sia ferma prima di leggerla.
+  const mira = () => page.getByTestId('mira').innerText();
+  let testo = await mira();
+  await expect.poll(async () => {
+    const prima = testo;
+    testo = await mira();
+    return testo === prima && testo !== '45° · 60%';
+  }, { intervals: [200], timeout: 5000 }).toBe(true);
   // il suggerimento sparisce alla prima mira, e il mirino resta dove l'hai lasciato
   await expect(page.getByTestId('suggerimento-mirino')).toHaveCount(0);
   await page.waitForTimeout(400);
-  expect(await page.getByTestId('mira').innerText()).toBe(testo);
+  expect(await mira()).toBe(testo);
   expect(await page.evaluate(() => (window as any).__kaboom.bus.battaglia.value.fase)).toBe('azione');
   await page.screenshot({ path: 'test-results/screenshot/mirino-20x9.png' });
   // dopo FUOCO il mirino non c'è più (non si mira in volo)

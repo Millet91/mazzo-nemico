@@ -6,7 +6,7 @@
 // Come core/tipi.ts: solo dati serializzabili (numeri, stringhe, booleani, array, oggetti semplici), niente classi.
 // Il salvataggio è StatoCarriera passato a JSON.stringify.
 
-import type { Bioma, ConfigScontro, IdArma, IdMossa, Punto } from './tipi';
+import type { Bioma, ConfigScontro, IdArma, IdMossa, LivelloIa, Punto } from './tipi';
 
 // Scontri e mosse vivono in core/tipi.ts (contratto P1, Fase 1): qui si riesportano per chi usa la carriera.
 export type { ConfigScontro, IdMossa, TipoScontro } from './tipi';
@@ -114,6 +114,9 @@ export interface StatoCarriera {
   versione: number;
   /** capitolo in corso (0 = Prologo non ancora vinto) */
   capitolo: IdCapitolo;
+  /** difficoltà della carriera (15 §1.1), scelta all'inizio e cambiabile tra un capitolo e l'altro.
+   *  Facoltativa per i salvataggi vecchi: assente = contenuti/campagna.ts › difficoltaPredefinita. */
+  difficolta?: LivelloIa;
   round: number;
   fase: FaseRound;
   isole: Record<IdIsola, StatoIsola>;

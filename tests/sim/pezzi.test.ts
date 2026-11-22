@@ -86,6 +86,21 @@ describe('Pezzi che cadono (Fase 3)', () => {
     expect(eventiDi(tagliaECadi(s2).subito, 'crollo')).toHaveLength(1);
   });
 
+  it('anti-frustrazione: stare sopra il pezzo o accanto alla stessa quota non lo tiene su', () => {
+    // partenza sopra la mensola: la mensola cade col pirata
+    const t = conMensola();
+    const m = mappa(t, [{ x: 1000, y: ALTO }], [{ x: 1700, y: SUOLO }]);
+    const s = creaBattaglia(config(1, 1), m);
+    s.turno.numero = BIL.crolli.dalTurno;
+    expect(eventiDi(tagliaECadi(s).subito, 'crollo')).toHaveLength(1);
+    // partenza su un'altra mensola alla stessa quota, a 10 px dal capo: fuori dalla zona (è solo sotto)
+    const t2 = conMensola();
+    rettangolo(t2, 1050, ALTO, 1100, SUOLO, MATERIALE.roccia);
+    const s2 = creaBattaglia(config(1, 1), mappa(t2, [{ x: 1055, y: ALTO }], [{ x: 1700, y: SUOLO }]));
+    s2.turno.numero = BIL.crolli.dalTurno;
+    expect(eventiDi(tagliaECadi(s2).subito, 'crollo')).toHaveLength(1);
+  });
+
   it('le briciole spariscono in polvere senza diventare pezzi', () => {
     const t = terrenoPiatto(MATERIALE.roccia);
     rettangolo(t, 900, ALTO, 940, SUOLO, MATERIALE.roccia);

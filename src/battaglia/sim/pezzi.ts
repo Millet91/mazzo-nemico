@@ -128,28 +128,26 @@ export function creaPezzo(
 
 /**
  * Una partenza (piedi di un pirata alla nascita) sta nella zona di caduta del pezzo? Allora il pezzo resta.
- * Zona colonna per colonna (proposta di Mappa): ogni colonna del pezzo dal suo pixel più alto in giù fino al mare,
- * allargata di `rispettoSpawnPx` per lato. Una partenza ci sta dentro se a quella distanza c'è una colonna che comincia
- * sopra la riga dei suoi piedi (il pezzo che scende le passerebbe addosso), oppure se ci poggia sopra (una colonna
- * sotto i piedi che comincia proprio lì). Chi sta accanto al capo di un ponte, alla stessa quota, è fuori.
+ * Decisione del Lead (P1-contratti §7): zona colonna per colonna e solo SOTTO il pezzo, cioè per ogni colonna da sotto
+ * il suo ultimo pixel pieno fino al mare, allargata di `rispettoSpawnPx` per lato. Una partenza accanto al pezzo (alla
+ * stessa quota) non lo blocca; stare sopra il pezzo non lo protegge (il ponte può cadere con chi c'è sopra).
  */
 function partenzaSotto(s: StatoBattaglia, p: PezzoStaccato): boolean {
   const partenze = s.partenze ?? [];
   if (partenze.length === 0) return false;
   const m = BIL.crolli.rispettoSpawnPx;
   const pw = p.x1 - p.x0 + 1, w = s.terreno.w;
-  const cima = new Int32Array(pw).fill(s.terreno.h);
+  const fondoCol = new Int32Array(pw).fill(-1);
   for (const i of p.pixel) {
     const px = i % w, py = (i - px) / w;
-    if (py < cima[px - p.x0]) cima[px - p.x0] = py;
+    if (py > fondoCol[px - p.x0]) fondoCol[px - p.x0] = py;
   }
   for (const q of partenze) {
     if (q.y >= s.terreno.mare) continue;
     const qx = Math.floor(q.x);
     for (let x = Math.max(p.x0, qx - m); x <= Math.min(p.x1, qx + m); x++) {
-      const c = cima[x - p.x0];
-      if (c < q.y) return true;
-      if (c === q.y && Math.abs(x - qx) < MEZZA_LARGHEZZA_PIRATA) return true;
+      const f = fondoCol[x - p.x0];
+      if (f >= 0 && q.y > f) return true;
     }
   }
   return false;

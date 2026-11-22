@@ -1,5 +1,8 @@
 // Pittore del terreno (gira in Chromium headless, Canvas 2D). Entra la maschera dei materiali (R = materiale × 40,
-// alfa = solido), esce il quadro 2048×1024 con alfa = maschera: quello che si vede è esattamente quello che si colpisce.
+// G = etichetta × 30, alfa = solido), esce il quadro con alfa = maschera: quello che si vede è esattamente quello che si colpisce.
+// `scala` 1 = 2048×1024 (un pixel per unità di mondo). `scala` 2 = 4096×2048 per il terreno HD della Fase 2: la sagoma è
+// la stessa maschera ingrandita con i bordi addolciti (scarto < 1 px di mondo), i motivi restano grandi uguali nel mondo
+// e la grana è fatta sui pixel fini. Tutte le misure qui sotto sono in px di mondo: `S` le porta sui pixel del quadro.
 // Stile 03 §1: cartoon 2.5D, 3 toni, luce calda da sinistra in alto, ombre blu-viola, contorno scuro solo fuori.
 /* eslint-disable */
 (function () {
@@ -26,14 +29,33 @@
     return out;
   }
 
-  window.dipingiTerreno = function (img) {
-    const W = img.width, H = img.height;
-    const c0 = document.createElement('canvas'); c0.width = W; c0.height = H;
+  window.dipingiTerreno = function (img, scala) {
+    const S = scala === 2 ? 2 : 1;
+    const w0 = img.width, h0 = img.height, W = w0 * S, H = h0 * S;
+    const c0 = document.createElement('canvas'); c0.width = w0; c0.height = h0;
     const x0 = c0.getContext('2d'); x0.drawImage(img, 0, 0);
-    const src = x0.getImageData(0, 0, W, H).data;
-    const mat = new Uint8Array(W * H);
-    const tag = new Uint8Array(W * H);   // G/50: 1 foglie, 2 edificio, 3 rovina, 4 ponte
-    for (let i = 0; i < W * H; i++) { mat[i] = src[i * 4 + 3] > 127 ? Math.round(src[i * 4] / 40) : ARIA; tag[i] = Math.round(src[i * 4 + 1] / 50); }
+    const src = x0.getImageData(0, 0, w0, h0).data;
+    const mat0 = new Uint8Array(w0 * h0);
+    const tag0 = new Uint8Array(w0 * h0);   // G/30: 1 foglie, 2 edificio, 3 pietra (muretti, rovina), 4 ponte, 5 molo, 6 cassa
+    for (let i = 0; i < w0 * h0; i++) { mat0[i] = src[i * 4 + 3] > 127 ? Math.round(src[i * 4] / 40) : ARIA; tag0[i] = Math.round(src[i * 4 + 1] / 30); }
+    let mat = mat0, tag = tag0;
+    if (S > 1) {
+      // sagoma ingrandita: solido dove la maschera interpolata supera la metà (i gradini diventano smussi a 45°);
+      // materiale ed etichetta dal pixel pieno più vicino
+      mat = new Uint8Array(W * H); tag = new Uint8Array(W * H);
+      const pieno = (x, y) => (x >= 0 && y >= 0 && x < w0 && y < h0 && mat0[y * w0 + x] ? 1 : 0);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const fx = (x + 0.5) / S - 0.5, fy = (y + 0.5) / S - 0.5, xi = Math.floor(fx), yi = Math.floor(fy), u = fx - xi, v = fy - yi;
+        const a = pieno(xi, yi), b = pieno(xi + 1, yi), c = pieno(xi, yi + 1), d = pieno(xi + 1, yi + 1);
+        if ((a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v < 0.5) continue;
+        const nx = u < 0.5 ? xi : xi + 1, ny = v < 0.5 ? yi : yi + 1;
+        let j = -1;
+        for (const [qx, qy] of [[nx, ny], [nx === xi ? xi + 1 : xi, ny], [nx, ny === yi ? yi + 1 : yi], [nx === xi ? xi + 1 : xi, ny === yi ? yi + 1 : yi]]) if (pieno(qx, qy)) { j = qy * w0 + qx; break; }
+        if (j < 0) continue;
+        mat[y * W + x] = mat0[j]; tag[y * W + x] = tag0[j];
+      }
+    }
+    const x0b = S > 1 ? (() => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c.getContext('2d'); })() : x0;
     // il "terreno" vero: senza torri, ponti e cespugli (servono a strati, erba e grotte)
     const terra = (i) => mat[i] !== ARIA && (tag[i] === 0 || tag[i] === 3);
 
@@ -42,10 +64,10 @@
     for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (terra(y * W + x)) { sup[x] = y; break; }
     // superficie "di fondo" senza le sporgenze strette (rovina, prua del relitto): serve agli strati
     const sup2 = new Int32Array(W);
-    for (let x = 0; x < W; x++) { let v = 0; for (let k = -22; k <= 22; k++) v = Math.max(v, Math.min(sup[Math.max(0, Math.min(W - 1, x + k))], 1000)); sup2[x] = Math.min(v, sup[x] + 60); }
+    for (let x = 0; x < W; x++) { let v = 0; for (let k = -22 * S; k <= 22 * S; k++) v = Math.max(v, Math.min(sup[Math.max(0, Math.min(W - 1, x + k))], 1000 * S)); sup2[x] = Math.min(v, sup[x] + 60 * S); }
     // pendenza della superficie (per la luce da sinistra in alto)
     const pend = new Float32Array(W);
-    for (let x = 2; x < W - 2; x++) pend[x] = (sup[x + 2] - sup[x - 2]) / 4;
+    for (let x = 2 * S; x < W - 2 * S; x++) pend[x] = (sup[x + 2 * S] - sup[x - 2 * S]) / (4 * S);
     // aria "coperta" (grotte, arco, ventre del relitto): ha terreno sopra nella sua colonna
     const coperta = new Float32Array(W * H), ariaF = new Float32Array(W * H);
     for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) { const i = y * W + x; if (!mat[i]) ariaF[i] = 1; }
@@ -55,17 +77,17 @@
       for (let y = 0; y < H; y++) {
         const i = y * W + x;
         if (terra(i)) { sopra = y; continue; }
-        if (mat[i] || y < sup[x] || y - sopra > 130) continue;
-        let sotto = y; while (sotto < H && !terra(sotto * W + x) && sotto - sopra <= 130) sotto++;
+        if (mat[i] || y < sup[x] || y - sopra > 130 * S) continue;
+        let sotto = y; while (sotto < H && !terra(sotto * W + x) && sotto - sopra <= 130 * S) sotto++;
         if (sotto < H && terra(sotto * W + x)) for (let k = y; k < sotto; k++) if (!mat[k * W + x]) coperta[k * W + x] = 1;
         y = sotto - 1;
       }
     }
-    const ao = sfoca(sfoca(coperta, W, H, 10), W, H, 8);
-    const copM = sfoca(sfoca(coperta, W, H, 26), W, H, 18);
-    const bordo = sfoca(ariaF, W, H, 2);       // vicino all'aria (contorno)
-    const luceBordo = sfoca(ariaF, W, H, 7);   // fascia di luce sotto la superficie
-    const vol = sfoca(sfoca(ariaF, W, H, 18), W, H, 18);   // per il volume: verso dove c'è aria
+    const ao = sfoca(sfoca(coperta, W, H, 10 * S), W, H, 8 * S);
+    const copM = sfoca(sfoca(coperta, W, H, 26 * S), W, H, 18 * S);
+    const bordo = sfoca(ariaF, W, H, 2 * S);       // vicino all'aria (contorno)
+    const luceBordo = sfoca(ariaF, W, H, 7 * S);   // fascia di luce sotto la superficie
+    const vol = sfoca(sfoca(ariaF, W, H, 18 * S), W, H, 18 * S);   // per il volume: verso dove c'è aria
 
     const n1 = rumore(11), n2 = rumore(23), n3 = rumore(37);
     const C = {
@@ -76,12 +98,14 @@
       foglia1: hx('#7FD255'), foglia2: hx('#3F8A3A'), foglia3: hx('#25603A'),
       viola: hx('#3A2A55'), caldo: hx('#FFD9A0'), contorno: hx('#2A1A12'),
     };
-    const out = x0.createImageData(W, H), o = out.data;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const i = y * W + x, m = mat[i];
+    const out = x0b.createImageData(W, H), o = out.data;
+    for (let yq = 0; yq < H; yq++) for (let xq = 0; xq < W; xq++) {
+      const i = yq * W + xq, m = mat[i];
       if (!m) continue;
-      const d = y - Math.max(sup[x], sup2[x] - 10);
-      const nn = n1(x, y, 90), fine = n2(x, y, 9), gr = n3(x, y, 3);
+      // x, y, d: px di mondo (anche con la virgola a scala 2); xq, yq: pixel del quadro
+      const x = xq / S, y = yq / S;
+      const d = (yq - Math.max(sup[xq], sup2[xq] - 10 * S)) / S;
+      const nn = n1(x, y, 90), fine = S > 1 ? n2(x, y, 9) * 0.6 + n2(xq + 400, yq + 90, 9) * 0.4 : n2(x, y, 9), gr = n3(xq, yq, 3);
       let c;
       if (tag[i] === 1) {
         // cespuglio: ciuffi di foglie (macchie di rumore), più chiaro in alto a sinistra
@@ -117,13 +141,13 @@
         if (n2(x * 3, y * 0.3, 6) > 0.72) c = mix(c, C.legno2, 0.25);
       } else if (m === LEGNO && tag[i] === 5) {
         // molo: tavolato chiaro con le fughe scure (si cammina sopra) e pali scuri che scendono in acqua
-        const tavolato = tag[i - 9] === 5 && tag[i + 9] === 5 && (tag[i - 3 * W] === 5 || tag[i - 3 * W] === 0 && y < 900);
+        const tavolato = tag[i - 9 * S] === 5 && tag[i + 9 * S] === 5 && (tag[i - 3 * S * W] === 5 || tag[i - 3 * S * W] === 0 && y < 900);
         if (tavolato) {
-          let su = 0; while (tag[i - (su + 1) * W] === 5) su++;
+          let su = 0; while (tag[i - (su + 1) * W] === 5) su++; su /= S;
           c = mix(hx('#E9C48A'), hx('#C9965E'), Math.min(1, su / 12) + (nn - 0.5) * 0.3);
           if (x % 16 < 2) c = mix(c, hx('#4A2E1A'), 0.85);          // fuga tra un'asse e l'altra
           if (su < 2) c = mix(c, hx('#FFF0C8'), 0.6);              // bordo di luce in cima
-          if (su === 6) c = mix(c, hx('#8A5A34'), 0.5);            // linea della trave
+          if (su >= 6 && su < 7) c = mix(c, hx('#8A5A34'), 0.5);            // linea della trave
         } else {
           c = mix(hx('#7A4A2A'), hx('#4A2E1A'), (x % 8) / 10 + (nn - 0.5) * 0.3);
           if (y % 22 < 2) c = mix(c, hx('#3A2414'), 0.6);          // anelli del palo
@@ -134,6 +158,18 @@
         const asse = x / 6;
         c = mix(hx('#B07A48'), C.legno2, (Math.floor(asse) % 2) * 0.3 + (nn - 0.5) * 0.3);
         if ((asse % 1) < 0.18) c = mix(c, C.contorno, 0.5);
+      } else if (m === LEGNO && tag[i] === 6) {
+        // cassa: tavole orizzontali chiare, cornice scura e traversa in diagonale
+        let sx = 0; while (sx < 40 * S && tag[i - (sx + 1)] === 6) sx++;
+        let dx = 0; while (dx < 40 * S && tag[i + dx + 1] === 6) dx++;
+        let su = 0; while (su < 40 * S && tag[i - (su + 1) * W] === 6) su++;
+        let giu = 0; while (giu < 40 * S && tag[i + (giu + 1) * W] === 6) giu++;
+        const lw = (sx + dx + 1) / S, lh = (su + giu + 1) / S, u = sx / S, v = su / S;
+        c = mix(hx('#D9A766'), hx('#B07A48'), (Math.floor(v / 7) % 2) * 0.35 + (nn - 0.5) * 0.3);
+        if (v % 7 < 1) c = mix(c, C.legno2, 0.6);
+        if (Math.abs(u / lw - v / lh) < 0.09) c = mix(hx('#8A5A34'), C.legno2, 0.2);            // traversa
+        if (u < 3.5 || u > lw - 4.5 || v < 3.5 || v > lh - 4.5) c = mix(hx('#7A4A2A'), C.legno2, 0.3);   // cornice
+        if ((u < 3.5 || u > lw - 4.5) && (v < 3.5 || v > lh - 4.5)) c = hx('#C9A04A');           // borchie agli angoli
       } else if (m === LEGNO) {
         // assi: righe ogni 13 px inclinate come lo scafo, venature
         const asse = (y + x * 0.58) / 13;
@@ -147,14 +183,14 @@
       // luce calda dall'alto a sinistra: fascia sotto la superficie, più forte sui pendii che guardano a sinistra
       const vicino = luceBordo[i];
       if (vicino > 0.02 && d < 40) {
-        const verso = Math.max(-1, Math.min(1, pend[x] * 0.8));   // >0 = la superficie scende verso destra → guarda a sinistra?
+        const verso = Math.max(-1, Math.min(1, pend[xq] * 0.8));   // >0 = la superficie scende verso destra → guarda a sinistra?
         const lum = vicino * (0.55 - verso * 0.45);
         if (lum > 0) { r += (C.caldo[0] - r) * lum * 0.55; gg += (C.caldo[1] - gg) * lum * 0.55; b += (C.caldo[2] - b) * lum * 0.4; }
         else { r += (C.viola[0] - r) * -lum * 0.4; gg += (C.viola[1] - gg) * -lum * 0.4; b += (C.viola[2] - b) * -lum * 0.4; }
       }
       // volume 2.5D: la luce viene da sinistra in alto, il lato verso destra/in basso va in ombra fredda
-      if (x > 1 && y > 1 && x < W - 2 && y < H - 2) {
-        const gx = vol[i + 2] - vol[i - 2], gy = vol[i + 2 * W] - vol[i - 2 * W];
+      if (xq > 2 * S && yq > 2 * S && xq < W - 2 * S - 1 && yq < H - 2 * S - 1) {
+        const gx = vol[i + 2 * S] - vol[i - 2 * S], gy = vol[i + 2 * S * W] - vol[i - 2 * S * W];
         const l = (-gx * 0.72 - gy * 0.69) * 9;   // >0 = guarda la luce
         if (l > 0) { const t = Math.min(0.35, l); r += (C.caldo[0] - r) * t; gg += (C.caldo[1] - gg) * t; b += (C.caldo[2] - b) * t * 0.7; }
         else { const t = Math.min(0.4, -l); r += (C.viola[0] - r) * t; gg += (C.viola[1] - gg) * t; b += (C.viola[2] - b) * t; }
@@ -169,9 +205,15 @@
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const ctx = c.getContext('2d');
     ctx.putImageData(out, 0, 0);
+    ctx.setTransform(S, 0, 0, S, 0, 0);   // da qui si disegna in px di mondo
     const R = rng(7);
-    const solido = (x, y) => x >= 0 && y >= 0 && x < W && y < H && mat[(y | 0) * W + (x | 0)] !== ARIA;
-    const materiale = (x, y) => (x >= 0 && y >= 0 && x < W && y < H ? mat[(y | 0) * W + (x | 0)] : 0);
+    const iq = (x, y) => ((y * S) | 0) * W + ((x * S) | 0);
+    const fuori = (x, y) => !(x >= 0 && y >= 0 && x * S < W && y * S < H);
+    const solido = (x, y) => !fuori(x, y) && mat[iq(x, y)] !== ARIA;
+    const materiale = (x, y) => (fuori(x, y) ? 0 : mat[iq(x, y)]);
+    /** superficie e pendenza in px di mondo, alla colonna di mondo x */
+    const supM = (x) => sup[Math.min(W - 1, Math.max(0, (x * S) | 0))] / S;
+    const pendM = (x) => pend[Math.min(W - 1, Math.max(0, (x * S) | 0))];
     const dentro = (x, y, r) => solido(x, y) && solido(x - r, y) && solido(x + r, y) && solido(x, y - r) && solido(x, y + r);
 
     // ── dettagli nel terreno ──
@@ -183,9 +225,9 @@
       ctx.restore();
     }
     for (let k = 0; k < 900; k++) {
-      const x = 70 + R() * (W - 140), y = 200 + R() * 780;
+      const x = 70 + R() * (w0 - 140), y = 200 + R() * 780;
       const m = materiale(x, y); if (!dentro(x, y, 8)) continue;
-      const d = y - sup[x | 0];
+      const d = y - supM(x);
       if (m === TERRA && d > 30) sasso(x, y, 2 + R() * 5, R() < 0.5 ? '#9C8270' : '#B08A66', 'rgba(50,30,50,0.45)');
       else if (m === ROCCIA && R() < 0.35) sasso(x, y, 3 + R() * 6, '#B9A08A', 'rgba(60,50,80,0.5)');
       else if (m === SABBIA && R() < 0.4) { // conchigliette
@@ -195,8 +237,8 @@
     // radici che scendono dall'erba
     ctx.lineCap = 'round';
     for (let k = 0; k < 70; k++) {
-      const x = 80 + R() * (W - 160); const s = sup[x | 0];
-      if (s > 860 || Math.abs(pend[x | 0]) > 1 || materiale(x, s + 30) !== TERRA) continue;
+      const x = 80 + R() * (w0 - 160); const s = supM(x);
+      if (s > 860 || Math.abs(pendM(x)) > 1 || materiale(x, s + 30) !== TERRA) continue;
       let px = x, py = s + 14, ang = Math.PI / 2 + (R() - 0.5) * 0.8; const lung = 18 + R() * 40;
       ctx.strokeStyle = 'rgba(92,60,38,0.75)'; ctx.lineWidth = 1.6;
       ctx.beginPath(); ctx.moveTo(px, py);
@@ -260,29 +302,29 @@
     metti(ammonite, 1000, 560, 1.4); metti(ammonite, 1120, 820, 1); metti(ammonite, 1520, 960, 0.9);
     // muschio e piccole sporgenze sulla Rocca
     for (let k = 0; k < 60; k++) {
-      const x = 900 + R() * 330; const s = sup[x | 0]; if (s > 700 || s < 280) continue;
+      const x = 900 + R() * 330; const s = supM(x); if (s > 700 || s < 280) continue;
       ctx.fillStyle = R() < 0.5 ? 'rgba(108,194,74,0.85)' : 'rgba(80,160,70,0.85)';
       ctx.beginPath(); ctx.ellipse(x, s + 10 + R() * 30, 6 + R() * 8, 3 + R() * 3, 0, 0, 7); ctx.fill();
     }
 
     // ── erba sul bordo (sabbia e terra in piano o in pendenza dolce; niente erba sulle pareti ripide) ──
-    for (let x = 64; x < W - 64; x++) {
-      const s = sup[x]; if (s >= 948) continue;
+    for (let xq = 64 * S; xq < W - 64 * S; xq++) {
+      const x = xq / S, s = sup[xq] / S; if (s >= 948) continue;
       const m = materiale(x, s + 2); if (m !== SABBIA && m !== TERRA) continue;
-      const ripida = Math.abs(pend[x]) > 1.4; if (ripida) continue;
+      const ripida = Math.abs(pend[xq]) > 1.4; if (ripida) continue;
       const spiaggia = s > 860;  // vicino al mare: sabbia senza erba
       if (spiaggia) continue;
       const spess = 7 + n1(x, 0, 18) * 7;
       const g = ctx.createLinearGradient(0, s, 0, s + spess);
       g.addColorStop(0, '#B6EC74'); g.addColorStop(0.35, '#7FD255'); g.addColorStop(1, '#4E9E3C');
-      ctx.fillStyle = g; ctx.fillRect(x, s, 1, spess);
+      ctx.fillStyle = g; ctx.fillRect(x, s, 1 / S, spess);
       // ciuffi che pendono sulla terra
-      if (n2(x, 5, 4) > 0.62) { ctx.fillStyle = '#4E9E3C'; ctx.fillRect(x, s + spess, 1, 3 + n3(x, 1, 2) * 6); }
+      if (n2(xq, 5, 4) > 0.62) { ctx.fillStyle = '#4E9E3C'; ctx.fillRect(x, s + spess, 1 / S, 3 + n3(xq, 1, 2) * 6); }
     }
     // fiorellini e margherite sull'erba
     for (let k = 0; k < 160; k++) {
-      const x = 80 + R() * (W - 160), s = sup[x | 0];
-      if (s > 860 || Math.abs(pend[x | 0]) > 1.2 || materiale(x, s + 2) === ROCCIA || materiale(x, s + 2) === LEGNO) continue;
+      const x = 80 + R() * (w0 - 160), s = supM(x);
+      if (s > 860 || Math.abs(pendM(x)) > 1.2 || materiale(x, s + 2) === ROCCIA || materiale(x, s + 2) === LEGNO) continue;
       ctx.fillStyle = ['#FF6B8B', '#FFF1A8', '#FFFFFF', '#FFB0E0', '#FFD23F'][k % 5];
       ctx.beginPath(); ctx.arc(x, s + 3 + R() * 3, 1.6 + R() * 1.2, 0, 7); ctx.fill();
     }
@@ -299,26 +341,38 @@
       ctx.fillStyle = 'rgba(150,220,255,0.5)'; ctx.beginPath(); ctx.arc(x - 2, y - 2, 2.5, 0, 7); ctx.fill();
     }
     ctx.restore();
-    // ── rovina: muro di blocchi di pietra (colonne dove la superficie sporge sopra quella di fondo) ──
-    for (let x = 0; x < W; x++) {
-      if (tag[(sup[x] + 2) * W + x] !== 3) continue;
-      for (let y = sup[x]; y < H && tag[y * W + x] === 3; y++) {
-        const riga = Math.floor((y - sup[x]) / 12), ox = (riga % 2) * 7;
-        const giunto = (y - sup[x]) % 12 === 0 || (x + ox) % 15 === 0;
-        const k = (y * W + x) * 4;
-        void k;
-        ctx.fillStyle = giunto ? 'rgba(60,50,62,0.75)' : `rgba(${200 + riga * 3},${185 + riga * 2},${165},1)`;
-        ctx.fillRect(x, y, 1, 1);
+    // ── pietra (muretti, rovina): blocchi sfalsati con le fughe scure, più chiari in cima ──
+    for (let xq = 0; xq < W; xq++) {
+      let cima = -1;
+      for (let yq = 0; yq < H; yq++) {
+        if (tag[yq * W + xq] !== 3) { cima = -1; continue; }
+        if (cima < 0) cima = yq;
+        const x = xq / S, dy = (yq - cima) / S, riga = Math.floor(dy / 9), ox = (riga % 2) * 7;
+        const giunto = dy % 9 < 1 || (x + ox) % 14 < 1;
+        const l = 196 - Math.min(40, riga * 9) + (n2(xq, yq, 5) - 0.5) * 22;
+        ctx.fillStyle = giunto ? 'rgba(60,50,62,0.8)' : `rgb(${l | 0},${(l - 14) | 0},${(l - 34) | 0})`;
+        ctx.fillRect(x, yq / S, 1 / S, 1 / S);
       }
+    }
+    // ── poppa del relitto (Cala v3): due file di finestre accese e la balaustra ──
+    if (materiale(139, 800) === LEGNO && dentro(139, 800, 24) && materiale(139, 740) === LEGNO) {
+      for (const [fy, n] of [[772, 3], [812, 3]]) for (let k = 0; k < n; k++) {
+        const fx = 120 + k * 18;
+        ctx.fillStyle = '#3A2414'; ctx.fillRect(fx - 6, fy - 9, 12, 18);
+        ctx.fillStyle = '#FFD98A'; ctx.fillRect(fx - 4, fy - 7, 8, 14);
+        ctx.fillStyle = '#3A2414'; ctx.fillRect(fx - 0.6, fy - 7, 1.2, 14); ctx.fillRect(fx - 4, fy - 0.6, 8, 1.2);
+      }
+      ctx.fillStyle = '#C9A04A'; ctx.fillRect(108, 748, 62, 3); ctx.fillRect(108, 836, 62, 3);
     }
 
     // ── contorno scuro sulla sagoma esterna e ritaglio alla maschera ──
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     const fin = ctx.getImageData(0, 0, W, H), f = fin.data;
     for (let i = 0; i < W * H; i++) {
       if (!mat[i]) {
         if (coperta[i]) {
           // parete in fondo a grotte e arco: alfa 110 (sotto 128 resta aria per la maschera), colori scuri e freddi
-          const y = (i / W) | 0, x = i - y * W, t = Math.min(1, ao[i] * 1.6);
+          const yq = (i / W) | 0, y = yq / S, x = (i - yq * W) / S, t = Math.min(1, ao[i] * 1.6);
           const base = y < 760 ? [96, 78, 92] : [74, 52, 58], nn = n1(x, y, 30);
           f[i * 4] = base[0] * (0.7 + nn * 0.5) * (1 - t * 0.35); f[i * 4 + 1] = base[1] * (0.7 + nn * 0.5) * (1 - t * 0.35); f[i * 4 + 2] = base[2] * (0.75 + nn * 0.5) * (1 - t * 0.2) + 10;
           f[i * 4 + 3] = Math.round(110 * Math.min(1, copM[i] * 1.8));   // sfuma dove la grotta si apre sull'aria libera
@@ -330,10 +384,11 @@
       if (b > 0.05) { const t = Math.min(1, b * 3.2) * 0.85; f[i * 4] += (C.contorno[0] - f[i * 4]) * t; f[i * 4 + 1] += (C.contorno[1] - f[i * 4 + 1]) * t; f[i * 4 + 2] += (C.contorno[2] - f[i * 4 + 2]) * t; }
     }
     ctx.putImageData(fin, 0, 0);
+    ctx.setTransform(S, 0, 0, S, 0, 0);
     // funghetti luminosi sul pavimento delle grotte (alfa < 128: restano aria)
     ctx.globalAlpha = 0.43;
     for (let k = 0, messi = 0; k < 2000 && messi < 14; k++) {
-      const x = 480 + R() * 1100, y = 820 + R() * 120, i = (y | 0) * W + (x | 0);
+      const x = 480 + R() * 1100, y = 820 + R() * 120, i = iq(x, y);
       if (!coperta[i] || !solido(x, y + 3) || x > 640 && x < 1380) continue;
       const g = ctx.createRadialGradient(x, y - 4, 1, x, y - 4, 16); g.addColorStop(0, 'rgba(140,255,220,0.9)'); g.addColorStop(1, 'rgba(140,255,220,0)');
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y - 4, 16, 0, 7); ctx.fill();
@@ -341,6 +396,7 @@
       messi++;
     }
     ctx.globalAlpha = 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     // l'aria resta aria: alfa delle grotte riportato sotto 128
     const ult = ctx.getImageData(0, 0, W, H), u = ult.data;
     for (let i = 0; i < W * H; i++) if (!mat[i] && u[i * 4 + 3] > 110) u[i * 4 + 3] = 110;

@@ -1,4 +1,4 @@
-import type { Bioma, Decorazione, Punto, TipoAppiglio } from '../../core/tipi';
+import type { Bioma, Decorazione, Punto, Rettangolo, StrutturaMappa, TipoAppiglio } from '../../core/tipi';
 
 /** Dati di una mappa fatta a mano (06 §6), scritti da scripts/mappe/costruisci.ts. */
 export interface DatiMappaFatta {
@@ -20,6 +20,10 @@ export interface DatiMappaFatta {
   copione?: boolean;
   /** punti con nome per la scena (es. cassa, veliero, cartello del Prologo) */
   segnaposti?: Record<string, Punto>;
+  /** Fase 3 (P1-contratti §7): ancoraggi del sostegno, rettangoli in px di mondo con gli estremi compresi */
+  sostegni?: Rettangolo[];
+  /** Fase 3: torri, ponti, massi e cengie che crollano a modo loro (contratto MappaGenerata.strutture) */
+  strutture?: StrutturaMappa[];
   /** maschera compressa (rle.ts) */
   maschera: string;
 }

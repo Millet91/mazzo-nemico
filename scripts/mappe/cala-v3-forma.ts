@@ -17,15 +17,35 @@
 //  - muretti di pietra e casse alti 24-30 px sulle terrazze (riparo; si scavalcano: Fisica, Fase 1);
 //  - l'Occhio della Rocca: un foro vicino alla cima, da cui passa un tiro ben fatto;
 //  - niente percorso obbligato usa il salto all'indietro.
-// Le due torri (legno) e i ponti sono gli elementi che crolleranno in Fase 3: nessuna partenza a meno di 120 px da una torre.
-import { MATERIALE } from '../../src/core/tipi';
+// Fase 3 (P1-contratti §7, docs/progetto/studio-v2/fase3-strutture.md): la parte alta dell'isola sono tre masse
+// che non toccano il fondale (le gallerie e l'arco le tagliano), tenute su dagli ancoraggi SOSTEGNI. Gli elementi che
+// crollano sono le strutture: due torri (poppa del relitto o torre del molo, Vedetta della Duna su pali), due ponti di
+// corda con un ancoraggio per capo, due massi in bilico sulle cengie basse della Rocca. Ogni struttura è fatta di
+// pezzi con un'etichetta (canale blu della PNG dei materiali): il pittore li dipinge separati da una fuga.
+// Nessuna partenza a meno di 120 px da una torre o da un masso, né nella zona di caduta di una struttura.
+import { MATERIALE, type Rettangolo, type StrutturaMappa, type TipoStruttura } from '../../src/core/tipi';
 
 export const W = 2048, H = 1024, MARE = 950, FONDALE = 984;
 export type Variante = 'base' | 'prologo';
 type P2 = [number, number];
 
 /** Etichette per il pittore (canale verde della PNG dei materiali, × 30). */
-export const TAG = { foglie: 1, edificio: 2, pietra: 3, ponte: 4, molo: 5, cassa: 6 } as const;
+export const TAG = { foglie: 1, edificio: 2, pietra: 3, ponte: 4, molo: 5, cassa: 6, masso: 7 } as const;
+
+/**
+ * Fase 3 · ancoraggi del sostegno (P1-contratti §7): un pezzo staccato dal fondale resta su se ha almeno un pixel pieno
+ * in uno di questi rettangoli (estremi compresi). Due per Mesa e tre per la Rocca: per far cadere un blocco intero
+ * bisogna svuotarli tutti. Valgono per le due varianti (le tre masse sono uguali).
+ */
+export const SOSTEGNI: Rettangolo[] = [
+  { x0: 436, y0: 790, x1: 456, y1: 806 },     // A1 Mesa sinistra: piede della parete, sopra la bocca della galleria
+  { x0: 778, y0: 796, x1: 798, y1: 812 },     // A2 Mesa sinistra: piede del dirupo, sopra lo sbocco nella Valle
+  { x0: 1250, y0: 792, x1: 1270, y1: 808 },   // A3 Mesa destra: piede del dirupo
+  { x0: 1590, y0: 786, x1: 1608, y1: 802 },   // A4 Mesa destra: piede della parete
+  { x0: 1000, y0: 560, x1: 1048, y1: 640 },   // A5 Rocca: nucleo di roccia viva
+  { x0: 940, y0: 680, x1: 960, y1: 700 },     // A6 Rocca: spalla ovest dell'arco
+  { x0: 1090, y0: 680, x1: 1110, y1: 700 },   // A7 Rocca: spalla est dell'arco
+];
 
 // ───────────────────────── profilo dell'isola (da sinistra a destra, quote vere) ─────────────────────────
 const PROFILO: P2[] = [
@@ -119,9 +139,15 @@ export const BALCONI = [
 export const NIDO = { x0: 938, x1: 978, y: 430 };
 /** Cengie: piccole mensole di roccia sui fianchi della Rocca e sul dirupo (contorni, riparo dai tiri tesi). [x0, x1, y, spessore] */
 export const CENGE: [number, number, number, number][] = [
-  [892, 908, 706, 10], [1134, 1156, 664, 10],     // fianchi bassi della Rocca, a quote diverse (attaccate al fianco)
+  [882, 908, 706, 10], [1134, 1162, 664, 10],     // fianchi bassi della Rocca, a quote diverse: ci stanno i MASSI
   [803, 822, 772, 12],                             // tettoia sopra lo sbocco della galleria sinistra
 ];
+/**
+ * Le due cengie basse della Rocca (indici in CENGE) e i massi in bilico sopra, staccati dal fianco di almeno 4 px.
+ * Il masso è un cerchio tagliato in basso dalla cengia: poggia su una base piatta di circa 15 px.
+ */
+export const CENGE_DEI_MASSI = [0, 1];
+export const MASSI = [{ x: 892, y: 697, r: 11 }, { x: 1150, y: 655, r: 11 }];
 /**
  * Relitto del Pappagallo Verde (solo variante base). La poppa è un blocco di legno alto: è la Torre della Vedetta
  * di sinistra. Il ponte di coperta scende verso la terrazza e ci si cammina.
@@ -129,14 +155,14 @@ export const CENGE: [number, number, number, number][] = [
 export const RELITTO = { poppa0: 106, poppa1: 172, cima: 730, coperta0: 866, coperta1: 849, prua: 244 };
 /** Molo Storto (solo variante prologo): tavolato sul mare, in fondo la torre di guardia del porto. */
 export const MOLO = { x0: 108, x1: 218, piano: 868, spessore: 12, torre0: 72, torre1: 108, cima: 760 };
-/** Tettoie di legno in cima alle due torri (riparo dai tiri a parabola): muro verso il mare e tetto a sbalzo. */
+/** Tettoie di legno in cima alle torri del relitto e del molo (riparo dai tiri a parabola): muro verso il mare e tetto a sbalzo. */
 const TETTOIA = { muro: 6, alto: 38, tetto: 6, sbalzo: 42 };
 /**
- * Sbalzo della tettoia della Vedetta sulla Duna: più corto, perché chi sta sotto il tetto deve poter scavalcare il
- * muretto del pianoro (x 1882-1895). Con 42 px il tetto arrivava a x 1905 e copriva il posto accanto al muretto:
- * niente aria sopra la testa, quindi niente scavalco né Balzo verso sinistra. Con 30 px il tetto parte da x 1917.
+ * Vedetta della Duna (Fase 3): torretta su due pali, in fondo al pianoro. Il piano sta alla quota della tettoia di
+ * prima (44-38 px sopra il suolo) e parte da x 1917, così chi sta sotto scavalca ancora il muretto del pianoro
+ * (x 1882-1895): sopra la testa c'è aria. Il palo est chiude il pianoro verso il mare come faceva il muro.
  */
-export const SBALZO_DUNA = 30;
+export const VEDETTA = { x0: 1917, x1: 1946, sopraSuolo: 44, piano: 6, pali: [1920, 1940], palo: 6, ringhiera: 3, gronda0: 1913, gronda1: 1950, gronda: 666, colmo: 650 };
 /** Scoglio del Granchio: il cuore di roccia della Duna della Vedetta. */
 export const SCOGLIO = { x: 1908, y: 850, rx: 58, ry: 104 };
 export const DUNA = { piede: 1700, pianoro0: 1874, pianoro1: 1946, quota: 730 };
@@ -159,10 +185,10 @@ export const CESPUGLI = [
   { x: 276, y: 836, rx: 12, ry: 12 }, { x: 574, y: 757, rx: 11, ry: 11 },
   { x: 1456, y: 757, rx: 11, ry: 11 },
 ];
-/** Elementi di legno che crolleranno in Fase 3 (torri): [x0, x1]. Nessuna partenza entro DISTANZA_CROLLO px. */
+/** Torri che crollano in Fase 3: [x0, x1]. Nessuna partenza entro DISTANZA_CROLLO px. */
 export const TORRI_X: Record<Variante, [number, number][]> = {
-  base: [[RELITTO.poppa0, RELITTO.poppa1], [DUNA.pianoro1 - SBALZO_DUNA, DUNA.pianoro1]],
-  prologo: [[MOLO.torre0, MOLO.torre1], [DUNA.pianoro1 - SBALZO_DUNA, DUNA.pianoro1]],
+  base: [[RELITTO.poppa0, RELITTO.poppa1], [VEDETTA.gronda0, VEDETTA.gronda1]],
+  prologo: [[MOLO.torre0, MOLO.torre1], [VEDETTA.gronda0, VEDETTA.gronda1]],
 };
 export const DISTANZA_CROLLO = 120;
 /** Anelli di ferro per il rampino (Fase 4): solo posti prenotati, 120-260 px sopra il suolo. Non sono nella maschera. */
@@ -200,15 +226,36 @@ export function appigliDi(m: Uint8Array, variante: Variante = 'base'): typeof AP
  */
 export const BARILI_X = [954, 1052, 1094];
 
-export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array; sup: Float64Array; tag: Uint8Array } {
+/** Un pezzo di una struttura: l'etichetta (1-255) è la sua posizione in `pezzi` più 1. */
+export interface PezzoForma { nome: string; struttura: number }
+export interface StrutturaForma extends StrutturaMappa { nome: string; pezzi: number[] }
+export interface FormaCala {
+  m: Uint8Array; sup: Float64Array; tag: Uint8Array;
+  /** etichetta del pezzo di struttura per ogni pixel (0 = corpo dell'isola) */
+  pezzo: Uint8Array; pezzi: PezzoForma[];
+  /** rettangolo = ingombro dei pixel dei suoi pezzi, estremi compresi */
+  strutture: StrutturaForma[];
+}
+
+export function costruisciMaschera(variante: Variante = 'base'): FormaCala {
   const sup = superficieDisegnata();
   const m = new Uint8Array(W * H);
   const tag = new Uint8Array(W * H);
+  const pezzo = new Uint8Array(W * H);
   const A = MATERIALE.aria;
+  // pezzo di struttura che si sta disegnando (0 = corpo dell'isola): metti e seVuoto lo scrivono, scava lo toglie
+  let pz = 0;
+  const pezzi: PezzoForma[] = [];
+  const elenco: { tipo: TipoStruttura; nome: string; pezzi: number[]; ancoraggi?: [Rettangolo, Rettangolo] }[] = [];
+  const struttura = (tipo: TipoStruttura, nome: string, nomiPezzi: string[], ancoraggi?: [Rettangolo, Rettangolo]): number[] => {
+    const st = elenco.length, ids = nomiPezzi.map((n) => { pezzi.push({ nome: n, struttura: st }); return pezzi.length; });
+    elenco.push({ tipo, nome, pezzi: ids, ...(ancoraggi ? { ancoraggi } : {}) });
+    return ids;
+  };
   const dentro = (x: number, y: number) => x >= 64 && x < W - 64 && y >= 160 && y < FONDALE;
-  const metti = (x: number, y: number, v: number, t = 0) => { if (dentro(x, y)) { m[y * W + x] = v; tag[y * W + x] = t; } };
-  const seVuoto = (x: number, y: number, v: number, t = 0) => { if (dentro(x, y) && m[y * W + x] === A) { m[y * W + x] = v; tag[y * W + x] = t; } };
-  const scava = (x: number, y: number) => { if (dentro(x, y)) { m[y * W + x] = A; tag[y * W + x] = 0; } };
+  const metti = (x: number, y: number, v: number, t = 0) => { if (dentro(x, y)) { m[y * W + x] = v; tag[y * W + x] = t; pezzo[y * W + x] = pz; } };
+  const seVuoto = (x: number, y: number, v: number, t = 0) => { if (dentro(x, y) && m[y * W + x] === A) { m[y * W + x] = v; tag[y * W + x] = t; pezzo[y * W + x] = pz; } };
+  const scava = (x: number, y: number) => { if (dentro(x, y)) { m[y * W + x] = A; tag[y * W + x] = 0; pezzo[y * W + x] = 0; } };
   /** primo pixel pieno della colonna, dall'alto */
   const suolo = (x: number, da = 160) => { let y = da; while (y < FONDALE && m[y * W + x] === A) y++; return y; };
 
@@ -242,11 +289,25 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
     const t = (x - b.x0) / (b.x1 - b.x0), sotto = b.spessore * (0.55 + 0.45 * Math.sin(Math.PI * t));
     for (let y = b.y; y < b.y + sotto; y++) metti(x, y, MATERIALE.roccia);
   }
-  // ── ponti di corda ──
-  for (const p of PONTI) for (let x = p.x0; x <= p.x1; x++) {
-    const y = quotaPonte(p, x);
-    for (let k = 0; k < p.spessore; k++) seVuoto(x, y + k, MATERIALE.legno, TAG.ponte);
-  }
+  // ── ponti di corda: 8 pezzi di assi (circa 14 px l'uno); un ancoraggio per capo, dove le assi toccano la roccia ──
+  PONTI.forEach((p, n) => {
+    // le assi vere vanno dal primo all'ultimo pixel di legno (ai capi c'è già la roccia): 8 pezzi uguali lì dentro
+    let a0 = W, a1 = -1;
+    for (let x = p.x0; x <= p.x1; x++) {
+      const y = quotaPonte(p, x);
+      for (let k = 0; k < p.spessore; k++) if (dentro(x, y + k) && m[(y + k) * W + x] === A) { a0 = Math.min(a0, x); a1 = Math.max(a1, x); }
+    }
+    // ancoraggio di un capo: le prime assi e i 6 px di roccia (o sabbia) a cui sono legate, alti quanto il ponte
+    const capo = (x0: number, x1: number, xQuota: number): Rettangolo => ({ x0, y0: quotaPonte(p, xQuota), x1, y1: quotaPonte(p, xQuota) + p.spessore });
+    const ids = struttura('ponte', n === 0 ? 'ponte sinistro' : 'ponte destro', Array.from({ length: 8 }, (_, k) => `assi ${k + 1}`),
+      [capo(a0 - 6, a0 + 2, a0), capo(a1 - 2, a1 + 6, a1)]);
+    for (let x = p.x0; x <= p.x1; x++) {
+      const y = quotaPonte(p, x);
+      pz = ids[Math.max(0, Math.min(7, Math.floor(((x - a0) / (a1 - a0 + 1)) * 8)))];
+      for (let k = 0; k < p.spessore; k++) seVuoto(x, y + k, MATERIALE.legno, TAG.ponte);
+    }
+    pz = 0;
+  });
   // ── arco della Rocca ──
   {
     const cx = (ARCO.x0 + ARCO.x1) / 2, rx = (ARCO.x1 - ARCO.x0) / 2, ry = ARCO.pavimento - ARCO.volta;
@@ -287,11 +348,25 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
     for (let y = NIDO.y - 52 + Math.round(((x - a0) / (a1 - a0) - 0.5) ** 2 * 40); y < NIDO.y; y++) scava(x, y);
     for (let y = NIDO.y; y < NIDO.y + 24; y++) seVuoto(x, y, MATERIALE.roccia);
   }
-  // ── cengie ──
-  for (const [x0, x1, y, sp] of CENGE) for (let x = x0; x <= x1; x++) {
-    const t = (x - x0) / (x1 - x0), sotto = Math.max(4, Math.round(sp * (0.5 + 0.5 * Math.sin(Math.PI * t))));
-    for (let k = 0; k < sotto; k++) seVuoto(x, y + k, MATERIALE.roccia);
-  }
+  // ── cengie (le due dei massi in 2 pezzi) e massi in bilico ──
+  CENGE.forEach(([x0, x1, y, sp], n) => {
+    const conMasso = CENGE_DEI_MASSI.indexOf(n), lato = conMasso === 0 ? 'sinistra' : 'destra';
+    const ids = conMasso >= 0 ? struttura('cengia', `cengia ${lato}`, ['cengia verso la Valle', 'cengia verso la Rocca']) : [];
+    for (let x = x0; x <= x1; x++) {
+      const t = (x - x0) / (x1 - x0), sotto = Math.max(4, Math.round(sp * (0.5 + 0.5 * Math.sin(Math.PI * t))));
+      // il pezzo verso la Rocca è quello attaccato al fianco: a sinistra la Rocca sta a destra della cengia
+      if (conMasso >= 0) pz = ids[(x - x0) * 2 < x1 - x0 ? (conMasso === 0 ? 0 : 1) : (conMasso === 0 ? 1 : 0)];
+      for (let k = 0; k < sotto; k++) seVuoto(x, y + k, MATERIALE.roccia);
+    }
+    pz = 0;
+    if (conMasso < 0) return;
+    const b = MASSI[conMasso];
+    [pz] = struttura('masso', `masso ${lato}`, ['masso']);
+    for (let yy = b.y - b.r; yy < y && yy <= b.y + b.r; yy++) for (let x = b.x - b.r; x <= b.x + b.r; x++) {
+      if ((x - b.x) ** 2 + (yy - b.y) ** 2 <= b.r * b.r) seVuoto(x, yy, MATERIALE.roccia, TAG.masso);
+    }
+    pz = 0;
+  });
 
   // ── tettoia di una torre: muro dal lato del mare e tetto a sbalzo verso terra ──
   const tettoia = (xMare: number, verso: 1 | -1, cima: number, sbalzo = TETTOIA.sbalzo) => {
@@ -300,11 +375,13 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
   };
 
   if (variante === 'base') {
-    // ── Relitto: poppa alta (Torre della Vedetta) e ponte di coperta fino alla terrazza ──
+    // ── Relitto: poppa alta (Torre della Vedetta, 6 pezzi) e ponte di coperta fino alla terrazza ──
     const R = RELITTO;
+    const ids = struttura('torre', 'poppa del relitto', ['tettoia', 'cassero', 'finestre alte', 'finestre basse', 'base della poppa', 'fasciame']);
+    const fasce = [770, 800, 830, 866, Infinity];
     for (let x = R.poppa0; x <= R.poppa1; x++) for (let y = R.cima; y < FONDALE; y++) {
       const i = y * W + x;
-      if (m[i] === A || (m[i] === MATERIALE.sabbia && y < Math.round(sup[x]) + 14)) { m[i] = MATERIALE.legno; tag[i] = 0; }
+      if (m[i] === A || (m[i] === MATERIALE.sabbia && y < Math.round(sup[x]) + 14)) { m[i] = MATERIALE.legno; tag[i] = 0; pezzo[i] = ids[1 + fasce.findIndex((f) => y < f)]; }
     }
     for (let x = R.poppa1 + 1; x <= R.prua; x++) {
       const coperta = Math.round(R.coperta0 + (R.coperta1 - R.coperta0) * ((x - R.poppa1) / (R.prua - R.poppa1)));
@@ -313,7 +390,9 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
         if (m[i] === A || m[i] === MATERIALE.sabbia) { m[i] = MATERIALE.legno; tag[i] = 0; }
       }
     }
+    pz = ids[0];
     tettoia(R.poppa0, 1, R.cima);
+    pz = 0;
   } else {
     // ── Prologo: Molo Storto. Sotto il molo la spiaggia scende sott'acqua; in fondo la torre di guardia ──
     const M = MOLO;
@@ -326,12 +405,38 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
       for (let y = M.piano; y < M.piano + M.spessore; y++) seVuoto(x, y, MATERIALE.legno, TAG.molo);
       if ((x - M.x0) % 32 < 8) for (let y = M.piano + M.spessore; y < FONDALE; y++) seVuoto(x, y, MATERIALE.legno, TAG.molo);
     }
-    // torre di guardia: blocco di legno sul mare (chiude il molo: da lì non si cade in acqua)
-    for (let x = M.torre0; x < M.torre1; x++) for (let y = M.cima; y < FONDALE; y++) seVuoto(x, y, MATERIALE.legno, TAG.molo);
+    // torre di guardia: blocco di legno sul mare (chiude il molo: da lì non si cade in acqua). 6 pezzi come la poppa
+    const ids = struttura('torre', 'torre del molo', ['tettoia', 'cima', 'fusto alto', 'fusto basso', 'base', 'pali in acqua']);
+    const fasce = [800, 836, M.piano, 920, Infinity];
+    for (let x = M.torre0; x < M.torre1; x++) for (let y = M.cima; y < FONDALE; y++) {
+      pz = ids[1 + fasce.findIndex((f) => y < f)];
+      seVuoto(x, y, MATERIALE.legno, TAG.molo);
+    }
+    pz = ids[0];
     tettoia(M.torre0, 1, M.cima);
+    pz = 0;
   }
-  // ── tettoia della Vedetta sulla Duna (muro verso il mare, a destra) ──
-  tettoia(DUNA.pianoro1, -1, suolo(DUNA.pianoro1 - 3), SBALZO_DUNA);
+  // ── Vedetta della Duna: due pali sul pianoro, il piano alla quota della vecchia tettoia, ringhiera e tetto a punta ──
+  {
+    const V = VEDETTA;
+    const [paloO, paloE, piano, ringhiera, tetto] = struttura('torre', 'Vedetta della Duna', ['palo ovest', 'palo est', 'piano', 'ringhiera', 'tetto']);
+    const y0 = suolo(DUNA.pianoro1 - 3) - V.sopraSuolo;   // cima del piano
+    pz = piano;
+    for (let x = V.x0; x <= V.x1; x++) for (let y = y0; y < y0 + V.piano; y++) metti(x, y, MATERIALE.legno, TAG.edificio);
+    V.pali.forEach((px, k) => {
+      pz = k === 0 ? paloO : paloE;
+      for (let x = px; x < px + V.palo; x++) for (let y = y0 + V.piano; y < FONDALE && m[y * W + x] === A; y++) metti(x, y, MATERIALE.legno, TAG.edificio);
+    });
+    pz = ringhiera;
+    for (const rx of [V.x0, V.x1 - V.ringhiera + 1]) for (let x = rx; x < rx + V.ringhiera; x++) for (let y = V.gronda + 1; y < y0; y++) metti(x, y, MATERIALE.legno, TAG.edificio);
+    pz = tetto;
+    const mezzo = (V.gronda0 + V.gronda1) / 2, mezzaLargh = (V.gronda1 - V.gronda0) / 2;
+    for (let x = V.gronda0; x <= V.gronda1; x++) {
+      const cima = Math.round(V.colmo + (V.gronda - 4 - V.colmo) * Math.abs(x - mezzo) / mezzaLargh);
+      for (let y = cima; y <= V.gronda; y++) metti(x, y, MATERIALE.legno, TAG.edificio);
+    }
+    pz = 0;
+  }
 
   // ── muretti e casse ──
   for (const a of APPOGGI) {
@@ -353,22 +458,49 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
   }
   // ── niente briciole sospese: i pezzetti di solido staccati da tutto (meno di BRICIOLA px, per esempio le
   //    colonnine di 1 px che restano tra il dirupo e la bocca di una galleria) tornano aria ──
-  togliBriciole(m, tag);
-  return { m, sup, tag };
+  togliBriciole(m, tag, pezzo);
+  // ── rettangolo di ogni struttura: l'ingombro dei pixel dei suoi pezzi ──
+  const box = elenco.map(() => ({ x0: W, y0: H, x1: -1, y1: -1 }));
+  for (let i = 0; i < W * H; i++) if (pezzo[i] && m[i]) {
+    const b = box[pezzi[pezzo[i] - 1].struttura], x = i % W, y = (i - x) / W;
+    b.x0 = Math.min(b.x0, x); b.y0 = Math.min(b.y0, y); b.x1 = Math.max(b.x1, x); b.y1 = Math.max(b.y1, y);
+  }
+  const strutture: StrutturaForma[] = elenco.map((e, k) => ({ tipo: e.tipo, ...box[k], ...(e.ancoraggi ? { ancoraggi: e.ancoraggi } : {}), nome: e.nome, pezzi: e.pezzi }));
+  return { m, sup, tag, pezzo, pezzi, strutture };
 }
 
 /** Pezzi di solido più piccoli di così, staccati dal resto (4 vicini), sono briciole da togliere. */
 export const BRICIOLA = 400;
-function togliBriciole(m: Uint8Array, tag: Uint8Array): void {
-  const vis = new Uint8Array(W * H), pila: number[] = [], pezzo: number[] = [];
+function togliBriciole(m: Uint8Array, tag: Uint8Array, pezzo: Uint8Array): void {
+  const vis = new Uint8Array(W * H), pila: number[] = [], pz: number[] = [];
   for (let i = 0; i < W * H; i++) {
     if (!m[i] || vis[i]) continue;
-    pezzo.length = 0; vis[i] = 1; pila.push(i);
+    pz.length = 0; vis[i] = 1; pila.push(i);
     while (pila.length) {
-      const j = pila.pop()!; pezzo.push(j);
+      const j = pila.pop()!; pz.push(j);
       const x = j % W;
       for (const k of [x > 0 ? j - 1 : -1, x < W - 1 ? j + 1 : -1, j - W, j + W]) if (k >= 0 && k < W * H && m[k] && !vis[k]) { vis[k] = 1; pila.push(k); }
     }
-    if (pezzo.length < BRICIOLA) for (const j of pezzo) { m[j] = MATERIALE.aria; tag[j] = 0; }
+    if (pz.length < BRICIOLA) for (const j of pz) { m[j] = MATERIALE.aria; tag[j] = 0; pezzo[j] = 0; }
   }
+}
+
+/**
+ * Zona di caduta di ogni struttura (P1-contratti §7: "il pezzo prolungato fino al mare, allargato di 24 px per lato"),
+ * misurata colonna per colonna: dal pixel più alto della struttura in quella colonna in giù. Una partenza ci sta dentro
+ * se a meno di `margine` px in x c'è una colonna della struttura che comincia SOPRA la riga dei suoi piedi (y del
+ * suolo su cui poggia): il pezzo che scende dritto passerebbe dentro il pirata. Chi sta sulla Mesa accanto al capo di
+ * un ponte (piedi sulla riga 606, assi dalla riga 606 in giù) è fuori: il ponte che cade non lo tocca.
+ */
+export function cimeDelleStrutture(f: Pick<FormaCala, 'm' | 'pezzo' | 'pezzi' | 'strutture'>): Map<number, number>[] {
+  const cime = f.strutture.map(() => new Map<number, number>());
+  for (let i = 0; i < W * H; i++) if (f.pezzo[i] && f.m[i]) {
+    const c = cime[f.pezzi[f.pezzo[i] - 1].struttura], x = i % W, y = (i - x) / W;
+    if (!c.has(x) || y < c.get(x)!) c.set(x, y);
+  }
+  return cime;
+}
+export function nellaZona(cima: Map<number, number>, p: { x: number; y: number }, margine: number): boolean {
+  for (let x = p.x - margine; x <= p.x + margine; x++) { const y = cima.get(x); if (y !== undefined && p.y > y) return true; }
+  return false;
 }

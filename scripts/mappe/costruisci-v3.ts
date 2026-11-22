@@ -8,11 +8,13 @@
 // controlla che l'alfa del quadro coincida con la maschera e segna `arte` nei dati.
 //
 // Regole in più rispetto alla v2 (studio v2):
-//  - nessuna partenza a meno di 120 px da una torre (in Fase 3 le torri crollano);
+//  - nessuna partenza a meno di 120 px da una torre o da un masso (in Fase 3 crollano), né nella zona di caduta di
+//    una struttura (sotto i suoi pezzi fino al mare, allargata di BIL.crolli.rispettoSpawnPx per lato):
+//    lì la sim non farebbe cadere niente (P1-contratti §7);
 //  - un colpo diretto del cannone v2 (danno 60, +10% del Teschio) non butta in mare nessuna partenza;
 //  - nel Prologo i nemici stanno ad almeno 300 px dai pirati del giocatore.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { MATERIALE, type Decorazione, type MappaGenerata, type Punto } from '../../src/core/tipi';
+import { MATERIALE, type Decorazione, type MappaGenerata, type Punto, type StrutturaMappa } from '../../src/core/tipi';
 import { BIL } from '../../src/contenuti/bilanciamento';
 import { superficie } from '../../src/battaglia/gen/analisi';
 import { spianaBarile } from '../../src/battaglia/gen/barili';
@@ -24,7 +26,7 @@ import { mescola, semeIniziale, type ConRng } from '../../src/core/rng';
 import { codificaMaschera } from '../../src/battaglia/mappe/rle';
 import {
   costruisciMaschera, W, H, MARE, FONDALE, appigliDi, BARILI_X, TORRI_X, DISTANZA_CROLLO, ANELLI, APPOGGI, MOLO, PONTI, quotaPonte,
-  GROTTA, NIDO, type Variante,
+  GROTTA, NIDO, MASSI, SOSTEGNI, cimeDelleStrutture, nellaZona, type StrutturaForma, type Variante,
 } from './cala-v3-forma';
 import { leggiPng, scriviPng } from './png';
 
@@ -45,10 +47,10 @@ function controllaQuadro(file: string, m: Uint8Array): void {
   console.log(`${file}: ${diversi} px diversi dalla maschera`);
   if (diversi > 0) throw new Error('il quadro non corrisponde alla forma: rifare la pittura');
 }
-function scriviMateriali(id: string, m: Uint8Array, tag: Uint8Array): void {
-  // R = materiale × 40, G = etichetta × 30, alfa = solido
+function scriviMateriali(id: string, m: Uint8Array, tag: Uint8Array, pezzo: Uint8Array): void {
+  // R = materiale × 40, G = etichetta × 30, B = pezzo di struttura (Fase 3: il pittore separa i pezzi), alfa = solido
   const mat = new Uint8Array(W * H * 4);
-  for (let i = 0; i < W * H; i++) if (m[i]) mat.set([m[i] * 40, tag[i] * 30, 0, 255], i * 4);
+  for (let i = 0; i < W * H; i++) if (m[i]) mat.set([m[i] * 40, tag[i] * 30, pezzo[i], 255], i * 4);
   writeFileSync(`${USCITA}/${id}-materiali.png`, scriviPng(W, H, mat));
 }
 function anteprima(id: string, m: Uint8Array, spawn: [Punto[], Punto[]], barili: Punto[], appigli: { x: number; yAlto: number; yBasso: number }[]): void {
@@ -65,6 +67,13 @@ export function restaATerra(m: Uint8Array, p: Punto): boolean {
   return ([-1, 1] as const).every((dir) => spinto(m, MARE, p, SPINTA_CANNONE_V2, 90, dir).tipo === 'terra');
 }
 const lontanoDalleTorri = (variante: Variante, x: number) => TORRI_X[variante].every(([x0, x1]) => x < x0 - DISTANZA_CROLLO || x > x1 + DISTANZA_CROLLO);
+/** zona di caduta di una struttura (P1-contratti §7): chi parte qui la terrebbe su per tutta la battaglia */
+export const MARGINE_CADUTA = BIL.crolli.rispettoSpawnPx;
+/** partenza che non tiene su nessuna struttura e sta a 120 px dal centro dei massi (le torri le guarda lontanoDalleTorri) */
+const lontanoDaiCrolli = (strutture: StrutturaMappa[], cime: Map<number, number>[], p: Punto) =>
+  strutture.every((st, k) => !nellaZona(cime[k], p, MARGINE_CADUTA)) && MASSI.every((b) => Math.hypot(b.x - p.x, b.y - p.y) >= DISTANZA_CROLLO);
+/** le strutture come le vuole il contratto (senza i nomi e i pezzi, che servono solo qui e al pittore) */
+const perIDati = (l: StrutturaForma[]): StrutturaMappa[] => l.map(({ tipo, x0, y0, x1, y1, ancoraggi }) => ({ tipo, x0, y0, x1, y1, ...(ancoraggi ? { ancoraggi } : {}) }));
 function decorazioni(sup: Int32Array, lista: [Decorazione['tipo'], number, number, boolean][], spawn: Punto[]): Decorazione[] {
   return lista
     .filter(([, x]) => { const b = Array.from({ length: 21 }, (_, k) => sup[x - 10 + k]); return Math.max(...b) - Math.min(...b) <= 14; })   // niente oggetti sui pendii ripidi
@@ -77,12 +86,15 @@ const intestazione = (script: string) => `// GENERATO da scripts/mappe/${script}
 // ═════════════════════════ mappa di battaglia ═════════════════════════
 {
   const ID = 'cala-pappagallo-v3';
-  const { m, tag } = costruisciMaschera('base');
+  const forma = costruisciMaschera('base');
+  const { m, tag, pezzo, strutture } = forma;
+  const cime = cimeDelleStrutture(forma);
   const sup = superficie(m);
   const s: ConRng = { rng: semeIniziale(20261122) };
   const appigliForma = appigliDi(m, 'base');
   const buoni = (l: Posto[]) => l.filter((p) =>
-    appigliForma.every((a) => distanzaAppiglio(a, p) >= 44) && Math.abs(p.x - W / 2) >= DAL_CENTRO && lontanoDalleTorri('base', p.x) && restaATerra(m, p));
+    appigliForma.every((a) => distanzaAppiglio(a, p) >= 44) && Math.abs(p.x - W / 2) >= DAL_CENTRO && lontanoDalleTorri('base', p.x) &&
+    lontanoDaiCrolli(strutture, cime, p) && restaATerra(m, p));
   const tutti: [Posto[], Posto[]] = [buoni(postiValidi(m, sup, MARE, false, 4)), buoni(postiValidi(m, sup, MARE, true, 4))];
   const scegli = (posti: Posto[], n: number): Posto[] => {
     const out: Posto[] = [];
@@ -112,7 +124,6 @@ const intestazione = (script: string) => `// GENERATO da scripts/mappe/${script}
   const deco = decorazioni(sup, [
     ['palma', 262, 0.95, false], ['palma', 404, 0.9, true], ['cespuglio', 446, 0.8, false], ['palma', 572, 0.9, true], ['masso', 700, 0.7, false],
     ['cespuglio', 1352, 0.8, true], ['palma', 1474, 0.9, false], ['masso', 1596, 0.7, true], ['palma', 1652, 1, true], ['cespuglio', 1700, 0.8, false],
-    ['palma', 1930, 0.85, false],
   ], [...spawn[0], ...spawn[1]]);
   const appigli = appigliDi(m, 'base');   // dopo i barili, che spianano la loro base
   const mappa: MappaGenerata = {
@@ -127,16 +138,16 @@ const intestazione = (script: string) => `// GENERATO da scripts/mappe/${script}
   const segnaposti: Record<string, Punto> = Object.fromEntries(ANELLI.map(([x, y], i) => [`anello${i + 1}`, { x, y }]));
   writeFileSync(`src/battaglia/mappe/${ID}.dati.ts`, `${intestazione('costruisci-v3.ts')}export const DATI: DatiMappaFatta = ${JSON.stringify({
     id: ID, nome: 'Cala Pappagallo', bioma: 'isola', mare: MARE, w: W, h: H, arte: conArte ? ID : undefined,
-    spawn, barili, appigli, segnaposti, decorazioni: deco, maschera: codificaMaschera(m),
+    spawn, barili, appigli, segnaposti, decorazioni: deco, sostegni: SOSTEGNI, strutture: perIDati(strutture), maschera: codificaMaschera(m),
   }, null, 1)};\n`);
-  scriviMateriali(ID, m, tag);
+  scriviMateriali(ID, m, tag, pezzo);
   anteprima(ID, m, spawn, barili, appigli);
 }
 
 // ═════════════════════════ variante del Prologo ═════════════════════════
 {
   const ID = 'cala-pappagallo-v3-prologo';
-  const { m, tag } = costruisciMaschera('prologo');
+  const { m, tag, pezzo, strutture } = costruisciMaschera('prologo');
   const conArte = !!quadri && existsSync(`${quadri}/terreno-prologo.png`);
   if (conArte) controllaQuadro(`${quadri}/terreno-prologo.png`, m);
   const sup = superficie(m);
@@ -167,7 +178,6 @@ const intestazione = (script: string) => `// GENERATO da scripts/mappe/${script}
   const deco = decorazioni(sup, [
     ['palma', 262, 0.95, false], ['palma', 404, 0.9, true], ['cespuglio', 446, 0.8, false], ['palma', 572, 0.9, true], ['masso', 700, 0.7, false],
     ['cespuglio', 1352, 0.8, true], ['palma', 1474, 0.9, false], ['masso', 1596, 0.7, true], ['palma', 1652, 1, true], ['cespuglio', 1700, 0.8, false],
-    ['palma', 1930, 0.85, false],
   ], [...spawn[0], ...spawn[1]]);
   for (const [n, p] of Object.entries({ scarlatta, gancio, marinaioPonte, marinaioRocca })) {
     const sotto = m[p.y * W + p.x] !== MATERIALE.aria, sopra = m[(p.y - 1) * W + p.x] === MATERIALE.aria;
@@ -180,9 +190,9 @@ const intestazione = (script: string) => `// GENERATO da scripts/mappe/${script}
   console.log(`${ID}:`, JSON.stringify({ spawn, appigli: appigli.length, nemicoPiuVicino: Math.round(Math.min(...spawn[0].flatMap((p) => spawn[1].map((n) => Math.hypot(n.x - p.x, n.y - p.y))))) }));
   writeFileSync(`src/battaglia/mappe/${ID}.dati.ts`, `${intestazione('costruisci-v3.ts')}export const DATI: DatiMappaFatta = ${JSON.stringify({
     id: ID, nome: 'Cala Pappagallo (Prologo)', bioma: 'isola', mare: MARE, w: W, h: H, arte: conArte ? ID : undefined,
-    copione: true, spawn, barili: [], appigli, segnaposti, decorazioni: deco, maschera: codificaMaschera(m),
+    copione: true, spawn, barili: [], appigli, segnaposti, decorazioni: deco, sostegni: SOSTEGNI, strutture: perIDati(strutture), maschera: codificaMaschera(m),
   }, null, 1)};\n`);
-  scriviMateriali(ID, m, tag);
+  scriviMateriali(ID, m, tag, pezzo);
   anteprima(ID, m, spawn, [], appigli);
 }
 console.log('ok');

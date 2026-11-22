@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { decidi, creaIa, fotografia } from '../../src/battaglia/ia';
-import { decidiCon, potenzaPer, angoloVerso, punteggio, armiUsabili } from '../../src/battaglia/ia/pianifica';
+import { decidiCon, potenzaPer, angoloVerso, punteggio, armiUsabili, PASSI_FUGA } from '../../src/battaglia/ia/pianifica';
 import { passiSicuri } from '../../src/battaglia/ia/terreno';
 import { hashStato, simulaColpo, creaBattaglia, avanzaTick, eseguiComando } from '../../src/battaglia/sim';
 import { generaMappa } from '../../src/battaglia/gen';
@@ -168,7 +168,7 @@ describe('IA · qualità del Mozzo (fisica ideale, senza vento)', () => {
       const s = duello(1700, 1830, { seme });
       const io = s.pirati.find((x) => x.id === s.turno.pirata)!;
       const p = decidiCon(s, 'mozzo', simulaIdeale);
-      if (p.fuga !== 0) expect(passiSicuri(s, io, p.fuga, Math.ceil(BIL.turno.fugaTick * BIL.pirata.camminata))).toBeGreaterThanOrEqual(180);
+      if (p.fuga !== 0) expect(passiSicuri(s, io, p.fuga, PASSI_FUGA)).toBeGreaterThanOrEqual(PASSI_FUGA);
       expect(p.fuga).not.toBe(1);
     }
   });

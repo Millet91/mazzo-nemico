@@ -109,6 +109,12 @@ export const BIL = {
 
   lapide: { danno: 10, raggio: 25 },
 
+  /**
+   * Macerie (studio v2, PIANO §7; Bilanciamento): un blocco che cade fa 8 PV a pirata, al massimo 20 PV per turno a
+   * pirata; sotto 5 PV il numero non si mostra. Numeri a priori: la sim li userà dalla Fase 3 (il campo si spezza).
+   */
+  macerie: { danno: 8, maxPerTurno: 20, mostraDa: 5 },
+
   /** scale e liane distruttibili (richiesta del proprietario, 21/11/2026) */
   /**
    * Studio v2, Fase 1 (PIANO §3, game-design §3.4 e 3.6, tecnica §3.4-3.6). CONGELATO dal Lead P1: la sim della
@@ -212,19 +218,20 @@ export const BIL = {
   /** tratti delle ciurme che valgono in battaglia (00 §2.1) */
   tratti: {
     /** Teschio Rosso: +10% di danno sulle armi esplosive */
-    /** D effettivo = floor(D × (1 + bonus)): cannone 49, granata 44. Non vale sulla lapide. */
+    /** D effettivo = floor(D × (1 + bonus)): cannone 66, granata 57. Non vale sulla lapide. */
     teschioBonusDanno: 0.1,
     teschioArmi: ['cannone', 'granata', 'barile', 'mina', 'pallaSpezzata', 'pappagallo', 'scimmia', 'bordata'] as readonly string[],
   },
 
   /** IA di battaglia (01 §8; 05 n. 19) */
   ia: {
-    /** errorePotenza: errore uniforme inteso sulla GITTATA (±15% di gittata ≈ ±7,5% di potenza, perché la gittata va col
-     *  quadrato della potenza). erroreGradi: uniforme sull'angolo. Taratura finale col simulatore (giocatore batte Mozzo all'85%). */
+    /** errorePotenza: errore uniforme inteso sulla GITTATA (±35% di gittata ≈ ±16% di potenza, perché la gittata va col
+     *  quadrato della potenza). erroreGradi: uniforme sull'angolo. Mozzo ritarato dallo studio v2 (PIANO §7): ±14° e ±35%,
+     *  l'umano medio lo batte circa l'83% delle volte (obiettivo 85%). */
     /** l'IA sceglie solo tra le armi di `armi` che hanno munizioni nella sua Squadra */
     punteggio: { uccisione: 60, annegamento: 80, dannoAmico: -1.5, dannoSe: -2, seInMare: -200, sogliaMinima: 10 },
     livelli: {
-      mozzo: { simulazioni: 40, posizioni: 0, erroreGradi: 8, errorePotenza: 0.15, vento: 0.5, sceltaTraMigliori: 5, armi: ['cannone', 'granata', 'pistola', 'sciabola', 'barile'] },
+      mozzo: { simulazioni: 40, posizioni: 0, erroreGradi: 14, errorePotenza: 0.35, vento: 0.5, sceltaTraMigliori: 5, armi: ['cannone', 'granata', 'pistola', 'sciabola', 'barile'] },
       nostromo: { simulazioni: 200, posizioni: 2, erroreGradi: 3, errorePotenza: 0.06, vento: 1, sceltaTraMigliori: 1, armi: [] },
       capitano: { simulazioni: 600, posizioni: 4, erroreGradi: 1, errorePotenza: 0.02, vento: 1, sceltaTraMigliori: 1, armi: [] },
     } as Record<LivelloIa, { simulazioni: number; posizioni: number; erroreGradi: number; errorePotenza: number; vento: number; sceltaTraMigliori: number; armi: string[] }>,

@@ -183,11 +183,12 @@ describe('Esplosioni', () => {
     }
   });
 
-  it('Teschio Rosso: +10% per difetto su cannone e granata (49 e 44), non sulla pistola né sulla lapide', () => {
-    expect(dannoArma('cannone', 'teschio')).toBe(49);
-    expect(dannoArma('granata', 'teschio')).toBe(44);
+  it('Teschio Rosso: +10% per difetto su cannone e granata (66 e 57), non sulla pistola né sulla lapide', () => {
+    expect(dannoArma('cannone', 'teschio')).toBe(Math.floor(ARMA.cannone.danno * 1.1));
+    expect(dannoArma('granata', 'teschio')).toBe(Math.floor(ARMA.granata.danno * 1.1));
+    expect([dannoArma('cannone', 'teschio'), dannoArma('granata', 'teschio')]).toEqual([66, 57]);
     expect(dannoArma('pistola', 'teschio')).toBe(ARMA.pistola.danno);
-    expect(dannoArma('cannone', 'marina')).toBe(45);
+    expect(dannoArma('cannone', 'marina')).toBe(ARMA.cannone.danno);
     const s = battagliaPiatta([1000], [1500]);
     const p = s.pirati[0];
     esplodi(s, p.x, p.y, 'lapide', 'teschio', []);

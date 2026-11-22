@@ -617,11 +617,9 @@ test('Impostazioni: mancini, comandi classici, volume e Diagnostica', async ({ p
   await page.locator('#zoom-mira').click();
   await expect(page.locator('#zoom-mira')).toHaveAttribute('aria-checked', 'false');
   expect(await page.evaluate(() => (window as any).__kaboom.bus.zoomAutomaticoMira.value)).toBe(false);
-  await expect(page.getByTestId('volume-valore')).toHaveText('80%');
-  await page.locator('#volume').click();
-  await expect(page.getByTestId('volume-valore')).toHaveText('100%');
-  await page.locator('#volume').click();
-  await expect(page.getByTestId('volume-valore')).toHaveText('Muto');
+  // il volume ora sono due cursori (musica, effetti e voci): li prova tests/e2e/audio.spec.ts
+  await expect(page.getByTestId('volume-musica-valore')).toHaveText('60%');
+  await expect(page.getByTestId('volume-effetti-valore')).toHaveText('80%');
   await page.screenshot({ path: 'test-results/screenshot/impostazioni-20x9.png' });
   await expect(page.locator('#mancini')).toHaveAttribute('aria-checked', 'false');
   await page.locator('#mancini').click();

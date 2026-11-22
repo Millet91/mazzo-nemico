@@ -136,6 +136,23 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 }
 .interruttore[aria-checked='true'] .stato-interruttore { background: var(--ok); color: var(--inchiostro); }
 .interruttore:focus-visible { outline: 3px solid var(--info); }
+/* cursori del volume (src/audio/RigheAudio.tsx): stessa riga degli interruttori, con una barra da trascinare */
+.cursore {
+  box-sizing: border-box; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 14px;
+  border-radius: 14px; background: #FFFFFF10; pointer-events: auto;
+}
+.cursore .testi { flex: 1 1 40%; display: flex; flex-direction: column; min-width: 0; }
+.cursore .etichetta { font-weight: 900; font-size: 16px; }
+.cursore .nota { color: var(--testo-dim); font-size: 12px; }
+.cursore input[type='range'] {
+  flex: 1 1 45%; min-width: 120px; height: 48px; margin: 0; background: transparent; cursor: pointer;
+  accent-color: var(--oro); touch-action: pan-y;
+}
+.cursore input[type='range']:focus-visible { outline: 3px solid var(--info); border-radius: 8px; }
+.cursore .stato-interruttore {
+  min-width: 72px; text-align: center; padding: 6px 10px; border-radius: 12px; font-weight: 900; background: var(--legno);
+  font-variant-numeric: tabular-nums;
+}
 
 .diagnostica { display: flex; flex-direction: column; gap: 16px; }
 .diagnostica .nota { color: var(--testo-dim); margin: 6px 0 0; font-size: 12px; }

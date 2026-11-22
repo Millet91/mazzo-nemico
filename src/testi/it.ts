@@ -40,7 +40,10 @@ export const it = {
     comandiClassiciNota: 'Tasti grandi ◀ ▶ SALTA FUOCO, e ▲ ▼ per la mira fine. Il mirino da trascinare resta.',
     zoomMira: 'Zoom automatico durante la mira',
     zoomMiraNota: 'Mentre miri la visuale si allarga da sola per mostrare dove cade il colpo.',
-    volume: 'Volume',
+    volumeMusica: 'Musica',
+    volumeMusicaNota: 'Nel menu e in battaglia.',
+    volumeEffetti: 'Effetti e voci',
+    volumeEffettiNota: 'Colpi, passi, voci e tasti.',
     volumeValore: (p: number) => (p === 0 ? 'Muto' : `${p}%`),
   },
   schermaglia: {

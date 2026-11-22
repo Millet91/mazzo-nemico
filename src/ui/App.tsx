@@ -8,33 +8,27 @@ import { INFO_BUILD } from '../core/build';
 import { tocco } from '../piattaforma/haptics';
 import { caricaImpostazioni, salvaImpostazioni } from '../piattaforma/impostazioni';
 import { Battaglia } from './battaglia/Battaglia';
-import { avviaAscoltoBattaglia, avviaTicTac, indietroInBattaglia, inBattaglia, sceltaSchermaglia } from './battaglia/stato';
+import { avviaAscoltoBattaglia, indietroInBattaglia, inBattaglia, sceltaSchermaglia } from './battaglia/stato';
 import { SceltaSchermaglia } from './battaglia/SceltaSchermaglia';
-import { sbloccaAudio } from '../piattaforma/audio';
+import { avviaAudio } from '../audio';
+import { RigheAudio } from '../audio/RigheAudio';
 import { Diagnostica, provaAttiva, statoFps } from './Diagnostica';
 import { PulsanteKit, PulsanteTondo, applicaKit, urlKit } from './kit';
 import { VetrinaKit, vetrinaKit } from './kit/Vetrina';
 // ── Carriera (P2 Campagna, mount minimo: Arte UI lo sostituisce col menu nuovo) ──
 import { Carriera } from './carriera/Carriera';
 import { avviaAscoltoCarriera, entraInCarriera, indietroCarriera, preparaCarriera } from './carriera/stato';
-import { caricaPreferenzeHud, comandiClassici, impostaComandiClassici, impostaMancini, impostaVolumeHud, impostaZoomMira, mancini, piratiSchermaglia, volume, zoomMira } from './preferenze';
+import { caricaPreferenzeHud, comandiClassici, impostaComandiClassici, impostaMancini, impostaZoomMira, mancini, piratiSchermaglia, zoomMira } from './preferenze';
 
 // avvio dell'HUD (main.tsx non è una cartella dell'HUD): preferenze salvate, banner e vibrazioni della battaglia
 void caricaPreferenzeHud();
 avviaAscoltoBattaglia();
-avviaTicTac();
 // immagini del kit dipinto (P2) nelle variabili CSS
 if (typeof document !== 'undefined') applicaKit();
 avviaAscoltoCarriera(); // P2 Campagna
 void preparaCarriera(); // P2 Campagna
-// l'audio parte solo dopo un tocco (regola dei browser e della WebView)
-if (typeof window !== 'undefined') window.addEventListener('pointerdown', sbloccaAudio, { capture: true, passive: true });
-
-const PASSI_VOLUME = [0, 0.25, 0.5, 0.8, 1];
-function volumeSuccessivo(v: number): number {
-  const i = PASSI_VOLUME.findIndex((x) => x > v + 0.01);
-  return i < 0 ? PASSI_VOLUME[0] : PASSI_VOLUME[i];
-}
+// il motore audio ascolta il bus da solo (src/audio): musica, effetti, voci e suoni dei tasti
+avviaAudio();
 // gancio per i test Playwright (tests/e2e): con ?prova nell'indirizzo il bus è raggiungibile dalla pagina
 if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('prova')) {
   (window as unknown as { __kaboom: unknown }).__kaboom = { bus, gestisciIndietro: () => gestisciIndietro(), preferenze: { comandiClassici, mancini } };
@@ -148,11 +142,7 @@ function PannelloImpostazioni() {
               <span class="testi"><span class="etichetta">{T.impostazioni.zoomMira}</span><span class="nota">{T.impostazioni.zoomMiraNota}</span></span>
               <span class="stato-interruttore">{zoomMira.value ? T.impostazioni.acceso : T.impostazioni.spento}</span>
             </button>
-            <button type="button" id="volume" class="interruttore" aria-label={`${T.impostazioni.volume}: ${T.impostazioni.volumeValore(Math.round(volume.value * 100))}`}
-              onClick={() => { tocco(); void impostaVolumeHud(volumeSuccessivo(volume.value)); }}>
-              <span class="testi"><span class="etichetta">{T.impostazioni.volume}</span></span>
-              <span class="stato-interruttore" data-testid="volume-valore">{T.impostazioni.volumeValore(Math.round(volume.value * 100))}</span>
-            </button>
+            <RigheAudio />
             <Pulsante id="apri-diagnostica" onClick={() => (pannello.value = 'diagnostica')}>{T.impostazioni.diagnostica}</Pulsante>
             <Pulsante id="apri-info" onClick={() => (pannello.value = 'info')}>{T.impostazioni.info}</Pulsante>
           </div>

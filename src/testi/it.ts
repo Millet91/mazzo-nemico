@@ -79,10 +79,20 @@ export const it = {
     destra: 'Cammina a destra',
     salta: 'SALTA',
     saltaAiuto: 'Salta (doppio tocco: salto all\'indietro)',
-    saltaAiutoV3: 'Salta. Tieni premuto per il salto alto all\'indietro',
+    /** tasto Balzo (comandi v3): il nome cambia con quello che farebbe adesso */
+    balzo: {
+      salto: 'Salta',
+      scavalca: 'Scavalca il muretto',
+      afferra: 'Aggrappati alla scala o alla liana',
+      stacca: 'Salta giù dalla scala o dalla liana',
+      muro: 'Salta via dal muro',
+    },
+    fatto: 'FATTO',
+    fattoAiuto: 'Fatto: passa subito il turno',
     sali: 'Sali sulla scala o sulla liana',
     scendi: 'Scendi dalla scala o dalla liana',
-    suggerimentoMirino: 'Trascina il mirino oro: più lontano, più forte',
+    /** due righe corte, in alto a sinistra */
+    suggerimentoMirino: ['Trascina il mirino oro', 'Più lontano, più forte'] as const,
     su: 'Alza la mira',
     giu: 'Abbassa la mira',
     arma: 'ARMA',

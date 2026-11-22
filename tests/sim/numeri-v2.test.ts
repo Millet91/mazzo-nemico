@@ -1,9 +1,9 @@
 // Numeri di battaglia dello studio v2 (PIANO §7, regole versione 2) e la loro conseguenza sulle coste.
-// Il generatore resta tarato sul cannone v1 (REGOLE.cannoneDanno 45). La spinta di cannone e granata v2 è tornata
-// quella della v1 (`spintaEsplosione` in armi.ts): qui si controlla che un colpo diretto non butti in mare gli spawn.
+// La spinta di cannone e granata v2 è tornata quella della v1 (`spintaEsplosione` in armi.ts) e il generatore legge
+// la spinta vera (`spintaAlCentro`): qui si controlla che un colpo diretto non butti in mare gli spawn.
 import { describe, it, expect } from 'vitest';
 import { generaMappa } from '../../src/battaglia/gen';
-import { spinto } from '../../src/battaglia/gen/spawn';
+import { spinte, spinto } from '../../src/battaglia/gen/spawn';
 import { REGOLE } from '../../src/battaglia/gen/parametri';
 import { ARMA } from '../../src/contenuti/armi';
 import { BIL, TICK_AL_SECONDO } from '../../src/contenuti/bilanciamento';
@@ -11,9 +11,11 @@ import { simulaColpo, spintaAlCentro } from '../../src/battaglia/sim';
 import { avanzaFinche, battagliaPiatta, inAzione, pirata, spara, terrenoPiatto } from './aiuti';
 
 describe('Numeri v2 · coste e cannone', () => {
-  it('il generatore resta sul cannone v1: le impronte delle mappe non cambiano coi numeri nuovi', () => {
-    expect([REGOLE.cannoneDanno, REGOLE.cannoneRaggio]).toEqual([45, 55]);
-    expect(ARMA.cannone.danno).toBeGreaterThan(REGOLE.cannoneDanno);
+  it('il generatore usa la spinta vera del cannone (per eccesso al px/s) e il raggio v2', () => {
+    const S = TICK_AL_SECONDO;
+    expect(spinte().cannone * S).toBe(Math.ceil(spintaAlCentro('cannone', 'teschio') * S));
+    expect(spinte().cannone).toBeGreaterThanOrEqual(spintaAlCentro('cannone', 'teschio'));
+    expect(REGOLE.cannoneRaggio).toBe(ARMA.cannone.raggio);
   });
 
   it('la spinta di cannone e granata è quella della v1 (`spintaEsplosione`), col Teschio +10%', () => {
@@ -56,7 +58,7 @@ describe('Numeri v2 · coste e cannone', () => {
       }
       return (100 * mare) / n;
     };
-    const v1 = conta(Math.floor(REGOLE.cannoneDanno * (1 + BIL.tratti.teschioBonusDanno)) * BIL.fisica.spintaPerDanno);
+    const v1 = conta(Math.floor(45 * (1 + BIL.tratti.teschioBonusDanno)) * BIL.fisica.spintaPerDanno); // cannone v1: danno 45
     const v2 = conta(spintaAlCentro('cannone', null));
     const v2Teschio = conta(spintaAlCentro('cannone', 'teschio'));
     console.log(`coste: spawn in mare con un colpo diretto — v1 ${v1.toFixed(1)}%, v2 ${v2.toFixed(1)}%, v2 col Teschio ${v2Teschio.toFixed(1)}%`);

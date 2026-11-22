@@ -4,6 +4,7 @@
 import { MATERIALE, type Punto } from '../../core/tipi';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { ARMA } from '../../contenuti/armi';
+import { spintaAlCentro } from '../sim/esplosione';
 import { coseno, seno } from '../../core/trig';
 import { camminata, lineaLibera, solido, vola } from './analisi';
 import { MONDO, REGOLE } from './parametri';
@@ -25,13 +26,13 @@ export function petto(p: Punto): Punto {
 
 /**
  * Velocità (px/tick) di una spinta: colpo diretto di cannone (col +10% del Teschio, il caso peggiore) e sciabola.
- * Il cannone è quello di REGOLE.cannoneDanno (regole v1), non ARMA: vedi parametri.ts.
+ * Il cannone è la spinta vera della battaglia (`spintaAlCentro` della sim, da `spintaEsplosione` di armi.ts),
+ * arrotondata per eccesso al px/s intero: un piccolo margine di sicurezza, e con 342,1 px/s si ottengono 343 px/s,
+ * la spinta della v1 su cui sono tarate le coste, quindi le impronte delle mappe non cambiano.
  */
 export function spinte(): { cannone: number; sciabola: number; angoloSciabola: number } {
-  const t = BIL.tratti;
-  const dannoCannone = Math.floor(REGOLE.cannoneDanno * (1 + t.teschioBonusDanno));
   return {
-    cannone: dannoCannone * BIL.fisica.spintaPerDanno,
+    cannone: Math.ceil(spintaAlCentro('cannone', 'teschio') * TICK_AL_SECONDO) / TICK_AL_SECONDO,
     sciabola: (ARMA.sciabola.spintaFissa ?? 0) / TICK_AL_SECONDO,
     angoloSciabola: (ARMA.sciabola.angoloSpinta ?? 45) * 2,
   };

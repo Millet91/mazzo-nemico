@@ -100,7 +100,7 @@ test('Schermaglia avvia la battaglia vera di M1 e si esce dalla pausa', async ({
   const cfg = await page.evaluate(() => (window as any).__kaboom.bus.richiestaBattaglia.value);
   expect(cfg.squadre[0]).toMatchObject({ ciurma: 'teschio', controllo: 'umano', pirati: 3 });
   expect(cfg.squadre[1]).toMatchObject({ ciurma: 'marina', controllo: 'ia', livelloIa: 'mozzo', pirati: 3 });
-  expect(cfg.timerSecondi).toBe(30);
+  expect(cfg.timerSecondi).toBe(25); // Fase 1: secondi per sparo contro il Mozzo (BIL.ritmo)
   // il ciclo di gioco pubblica la vista: HUD vero, titolo e menu nascosti, comandi nel turno del Teschio
   await expect(page.getByTestId('hud')).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole('heading', { name: 'Kaboom Ahoy!' })).toBeHidden();
@@ -197,7 +197,7 @@ test('armi in fila: solo le 4 che ho, meno del 35% del campo; tocco sceglie e ch
   expect(await page.evaluate(() => (window as any).__kaboom.bus.battagliaInPausa.value)).toBe(false);
 });
 
-test('comandi: ◀ ▶ tenuti premuti, ▲ a tocco, SALTA doppio tocco, FUOCO una volta sola', async ({ page }) => {
+test('comandi: ◀ ▶ tenuti premuti, ▲ a tocco, SALTA = Balzo al tocco, FUOCO una volta sola', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 360 });
   await entraInBattaglia(page);
   const centro = async (id: string) => { const [r] = await rettangoli(page, id); return { x: r.x + r.w / 2, y: r.y + r.h / 2 }; };
@@ -211,9 +211,9 @@ test('comandi: ◀ ▶ tenuti premuti, ▲ a tocco, SALTA doppio tocco, FUOCO un
   await page.locator('#tasto-su').click();
   expect((await registro(page)).comandi.at(-1)).toEqual({ t: 'ruotaMira', delta: 2 });
 
-  await page.locator('#tasto-salta').dblclick();
-  await page.waitForTimeout(400);
-  expect((await registro(page)).comandi.filter((c) => c.t === 'salta')).toEqual([{ t: 'salta', indietro: true }]);
+  // il salto all'indietro col doppio tocco non c'è più: ogni tocco è un Balzo, subito
+  await page.locator('#tasto-salta').click();
+  expect((await registro(page)).comandi.filter((c) => c.t === 'salta')).toEqual([{ t: 'salta', indietro: false }]);
 
   await page.locator('#tasto-fuoco').dblclick();
   expect((await registro(page)).comandi.filter((c) => c.t === 'fuoco')).toHaveLength(1);
@@ -364,16 +364,14 @@ test('comandi v3: niente joystick, frecce salto e FUOCO piccoli ai bordi; ARMA n
     await page.mouse.up();
     expect((await registro(page)).comandi).toEqual([{ t: 'muovi', dir: 1 }, { t: 'muovi', dir: 0 }, { t: 'muovi', dir: -1 }, { t: 'muovi', dir: 0 }]);
 
-    // SALTA: tocco = salto lungo subito al rilascio; tenuto = salto alto all'indietro
+    // Balzo: parte al tocco (non al rilascio), e tenendo premuto non succede altro
     await page.evaluate(() => { (window as any).registro.comandi = []; });
     await page.mouse.move(sa.x, sa.y);
     await page.mouse.down();
+    expect((await registro(page)).comandi).toEqual([{ t: 'salta', indietro: false }]);
+    await page.waitForTimeout(350);
     await page.mouse.up();
     expect((await registro(page)).comandi).toEqual([{ t: 'salta', indietro: false }]);
-    await page.mouse.down();
-    await expect.poll(async () => (await registro(page)).comandi.at(-1)).toEqual({ t: 'salta', indietro: true });
-    await page.mouse.up();
-    expect((await registro(page)).comandi).toEqual([{ t: 'salta', indietro: false }, { t: 'salta', indietro: true }]);
 
     // FUOCO spara al rilascio: premuto non ha ancora sparato, e scivolando fuori dal tasto lo sparo si annulla
     await page.evaluate(() => { (window as any).registro.comandi = []; });
@@ -403,14 +401,16 @@ test('comandi v3 · scale e liane: compaiono sali e scendi; appeso, una freccia 
   await page.mouse.move(su.x, su.y);
   await page.mouse.down();
   expect((await registro(page)).comandi).toEqual([{ t: 'arrampica', dir: -1 }]);
+  // in un tocco: al rilascio non si manda niente, la sim lo porta in cima
   await page.mouse.up();
+  expect((await registro(page)).comandi).toEqual([{ t: 'arrampica', dir: -1 }]);
   const dx = await centro(page, 'tasto-destra');
   await page.mouse.move(dx.x, dx.y);
   await page.mouse.down();
   await page.mouse.up();
   // il salto va dal lato della freccia: prima gira il pirata a destra, poi salta
   expect((await registro(page)).comandi).toEqual([
-    { t: 'arrampica', dir: -1 }, { t: 'arrampica', dir: 0 },
+    { t: 'arrampica', dir: -1 },
     { t: 'muovi', dir: 1 }, { t: 'salta', indietro: false }, { t: 'muovi', dir: 0 },
   ]);
   await page.screenshot({ path: 'test-results/screenshot/appeso-20x9.png' });
@@ -419,11 +419,30 @@ test('comandi v3 · scale e liane: compaiono sali e scendi; appeso, una freccia 
   await expect(page.locator('#tasto-sali')).toHaveCount(0);
 });
 
-test('comandi v3: in fuga solo il movimento, nel turno dell\'IA nessuno', async ({ page }) => {
+test('comandi v3: in fuga il movimento e FATTO, nel turno dell\'IA nessuno', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 360 });
-  await entraInBattaglia(page, vista({ fase: 'fuga' }), false);
+  await entraInBattaglia(page, vista({ fase: 'fuga', puoFinire: true }), false);
   await expect(page.getByTestId('pad-muovi')).toBeVisible();
   await expect(page.getByTestId('pad-tiro')).toHaveCount(0);
+  await expect(page.locator('#tasto-fuoco')).toHaveCount(0);
+  // FATTO al posto di FUOCO: stesso lato, almeno 44 px, un tocco chiude il turno
+  await expect(page.locator('#tasto-fatto')).toBeVisible();
+  const [fatto] = await rettangoli(page, '#tasto-fatto');
+  expect(fatto.w).toBeGreaterThanOrEqual(44);
+  expect(fatto.h).toBeGreaterThanOrEqual(44);
+  expect(fatto.x + fatto.w / 2).toBeGreaterThan(800 * 0.85);
+  await controllaTasti(page, 800, 360, 4);
+  await page.locator('#tasto-fatto').click();
+  expect((await registro(page)).comandi).toEqual([{ t: 'fatto' }]);
+  await page.screenshot({ path: 'test-results/screenshot/fase1-fatto.png' });
+  // mancini: FATTO va a sinistra come FUOCO
+  await page.evaluate(() => ((window as any).__kaboom.preferenze.mancini.value = true));
+  const [fattoSx] = await rettangoli(page, '#tasto-fatto');
+  expect(fattoSx.x + fattoSx.w / 2).toBeLessThan(800 * 0.15);
+  await page.evaluate(() => ((window as any).__kaboom.preferenze.mancini.value = false));
+  // senza puoFinire (o dopo la fuga) niente FATTO
+  await aggiorna(page, { puoFinire: false });
+  await expect(page.locator('#tasto-fatto')).toHaveCount(0);
   await page.evaluate((v) => { (window as any).__kaboom.bus.battaglia.value = v; }, vista({ tocca: 'ia', iaPensa: true }));
   await expect(page.getByTestId('pad-muovi')).toHaveCount(0);
 });
@@ -645,7 +664,7 @@ test('Impostazioni: mancini, comandi classici, volume e Diagnostica', async ({ p
 });
 
 // Piano QA §2 L4: HUD della battaglia vera a seme fisso, al tick 0 e al tick 600 (10 s: il timer parte dopo 2 s,
-// quindi a 600 tick ne restano 22). Gli screenshot vanno negli artifact della CI.
+// quindi a 600 tick ne restano 25 − 8 = 17, Fase 1: 25 s per sparo col Mozzo). Gli screenshot vanno negli artifact della CI.
 test('battaglia vera a seme fisso: tick 0 e tick 600', async ({ page }) => {
   test.setTimeout(60000);
   for (const f of FORMATI) {
@@ -658,13 +677,57 @@ test('battaglia vera a seme fisso: tick 0 e tick 600', async ({ page }) => {
       b.richiestaBattaglia.value = { ...b.richiestaBattaglia.value, seme: 20261121 };
     });
     await expect(page.locator('#tasto-arma')).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId('timer')).toHaveText('30');
+    await expect(page.getByTestId('timer')).toHaveText('25');
     await page.screenshot({ path: `test-results/screenshot/battaglia-seme-tick0-${f.nome}.png` });
     await controllaTasti(page, f.width, f.height, 1);
-    await expect(page.getByTestId('timer')).toHaveText('22', { timeout: 20000 });
+    await expect(page.getByTestId('timer')).toHaveText('17', { timeout: 20000 });
     await page.screenshot({ path: `test-results/screenshot/battaglia-seme-tick600-${f.nome}.png` });
     await page.locator('#pausa').click();
     await page.locator('#esci').click();
     await expect(page.locator('#schermaglia')).toBeVisible();
+  }
+});
+
+test('Fase 1: il tasto Balzo cambia icona e nome; contro il muro manda il salto dal muro', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 360 });
+  await entraInBattaglia(page, vista(), false);
+  const balzo = page.locator('#tasto-salta');
+  await expect(balzo).toHaveAttribute('aria-label', 'Salta');
+  for (const [b, nome] of [['scavalca', 'Scavalca il muretto'], ['afferra', 'Aggrappati alla scala o alla liana'], ['stacca', 'Salta giù dalla scala o dalla liana'], ['muro', 'Salta via dal muro']] as const) {
+    await aggiorna(page, { balzo: b });
+    await expect(balzo).toHaveAttribute('aria-label', nome);
+    await expect(page.locator(`#tasto-salta .disco[data-balzo="${b}"]`)).toHaveCount(1);
+  }
+  await page.screenshot({ path: 'test-results/screenshot/fase1-balzo-muro.png' });
+  await balzo.click();
+  await aggiorna(page, { balzo: 'scavalca' });
+  await balzo.click();
+  expect((await registro(page)).comandi).toEqual([{ t: 'salta', indietro: true }, { t: 'salta', indietro: false }]);
+  // con i comandi classici SALTA fa lo stesso Balzo
+  await page.evaluate(() => { (window as any).__kaboom.preferenze.comandiClassici.value = true; (window as any).registro.comandi = []; });
+  await aggiorna(page, { balzo: 'muro' });
+  await page.locator('#tasto-salta').click();
+  expect((await registro(page)).comandi).toEqual([{ t: 'salta', indietro: true }]);
+});
+
+test('Fase 1: suggerimento del mirino su due righe, lontano dalla scritta del turno e dal banner', async ({ page }) => {
+  for (const f of FORMATI) {
+    await page.setViewportSize({ width: f.width, height: f.height });
+    await entraInBattaglia(page, vista(), false);
+    const sugg = page.getByTestId('suggerimento-mirino');
+    await expect(sugg).toBeVisible();
+    await expect(sugg.locator('span')).toHaveCount(2);
+    const [r] = await rettangoli(page, '[data-testid="suggerimento-mirino"]');
+    const [turno] = await rettangoli(page, '[data-testid="turno"]');
+    expect(r.h).toBeLessThan(50); // due righe, non tre
+    expect(r.x + r.w, 'non arriva alla scritta del turno').toBeLessThan(turno.x - 8);
+    // il banner "Tocca a te!" al centro non lo tocca
+    await page.evaluate(() => { (window as any).__kaboom.bus.eventiBattaglia.value = [{ t: 'turnoIniziato', numero: 2, squadra: 0, pirata: 0, vento: 0 }]; });
+    const banner = page.getByTestId('banner');
+    if (await banner.count()) {
+      const [b] = await rettangoli(page, '[data-testid="banner"]');
+      if (b) expect(r.x + r.w <= b.x || r.y >= b.y + b.h || r.y + r.h <= b.y, 'suggerimento sotto il banner').toBe(true);
+    }
+    await page.screenshot({ path: `test-results/screenshot/fase1-suggerimento-${f.nome}.png` });
   }
 });

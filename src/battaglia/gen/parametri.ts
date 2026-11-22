@@ -35,15 +35,9 @@ export const REGOLE = {
   sciabolaVieta: false,
   /** percorso a piedi in un turno (06 §7.2) */
   camminataTurno: 1200,
-  /**
-   * Cannone con cui sono tarate le coste e gli spawn (regole v1: danno 45, raggio 55). Lo studio v2 ha alzato il cannone
-   * a 60/70 (PIANO §7): se il generatore leggesse ARMA quasi nessun seme passerebbe più la regola "un colpo diretto non
-   * butta in mare uno spawn" e cambierebbero tutte le impronte. Finché Mappa e livelli non rifà le coste più spesse,
-   * il generatore resta su questi numeri: le mappe sono identiche a prima, ma con le regole v2 quella garanzia
-   * non vale più alla lettera (misura in tests/sim/numeri-v2.test.ts).
-   */
-  cannoneDanno: 45,
-  cannoneRaggio: 55,
+  /** raggio del cannone per il campionatore "da ogni spawn si colpisce un nemico" (06 §7.5); la spinta che non
+   *  deve buttare in mare uno spawn è quella vera della battaglia (`spintaAlCentro`, vedi spawn.ts) */
+  cannoneRaggio: 70,
   /** riempimento: solido tra fineCielo e mare (06 §0: 35-50%; Lead design 21/11/2026 per l'Isola: minimo 20%,
    *  perché con la costa aperta e 5 spawn in piano il 30% chiede montagne fino al cielo).
    *  In M1 tutti i biomi usano il terreno dell'Isola: quando arrivano gli altri biomi questi limiti vanno per bioma. */

@@ -138,7 +138,9 @@ describe('Audio · movimento da pirata', () => {
     expect(id(suoni([ESEMPI.staccato]).suoni)).toEqual(['stacco']);
     expect(id(suoni([ESEMPI.scavalco]).suoni)).toEqual(['scavalco', 'vox_a_sforzo']);
     expect(id(suoni([ESEMPI.bordo]).suoni)).toEqual(['bordo', 'vox_a_sforzo']);
-    expect(id(suoni([ESEMPI.saltoMuro]).suoni)).toEqual(['salto_muro']);
+    expect(id(suoni([ESEMPI.saltoMuro]).suoni)).toEqual(['salto_muro', 'vox_a_sforzo']);
+    expect(id(suoni([ESEMPI.piolo]).suoni)).toEqual(['piolo_legno']);
+    expect(id(suoni([{ ...ESEMPI.piolo, liana: true }]).suoni)).toEqual(['piolo_corda']);
     expect(id(suoni([{ t: 'atterrato', pirata: 0, dannoCaduta: 12 }]).suoni)).toEqual(['caduta_tonfo']);
     expect(id(suoni([ESEMPI.atterrato]).suoni)).toEqual(['atterra']);
   });

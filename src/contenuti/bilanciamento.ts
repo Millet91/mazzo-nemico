@@ -242,3 +242,13 @@ export const BIL = {
     animazioneMiraMs: 350, // m1-ritmo §3
   },
 } as const;
+
+/**
+ * Secondi del timer PER SPARO (BIL.ritmo, Fase 1): 12 di norma, 25 contro il Mozzo e nel Prologo, 45 con il
+ * Timer lungo (che vince su tutto). Lo usano Schermaglia e carriera quando preparano la ConfigBattaglia.
+ */
+export function secondiTimer(o: { livelloIa?: LivelloIa; prologo?: boolean; timerLungo?: boolean } = {}): number {
+  if (o.timerLungo) return BIL.ritmo.timerSparoLungo;
+  if (o.prologo || o.livelloIa === 'mozzo') return BIL.ritmo.timerSparoMozzo;
+  return BIL.ritmo.timerSparo;
+}

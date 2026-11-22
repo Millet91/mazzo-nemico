@@ -10,6 +10,7 @@ import { tagliaAppigli } from './appigli';
 import { SPINTA_MIN_SU } from './costanti';
 import { accendiOggetti } from './oggetti';
 import { controllaSostegno } from './pezzi';
+import { controllaPonti } from './strutture';
 
 /** Danno di un'arma per una ciurma, con il tratto del Teschio Rosso (+10% sugli esplosivi, per difetto). */
 export function dannoArma(arma: IdArma, ciurma: IdCiurma): number {
@@ -98,6 +99,7 @@ export function esplodi(
   tagliaAppigli(s, x, y, raggio, eventi);
   // Fase 3: i pezzi rimasti senza appoggio attorno al cratere (il cratere arriva a raggio × 1,2 nella sabbia)
   controllaSostegno(s, x, y, raggio * MOLT_CRATERE_MAX + 2, eventi);
+  controllaPonti(s, x, y, raggio * MOLT_CRATERE_MAX + 2, eventi);
 }
 
 /** il moltiplicatore del cratere più grande tra i materiali */

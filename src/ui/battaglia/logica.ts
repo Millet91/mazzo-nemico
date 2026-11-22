@@ -2,7 +2,7 @@
 // Qui stanno: la configurazione della Schermaglia di M1, le conversioni per i numeri mostrati,
 // i tasti "tenuti premuti" (◀ ▶ ▲ ▼), il doppio tocco di SALTA, la protezione di FUOCO e i banner.
 // Il mirino da trascinare sta in battaglia/render/mirino.ts; qui i tasti dei comandi v3 (frecce, salto, FUOCO).
-import type { ConfigBattaglia, EventoBattaglia, IdArma } from '../../core/tipi';
+import type { Comando, ConfigBattaglia, EventoBattaglia, IdArma, LivelloIa } from '../../core/tipi';
 import { VERSIONE_REGOLE } from '../../core/tipi';
 import type { VistaBattaglia } from '../../core/bus';
 import { BIL } from '../../contenuti/bilanciamento';
@@ -27,9 +27,19 @@ export function configSchermaglia(seme: number, pirati: [number, number] = [PIRA
       { ciurma: 'teschio', ruolo: 'attaccante', controllo: 'umano', pirati: limitaPirati(pirati[0]) },
       { ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: limitaPirati(pirati[1]) },
     ],
-    timerSecondi: BIL.turno.timerMozzo,
+    timerSecondi: secondiTimer({ livelloIa: 'mozzo' }),
     traiettoriaCompleta: true,
   };
+}
+
+/**
+ * Secondi del timer PER SPARO (BIL.ritmo, Fase 1): 12 di norma, 25 contro il Mozzo e nel Prologo, 45 con il
+ * Timer lungo (che vince su tutto). Lo usano Schermaglia e carriera quando preparano la ConfigBattaglia.
+ */
+export function secondiTimer(o: { livelloIa?: LivelloIa; prologo?: boolean; timerLungo?: boolean } = {}): number {
+  if (o.timerLungo) return BIL.ritmo.timerSparoLungo;
+  if (o.prologo || o.livelloIa === 'mozzo') return BIL.ritmo.timerSparoMozzo;
+  return BIL.ritmo.timerSparo;
 }
 
 /** Seme nuovo a ogni partita (fuori dalla sim la casualità del sistema va bene). */
@@ -180,27 +190,24 @@ export function creaGrilletto(spara: () => void) {
   };
 }
 
-/** tenendo premuto SALTA per questo tempo parte il salto alto all'indietro */
-export const SALTO_ALTO_MS = 260;
+// ─── Balzo e "fatto" (Fase 1) ───
+
+/** Cosa farebbe ora il Balzo (VistaBattaglia.balzo; assente = 'salto'). */
+export type Balzo = NonNullable<VistaBattaglia['balzo']>;
+export const balzoDi = (v: VistaBattaglia | null): Balzo => v?.balzo ?? 'salto';
 
 /**
- * SALTA (comandi v3): un tocco = salto lungo in avanti, e parte quando alzi il dito (niente attesa del doppio
- * tocco); tenendo premuto parte da solo il salto alto all'indietro. Un salto per pressione.
+ * Il tasto Balzo (id `tasto-salta`) manda sempre `salta`: la sim sceglie tra salto, scavalco, afferra e stacca.
+ * Solo quando il pirata è contro una parete in volo ('muro') va con `indietro: true` (salto dal muro).
+ * Parte al tocco, non al rilascio: il salvataggio al bordo ha mezzo secondo e il salto alto tenuto non c'è più.
  */
-export function creaSalto(avanti: () => void, alto: () => void, t: Tempi = TEMPI_VERI) {
-  let attesa: unknown = null;
-  return {
-    premi(): void {
-      if (attesa !== null) t.annulla(attesa);
-      attesa = t.dopo(SALTO_ALTO_MS, () => { attesa = null; alto(); });
-    },
-    rilascia(): void {
-      if (attesa === null) return;
-      t.annulla(attesa); attesa = null;
-      avanti();
-    },
-    annulla(): void { if (attesa !== null) t.annulla(attesa); attesa = null; },
-  };
+export function comandoBalzo(b: Balzo): Comando {
+  return { t: 'salta', indietro: b === 'muro' };
+}
+
+/** Il tasto "fatto" (chiude la fuga e passa il turno): solo nel turno del giocatore, in fuga, a battaglia aperta. */
+export function fattoVisibile(v: VistaBattaglia | null): boolean {
+  return !!v && !v.esito && v.tocca === 'umano' && v.fase === 'fuga' && !!v.puoFinire;
 }
 
 /**

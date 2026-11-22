@@ -156,7 +156,7 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 
 .diagnostica { display: flex; flex-direction: column; gap: 16px; }
 .diagnostica .nota { color: var(--testo-dim); margin: 6px 0 0; font-size: 12px; }
-.diagnostica .stato { margin: 6px 0 0; font-weight: 800; font-variant-numeric: tabular-nums; }
+.diagnostica .stato { margin: 6px 0 0; font-weight: 800; font-variant-numeric: tabular-nums; white-space: pre-line; }
 .elenco-replay { margin: 6px 0 0; padding: 0; list-style: none; columns: 2; font-size: 13px; }
 
 /* ─── Battaglia (00 §3, design M1 §6). Pannelli abisso all'85%, MAI backdrop-filter sopra il canvas. ─── */

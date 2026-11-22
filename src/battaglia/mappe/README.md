@@ -40,3 +40,20 @@ Il quadro di oggi in `public/assets/mappe/cala-pappagallo-v3/terreno.webp` è un
 definitivo a 2× arriva in Fase 2, quando il Render carica il terreno HD. La collisione resta la maschera 2048×1024.
 Le regole in più della v3 le prova `tests/mappe/cala-v3.test.ts`: muretti e casse da 24-32 px, nessuna partenza a meno
 di 120 px da una torre, un colpo diretto del cannone non butta in mare nessuna partenza, nemici del Prologo ad almeno 300 px.
+
+### Terreno HD (Fase 2, formato concordato con Render: P1-contratti §6)
+
+```
+CHROMIUM=/opt/pw-browsers/chromium node scripts/mappe/dipingi/esegui.cjs /tmp/claude-0/cala-pappagallo-v3-materiali.png <cartella> 2
+CHROMIUM=/opt/pw-browsers/chromium node scripts/mappe/dipingi/esegui.cjs /tmp/claude-0/cala-pappagallo-v3-prologo-materiali.png <cartella> 2 terreno-prologo
+python3 scripts/mappe/tessere-hd.py <cartella>/terreno@2x.png cala-pappagallo-v3 <cartella>/terreno-prologo@2x.png hd-prologo
+```
+
+Esce `public/assets/mappe/cala-pappagallo-v3/hd/`: tessere `t-<colonna>-<riga>.webp` (8×4, contenuto 512×512 con 2 px di
+margine, file 516×516, WebP senza perdita) e `indice.json` con le sole tessere non vuote (`tessere: ["t-3-1", ...]`).
+L'arte sborda a colore pieno per 8 px del quadro HD (4 px di mondo) oltre la sagoma; più in là resta il quadro com'è:
+trasparente, oppure la parete in fondo a grotte e arco (alfa ≤ 110). `hd-prologo/` ha le sole tessere dove la sagoma del
+Prologo cambia (molo e torre al posto del relitto, Nidi e cima della Rocca senza le spianate dei barili) e un
+`indice.json` con `base: "hd"`. In HD il pittore fa la sagoma più liscia (maschera sfocata di 1 px di mondo prima di
+ingrandirla), il contorno marrone caldo dentro il bordo, toni a gradini, ombre portate dipinte sotto tetti, balconi,
+ponti e arco, e la parete in fondo solo nelle grotte vere (raggi in 8 direzioni), sfumata verso le bocche.

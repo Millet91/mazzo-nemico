@@ -1,0 +1,14 @@
+{
+ "scala": 2,
+ "lato": 512,
+ "bordo": 2,
+ "colonne": 8,
+ "righe": 4,
+ "tessere": [
+  "t-3-1",
+  "t-4-1",
+  "t-0-2",
+  "t-0-3"
+ ],
+ "base": "hd"
+}

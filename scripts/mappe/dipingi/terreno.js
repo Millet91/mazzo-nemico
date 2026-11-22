@@ -44,9 +44,14 @@
       // materiale ed etichetta dal pixel pieno più vicino
       mat = new Uint8Array(W * H); tag = new Uint8Array(W * H);
       const pieno = (x, y) => (x >= 0 && y >= 0 && x < w0 && y < h0 && mat0[y * w0 + x] ? 1 : 0);
+      // la maschera 1× sfocata appena (raggio 1 px di mondo, due passate) toglie i gradini dalle curve: la sagoma HD
+      // resta entro mezzo px di mondo dalla maschera, e l'arte sborda comunque oltre (tessere HD, scripts/mappe/tessere-hd.py)
+      const m1 = new Float32Array(w0 * h0); for (let i = 0; i < w0 * h0; i++) m1[i] = mat0[i] ? 1 : 0;
+      const liscia = sfoca(sfoca(m1, w0, h0, 1), w0, h0, 1);
+      const pienoF = (x, y) => (x >= 0 && y >= 0 && x < w0 && y < h0 ? liscia[y * w0 + x] : 0);
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         const fx = (x + 0.5) / S - 0.5, fy = (y + 0.5) / S - 0.5, xi = Math.floor(fx), yi = Math.floor(fy), u = fx - xi, v = fy - yi;
-        const a = pieno(xi, yi), b = pieno(xi + 1, yi), c = pieno(xi, yi + 1), d = pieno(xi + 1, yi + 1);
+        const a = pienoF(xi, yi), b = pienoF(xi + 1, yi), c = pienoF(xi, yi + 1), d = pienoF(xi + 1, yi + 1);
         if ((a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v < 0.5) continue;
         const nx = u < 0.5 ? xi : xi + 1, ny = v < 0.5 ? yi : yi + 1;
         let j = -1;
@@ -83,11 +88,66 @@
         y = sotto - 1;
       }
     }
+    if (S > 1) {
+      // In HD la grotta vera si riconosce coi raggi: dall'aria si cerca il terreno in 8 direzioni entro 160 px di mondo.
+      // Coperta = terreno sopra, sotto e nelle due diagonali alte, e almeno 6 direzioni su 8 chiuse. Così niente
+      // rettangoli di parete scura sotto i tetti e le sporgenze (sembravano appesi nel cielo), e la parete sfuma alle bocche.
+      coperta.fill(0);
+      const LIM = 160 * S, terraA = new Uint8Array(W * H);
+      for (let i = 0; i < W * H; i++) terraA[i] = terra(i) ? 1 : 0;
+      const raggio = (dx, dy) => {
+        const dist = new Uint16Array(W * H), cap = LIM + 1;
+        const ys = dy > 0 ? [H - 1, -1, -1] : [0, H, 1], xs = dx > 0 ? [W - 1, -1, -1] : [0, W, 1];
+        for (let y = ys[0]; y !== ys[1]; y += ys[2]) for (let x = xs[0]; x !== xs[1]; x += xs[2]) {
+          const qx = x + dx, qy = y + dy;
+          if (qx < 0 || qy < 0 || qx >= W || qy >= H) { dist[y * W + x] = cap; continue; }
+          const q = qy * W + qx;
+          dist[y * W + x] = terraA[q] ? 1 : Math.min(cap, dist[q] + 1);
+        }
+        return dist;
+      };
+      const dirs = [[0, -1], [-1, -1], [1, -1], [0, 1], [-1, 0], [1, 0], [-1, 1], [1, 1]].map(([dx, dy]) => raggio(dx, dy));
+      for (let i = 0; i < W * H; i++) {
+        if (mat[i] || i < 160 * S * W) continue;
+        if (dirs[0][i] > LIM || dirs[1][i] > LIM || dirs[2][i] > LIM || dirs[3][i] > LIM) continue;
+        let n = 4; for (let k = 4; k < 8; k++) if (dirs[k][i] <= LIM) n++;
+        if (n >= 6) coperta[i] = 1;
+      }
+    }
     const ao = sfoca(sfoca(coperta, W, H, 10 * S), W, H, 8 * S);
     const copM = sfoca(sfoca(coperta, W, H, 26 * S), W, H, 18 * S);
+    // in HD la parete in fondo sfuma piano verso le bocche: sfocatura larga in orizzontale, corta in verticale
+    const sfocaX = (src, r) => { const out = new Float32Array(W * H), d = 2 * r + 1;
+      for (let y = 0; y < H; y++) { let t = 0; const o = y * W; for (let x = -r; x <= r; x++) t += src[o + Math.min(W - 1, Math.max(0, x))];
+        for (let x = 0; x < W; x++) { out[o + x] = t / d; t += src[o + Math.min(W - 1, x + r + 1)] - src[o + Math.max(0, x - r)]; } }
+      return out; };
+    const copB = S > 1 ? sfoca(sfocaX(sfocaX(coperta, 30 * S), 30 * S), W, H, 4 * S) : copM;
     const bordo = sfoca(ariaF, W, H, 2 * S);       // vicino all'aria (contorno)
     const luceBordo = sfoca(ariaF, W, H, 7 * S);   // fascia di luce sotto la superficie
     const vol = sfoca(sfoca(ariaF, W, H, 18 * S), W, H, 18 * S);   // per il volume: verso dove c'è aria
+
+    // ── ombre portate dipinte (solo HD): la luce viene da sinistra in alto; un pixel pieno vicino alla superficie è in
+    // ombra se, andando verso la luce, dopo l'aria si ritrova del pieno entro 90 px di mondo (sotto tetti, balconi, ponti,
+    // cengie, nell'arco e nelle bocche delle gallerie). L'ombra ha il bordo netto, come pennellata, con una fascia sfumata
+    // di 1 px di mondo.
+    const ombraP = new Float32Array(W * H);
+    if (S > 1) {
+      const lx = -0.55, ly = -1, ll = Math.hypot(lx, ly), sx = lx / ll, sy = ly / ll, passi = 90 * S;
+      for (let yq = 160 * S; yq < H; yq++) for (let xq = 0; xq < W; xq++) {
+        const i = yq * W + xq;
+        if (!mat[i] || luceBordo[i] < 0.01) continue;
+        let fuoriAria = false, colpito = false;
+        for (let k = 1; k <= passi; k++) {
+          const px = Math.round(xq + sx * k), py = Math.round(yq + sy * k);
+          if (px < 0 || py < 0 || px >= W) break;
+          const pieno = mat[py * W + px] !== ARIA;
+          if (!fuoriAria) { if (!pieno) fuoriAria = true; else if (k > 6 * S) break; continue; }
+          if (pieno) { colpito = k > 2 * S; break; }
+        }
+        if (colpito) ombraP[i] = 1;
+      }
+    }
+    const ombraS = S > 1 ? sfoca(ombraP, W, H, S) : ombraP;
 
     const n1 = rumore(11), n2 = rumore(23), n3 = rumore(37);
     const C = {
@@ -96,7 +156,7 @@
       roccia1: hx('#E2BE8E'), roccia2: hx('#B9906C'), roccia3: hx('#7E6658'), rocciaO: hx('#5E4A4A'),
       legno1: hx('#9A5E34'), legno2: hx('#6B3E22'), ferro: hx('#3E4656'),
       foglia1: hx('#7FD255'), foglia2: hx('#3F8A3A'), foglia3: hx('#25603A'),
-      viola: hx('#3A2A55'), caldo: hx('#FFD9A0'), contorno: hx('#2A1A12'),
+      viola: hx('#3A2A55'), caldo: hx('#FFD9A0'), contorno: hx('#2A1A12'), contornoHD: hx('#5A2E16'),
     };
     const out = x0b.createImageData(W, H), o = out.data;
     for (let yq = 0; yq < H; yq++) for (let xq = 0; xq < W; xq++) {
@@ -191,10 +251,14 @@
       // volume 2.5D: la luce viene da sinistra in alto, il lato verso destra/in basso va in ombra fredda
       if (xq > 2 * S && yq > 2 * S && xq < W - 2 * S - 1 && yq < H - 2 * S - 1) {
         const gx = vol[i + 2 * S] - vol[i - 2 * S], gy = vol[i + 2 * S * W] - vol[i - 2 * S * W];
-        const l = (-gx * 0.72 - gy * 0.69) * 9;   // >0 = guarda la luce
+        let l = (-gx * 0.72 - gy * 0.69) * 9;   // >0 = guarda la luce
+        // in HD toni a gradini (3 toni del cartone dipinto), con un passaggio corto tra un tono e l'altro
+        if (S > 1) { const q = Math.sign(l) * Math.min(2, Math.abs(l) / 0.12); l = Math.sign(q) * (Math.floor(Math.abs(q)) + Math.max(0, (Math.abs(q) % 1) - 0.8) * 5) * 0.17; }
         if (l > 0) { const t = Math.min(0.35, l); r += (C.caldo[0] - r) * t; gg += (C.caldo[1] - gg) * t; b += (C.caldo[2] - b) * t * 0.7; }
         else { const t = Math.min(0.4, -l); r += (C.viola[0] - r) * t; gg += (C.viola[1] - gg) * t; b += (C.viola[2] - b) * t; }
       }
+      // ombra portata dipinta
+      if (ombraS[i] > 0.02) { const t = Math.min(1, ombraS[i]) * 0.42; r += (C.viola[0] - r) * t; gg += (C.viola[1] - gg) * t; b += (C.viola[2] - b) * t * 0.9; }
       // occlusione blu-viola attorno a grotte e arco
       const a = Math.min(1, ao[i] * 2.4);
       if (a > 0) { r += (C.viola[0] - r) * a * 0.55; gg += (C.viola[1] - gg) * a * 0.55; b += (C.viola[2] - b) * a * 0.5; }
@@ -370,18 +434,21 @@
     const fin = ctx.getImageData(0, 0, W, H), f = fin.data;
     for (let i = 0; i < W * H; i++) {
       if (!mat[i]) {
-        if (coperta[i]) {
+        if (S > 1 ? copB[i] > 0.1 : coperta[i]) {
           // parete in fondo a grotte e arco: alfa 110 (sotto 128 resta aria per la maschera), colori scuri e freddi
           const yq = (i / W) | 0, y = yq / S, x = (i - yq * W) / S, t = Math.min(1, ao[i] * 1.6);
           const base = y < 760 ? [96, 78, 92] : [74, 52, 58], nn = n1(x, y, 30);
           f[i * 4] = base[0] * (0.7 + nn * 0.5) * (1 - t * 0.35); f[i * 4 + 1] = base[1] * (0.7 + nn * 0.5) * (1 - t * 0.35); f[i * 4 + 2] = base[2] * (0.75 + nn * 0.5) * (1 - t * 0.2) + 10;
-          f[i * 4 + 3] = Math.round(110 * Math.min(1, copM[i] * 1.8));   // sfuma dove la grotta si apre sull'aria libera
+          // sfuma dove la grotta si apre sull'aria libera (in HD più dolce: niente bordi dritti alle bocche)
+          const sf = S > 1 ? Math.min(1, Math.max(0, (copB[i] - 0.1) / 0.75)) : Math.min(1, copM[i] * 1.8);
+          f[i * 4 + 3] = Math.round(110 * sf * sf * (3 - 2 * sf));
         } else { f[i * 4 + 3] = 0; f[i * 4] = f[i * 4 + 1] = f[i * 4 + 2] = 0; }
         continue;
       }
       f[i * 4 + 3] = 255;
       const b = bordo[i];
-      if (b > 0.05) { const t = Math.min(1, b * 3.2) * 0.85; f[i * 4] += (C.contorno[0] - f[i * 4]) * t; f[i * 4 + 1] += (C.contorno[1] - f[i * 4 + 1]) * t; f[i * 4 + 2] += (C.contorno[2] - f[i * 4 + 2]) * t; }
+      const ct = S > 1 ? C.contornoHD : C.contorno;
+      if (b > 0.05) { const t = Math.min(1, b * 3.2) * (S > 1 ? 0.92 : 0.85); f[i * 4] += (ct[0] - f[i * 4]) * t; f[i * 4 + 1] += (ct[1] - f[i * 4 + 1]) * t; f[i * 4 + 2] += (ct[2] - f[i * 4 + 2]) * t; }
     }
     ctx.putImageData(fin, 0, 0);
     ctx.setTransform(S, 0, 0, S, 0, 0);

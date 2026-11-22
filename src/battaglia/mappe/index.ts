@@ -7,6 +7,7 @@ import { DATI as CALA_PAPPAGALLO } from './cala-pappagallo.dati';
 import { DATI as CALA_PAPPAGALLO_PROLOGO } from './cala-pappagallo-prologo.dati';
 import { DATI as CALA_V3 } from './cala-pappagallo-v3.dati';
 import { DATI as CALA_V3_PROLOGO } from './cala-pappagallo-v3-prologo.dati';
+import { DATI_ISOLE } from './isole-cap1';
 
 export type { DatiMappaFatta };
 
@@ -16,6 +17,8 @@ export const MAPPE_FATTE: Record<string, DatiMappaFatta> = {
   // Cala v3 (studio v2, Pacchetto 1): pronta per la Fase 2, non ancora nel menu
   [CALA_V3.id]: CALA_V3,
   [CALA_V3_PROLOGO.id]: CALA_V3_PROLOGO,
+  // isole vere del cap. 1 (Pacchetto 2, Scenario e livelli): fatte dal seme validato + trucco
+  ...Object.fromEntries(DATI_ISOLE.map((d) => [d.id, d])),
 };
 
 /** La maschera decodificata si tiene in cache: ogni battaglia ne riceve una copia (i crateri la scavano). */

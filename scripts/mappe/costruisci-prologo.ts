@@ -70,6 +70,6 @@ export const DATI: DatiMappaFatta = ${JSON.stringify({
 }, null, 1)};
 `);
 const mat = new Uint8Array(W * H * 4);
-for (let i = 0; i < W * H; i++) if (m[i]) mat.set([m[i] * 40, tag[i] * 50, 0, 255], i * 4);
+for (let i = 0; i < W * H; i++) if (m[i]) mat.set([m[i] * 40, tag[i] * 30, 0, 255], i * 4);
 writeFileSync(`/tmp/claude-0/${ID}-materiali.png`, scriviPng(W, H, mat));
 console.log('ok');

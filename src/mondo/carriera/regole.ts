@@ -12,10 +12,11 @@ import type { LivelloIa } from '../../core/tipi';
 // ─── Difficoltà ──────────────────────────────────────────────────────────────────────────────────
 
 let difficolta: LivelloIa = CAMPAGNA.difficoltaPredefinita;
-/** Difficoltà della carriera in uso (finché non è nello stato salvato, vale per tutta l'app). */
+/** Difficoltà scelta per le carriere NUOVE (menu, bot). Una carriera già iniziata usa la sua (StatoCarriera.difficolta). */
 export function impostaDifficolta(d: LivelloIa): void { difficolta = d; }
-export function difficoltaCarriera(): LivelloIa { return difficolta; }
-const leve = () => CAMPAGNA.difficolta[difficolta];
+export function difficoltaCarriera(s?: StatoCarriera | null): LivelloIa { return s?.difficolta ?? difficolta; }
+const leve = (s: StatoCarriera) => CAMPAGNA.difficolta[difficoltaCarriera(s)];
+const LIVELLI: readonly LivelloIa[] = ['mozzo', 'nostromo', 'capitano'];
 
 /** Quello che è successo, per banner, scene e animazioni della mappa. */
 export type EventoCampagna =
@@ -72,7 +73,7 @@ function postoLibero(cap: DefCapitolo, s: StatoCarriera): number {
 export function rinforziTeorici(cap: DefCapitolo, s: StatoCarriera): number {
   const isole = isoleDi(cap, s, 'giocatore').length;
   const bonus = regioniComplete(cap, s).reduce((n, r) => n + (cap.regioni.find((x) => x.id === r)?.bonus ?? 0), 0);
-  return Math.max(CAMPAGNA.rinforziMinimi, Math.floor(isole / CAMPAGNA.rinforziDivisore)) + bonus + leve().rinforziGiocatore;
+  return Math.max(CAMPAGNA.rinforziMinimi, Math.floor(isole / CAMPAGNA.rinforziDivisore)) + bonus + leve(s).rinforziGiocatore;
 }
 
 /** Rinforzi da piazzare davvero: quelli che non trovano posto (tetto 5) si perdono (nel cap. 1 non ci sono dobloni). */
@@ -113,6 +114,7 @@ export function nuovaCarriera(cap: DefCapitolo, precedente?: StatoCarriera | nul
     usate: [],
     perditeSfide: 0,
     conquisteRound: [],
+    difficolta: precedente?.difficolta ?? difficolta,
   };
   s.rinforzi = rinforziDelRound(cap, s);
   return s;
@@ -410,14 +412,14 @@ export function turnoMarina(cap: DefCapitolo, s0: StatoCarriera): Risultato {
   } else {
     const confini = confiniMarina(cap, s).filter((id) => s.isole[id].pirati < CAMPAGNA.tettoIsola)
       .sort((a, b) => s.isole[a].pirati - s.isole[b].pirati || a.localeCompare(b));
-    const rinforzi = Math.max(0, CAMPAGNA.marina.rinforzi + leve().rinforziMarina);
+    const rinforzi = Math.max(0, CAMPAGNA.marina.rinforzi + leve(s).rinforziMarina);
     if (confini.length && rinforzi > 0) {
       const id = confini[0];
       const da = s.isole[id].pirati;
       s.isole[id].pirati = Math.min(CAMPAGNA.tettoIsola, da + rinforzi);
       eventi.push({ t: 'marinaRinforza', isola: id, da, a: s.isole[id].pirati });
     }
-    const puoAttaccare = CAMPAGNA.marina.attacchiPerRound > 0 && s.round >= leve().primoAttaccoMarina;
+    const puoAttaccare = CAMPAGNA.marina.attacchiPerRound > 0 && s.round >= leve(s).primoAttaccoMarina;
     const att = puoAttaccare ? sceltaMarina(cap, s) : null;
     if (att) {
       s.attacco = att;
@@ -474,6 +476,8 @@ export function ripristina(cap: DefCapitolo, grezzo: unknown): StatoCarriera | n
   s.usate = Array.isArray(g.usate) ? g.usate.filter((id) => id in s.isole) : [];
   s.conquisteRound = Array.isArray(g.conquisteRound) ? g.conquisteRound.filter((id) => id in s.isole) : [];
   s.perditeSfide = g.perditeSfide ?? 0;
+  // salvataggi di prima della difficoltà: quella predefinita
+  s.difficolta = g.difficolta && LIVELLI.includes(g.difficolta) ? g.difficolta : CAMPAGNA.difficoltaPredefinita;
   if (!['rinforzi', 'attacco', 'marina', 'fine'].includes(s.fase)) s.fase = 'rinforzi';
   const r = annullaAttacco(s);
   // il turno della Marina senza attacco in corso non è un punto di sosta: si rifà da "Fine turno"

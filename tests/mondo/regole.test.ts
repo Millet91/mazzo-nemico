@@ -309,3 +309,24 @@ describe('difficoltà Mozzo (15 §1.1)', () => {
     expect(r.stato.attacco?.verso).toBe('1B');
   });
 });
+
+describe('difficoltà salvata nella carriera', () => {
+  it('una carriera nuova prende la difficoltà scelta e la tiene anche se poi cambia', () => {
+    impostaDifficolta('mozzo');
+    const s = nuovaCarriera(C);
+    expect(s.difficolta).toBe('mozzo');
+    impostaDifficolta('nostromo');
+    expect(s.rinforzi).toBe(4);
+    const r = turnoMarina(C, { ...s, round: 2, fase: 'attacco' });
+    expect(r.eventi.map((e) => e.t)).toEqual(['nuovoRound']);
+    expect(nuovaCarriera(C, s).difficolta).toBe('mozzo');
+  });
+
+  it('un salvataggio senza difficoltà (vecchio) usa quella predefinita; una sbagliata pure', () => {
+    const s = nuovaCarriera(C) as Partial<StatoCarriera>;
+    delete s.difficolta;
+    expect(ripristina(C, JSON.parse(JSON.stringify(s)))!.difficolta).toBe(CAMPAGNA.difficoltaPredefinita);
+    expect(ripristina(C, { ...JSON.parse(JSON.stringify(s)), difficolta: 'ammiraglio' })!.difficolta).toBe(CAMPAGNA.difficoltaPredefinita);
+    expect(ripristina(C, { ...JSON.parse(JSON.stringify(s)), difficolta: 'capitano' })!.difficolta).toBe('capitano');
+  });
+});

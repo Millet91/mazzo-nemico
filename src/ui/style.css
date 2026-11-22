@@ -307,6 +307,14 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 .pad-tiro { position: absolute; right: var(--bordo-corto); bottom: var(--sicura-b); width: 64px; height: 140px; }
 .pad-tiro .tasto { position: absolute; right: 0; }
 .pad-tiro #tasto-fuoco { bottom: 0; width: 64px; height: 64px; font-size: 14px; opacity: .92; }
+/* FATTO (Fase 1): in fuga prende il posto di FUOCO, stesso lato e stessa misura (64 px, più dei 44 minimi) */
+.tasto.fatto {
+  width: 80px; height: 80px; border-radius: 50%; font-size: 17px; color: #fff;
+  background: rgba(46, 125, 80, .88); border: 2px solid #CFF5D9; text-shadow: 0 1px 2px #0008;
+  animation: entra var(--rapida) var(--curva);
+}
+.pad-tiro #tasto-fatto { bottom: 0; width: 64px; height: 64px; font-size: 14px; }
+.pad-tiro.sopra-pirata #tasto-fatto:not(.premuto) { opacity: .4; }
 .pad-tiro #tasto-arma { bottom: 76px; }
 .pad-tiro #tasto-arma .cerchio-arma { width: 50px; height: 50px; border-width: 2px; opacity: .92; }
 .pad-tiro #tasto-arma .icona-arma { font-size: 28px; }
@@ -338,11 +346,13 @@ h1, h2 { font-family: var(--font-titolo); font-weight: 400; margin: 0; letter-sp
 /* la prima volta: una riga in alto a sinistra, sotto i PV, spiega il mirino; sparisce per sempre alla prima mira */
 .suggerimento-mirino {
   position: absolute; left: var(--bordo-corto); top: calc(var(--sicura-a) + 56px); pointer-events: none;
-  /* sta a sinistra del timer e della scritta del turno: se è lunga va a capo */
-  max-width: calc(50% - var(--bordo-corto) - 84px); line-height: 1.2;
-  padding: 6px 14px; border-radius: 14px; background: rgba(19, 41, 58, .8); border: 1px solid rgba(255, 200, 61, .6);
-  color: var(--oro); font-weight: 900; font-size: 14px; animation: respira 1.6s ease-in-out infinite;
+  /* due righe corte (Fase 1): resta lontano dalla scritta del turno e dai banner al centro */
+  display: flex; flex-direction: column; max-width: calc(50% - var(--bordo-corto) - 120px); line-height: 1.2;
+  padding: 5px 12px; border-radius: 12px; background: rgba(19, 41, 58, .8); border: 1px solid rgba(255, 200, 61, .6);
+  color: var(--oro); font-weight: 900; font-size: 13px; animation: respira 1.6s ease-in-out infinite;
 }
+.suggerimento-mirino span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suggerimento-mirino span + span { font-size: 12px; color: #FFE7A3; }
 /* ricentra: 44 px sotto la barra in alto a destra, solo quando il pirata di turno è fuori schermo (Lead design) */
 .tasto-ricentra {
   position: absolute; top: calc(var(--sicura-a) + 56px); right: var(--bordo-corto); width: 44px; height: 44px; padding: 0;

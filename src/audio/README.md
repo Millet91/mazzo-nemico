@@ -53,3 +53,9 @@ Come si lavora:
 - **Fase 4** (`ricette/attrezzi.ts`): solo registro, si collegano a `eventi.ts` quando il Lead congela gli eventi.
   Ascolto: `/mnt/project-files/audio-p1/fase4-attrezzi-e-prima-dopo.mp3` (alla fine quattro suoni prima a 32 kHz e
   poi alla frequenza nuova).
+- **Preparazione a due tempi** (decisione del Lead P1, 22/11): all'apertura si preparano solo le note del brano del
+  menu e i tasti (`SUONI_MENU`), più tutto quello che il cassetto ha già; entrando in battaglia (`richiestaBattaglia`,
+  dietro la schermata di caricamento) il resto: prima gli effetti, i più urgenti per primi, poi le note della musica di
+  battaglia (che intanto si suonano dal vivo). Un suono non ancora pronto resta muto: niente aspetta l'audio.
+  Lo fa `index.ts` da solo guardando il bus: App.tsx e il menu non cambiano. A CPU ×4 il menu è pronto in 2,7-3,0 s
+  con frame quasi uguali a senza audio; il resto in 4,2-4,6 s dall'entrata in battaglia; secondo avvio 0,5-0,9 s.

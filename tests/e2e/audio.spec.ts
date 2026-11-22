@@ -3,8 +3,11 @@
 // è lo stesso che può usare la QA per "nessun evento senza suono".
 import { test, expect, type Page } from '@playwright/test';
 
-interface Stato { contesto: string; pronti: number; totale: number; msPronti: number | null; daCassetto: number; brano: string | null; scena: string | null; ambiente: boolean; percussioni: boolean; chiesti: string[]; suonati: number; voci: number }
+interface Stato { contesto: string; pronti: number; totale: number; prontiMenu: number; totaleMenu: number; msMenu: number | null; msPronti: number | null; daCassetto: number; brano: string | null; scena: string | null; ambiente: boolean; percussioni: boolean; chiesti: string[]; suonati: number; voci: number }
 const stato = (page: Page) => page.evaluate(() => (window as any).__kaboomAudio.stato() as Stato);
+/** prepara subito anche i suoni di battaglia (nel gioco partono entrando in battaglia) */
+const preparaTutto = (page: Page) => page.evaluate(() => (window as any).__kaboomAudio.pronto() as Promise<void>);
+const tuttiPronti = async (page: Page) => { const s = await stato(page); return s.pronti === s.totale; };
 
 test('Impostazioni: due cursori (musica, effetti e voci), salvati sul telefono', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 360 });
@@ -44,13 +47,18 @@ test('chi aveva messo "Muto" col vecchio volume unico resta muto', async ({ page
   await expect(page.getByTestId('volume-effetti-valore')).toHaveText('Muto');
 });
 
-test('menu: i suoni si preparano da soli, al primo tocco parte la musica e i tasti suonano', async ({ page }) => {
+test('menu: i suoni dei tasti si preparano da soli (gli altri no), al primo tocco parte la musica e i tasti suonano', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 360 });
   await page.goto('/?prova');
   await expect(page.locator('#schermaglia')).toBeVisible();
   const t0 = Date.now();
-  await expect.poll(async () => { const s = await stato(page); return s.pronti === s.totale; }, { timeout: 30000 }).toBe(true);
-  console.log(`audio: ${(await stato(page)).totale} suoni pronti dopo ${Date.now() - t0} ms dall'apertura del menu`);
+  await expect.poll(async () => { const s = await stato(page); return s.prontiMenu === s.totaleMenu; }, { timeout: 30000 }).toBe(true);
+  const m = await stato(page);
+  console.log(`audio: ${m.totaleMenu} suoni del menu pronti dopo ${Date.now() - t0} ms dall'apertura`);
+  // il primo avvio del menu non calcola i suoni di battaglia: si preparano entrando in battaglia
+  await page.waitForTimeout(500);
+  expect((await stato(page)).pronti).toBe(m.totaleMenu);
+  expect((await stato(page)).msPronti).toBeNull();
   // prima di un tocco il browser non lascia suonare: niente contesto audio
   expect((await stato(page)).contesto).toBe('assente');
   await page.locator('#apri-impostazioni').click();
@@ -71,10 +79,11 @@ test('battaglia vera: campana di turno, musica di battaglia e mare; il colpo di 
   page.on('pageerror', (e) => errori.push(String(e)));
   await page.goto('/?prova');
   await expect(page.locator('#schermaglia')).toBeVisible();
-  // i suoni si preparano in sottofondo nei primi secondi: qui si aspetta che ci siano tutti, per contare quelli partiti
-  await expect.poll(async () => { const s = await stato(page); return s.pronti === s.totale; }, { timeout: 30000 }).toBe(true);
+  await expect.poll(async () => { const s = await stato(page); return s.prontiMenu === s.totaleMenu; }, { timeout: 30000 }).toBe(true);
   await page.locator('#schermaglia').click();
   await page.locator('#salpa').click();
+  // entrando in battaglia si prepara il resto, dietro la schermata di caricamento (la battaglia non lo aspetta)
+  await expect.poll(() => tuttiPronti(page), { timeout: 30000 }).toBe(true);
   await expect(page.getByTestId('hud')).toBeVisible({ timeout: 15000 });
   await expect(page.locator('#tasto-fuoco')).toBeVisible({ timeout: 15000 });
   await expect.poll(async () => (await stato(page)).brano, { timeout: 15000 }).toBe('battaglia');
@@ -110,7 +119,8 @@ test('eventi della Fase 1 sul bus (passo, scivolata, mare che sale, fine): il mo
   await page.setViewportSize({ width: 800, height: 360 });
   await page.goto('/?prova');
   await expect(page.locator('#schermaglia')).toBeVisible();
-  await expect.poll(async () => { const s = await stato(page); return s.pronti === s.totale; }, { timeout: 30000 }).toBe(true);
+  await preparaTutto(page);
+  expect(await tuttiPronti(page)).toBe(true);
   // una vista finta, senza richiesta di battaglia: il ciclo di gioco resta fermo (come nelle prove dell'HUD)
   await page.locator('#apri-impostazioni').click();
   await page.keyboard.press('Escape');
@@ -148,13 +158,19 @@ test('eventi della Fase 1 sul bus (passo, scivolata, mare che sale, fine): il mo
 test('Diagnostica: la riga dell\'audio; al secondo avvio i suoni vengono dal telefono, senza ricalcolarli', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 360 });
   await page.goto('/?prova');
-  await expect.poll(async () => { const s = await stato(page); return s.pronti === s.totale; }, { timeout: 30000 }).toBe(true);
+  await expect.poll(async () => { const s = await stato(page); return s.prontiMenu === s.totaleMenu; }, { timeout: 30000 }).toBe(true);
   let s = await stato(page);
-  expect(s.daCassetto).toBe(0);
-  expect(s.msPronti).toBeGreaterThan(0);
   await page.locator('#apri-impostazioni').click();
   await page.locator('#apri-diagnostica').click();
   const riga = page.getByTestId('stato-audio');
+  // nel menu ci sono solo i tasti
+  await expect(riga).toContainText(`${s.totaleMenu} su ${s.totale} suoni pronti (gli altri si preparano entrando in battaglia)`);
+  // come entrando in battaglia
+  await preparaTutto(page);
+  s = await stato(page);
+  expect(s.pronti).toBe(s.totale);
+  expect(s.daCassetto).toBe(0);
+  expect(s.msPronti).toBeGreaterThan(0);
   await expect(riga).toContainText(`${s.totale} su ${s.totale} suoni pronti`);
   await expect(riga).toContainText('calcolati');
   await expect(riga).toContainText('motore acceso');
@@ -162,7 +178,8 @@ test('Diagnostica: la riga dell\'audio; al secondo avvio i suoni vengono dal tel
   // il cassetto si scrive in sottofondo appena tutto è pronto: poi si ricarica come un secondo avvio dell'app
   await page.waitForTimeout(1500);
   await page.reload();
-  await expect.poll(async () => { const x = await stato(page); return x.pronti === x.totale; }, { timeout: 10000 }).toBe(true);
+  // dal secondo avvio il cassetto dà tutti i suoni già nel menu, senza entrare in battaglia
+  await expect.poll(() => tuttiPronti(page), { timeout: 10000 }).toBe(true);
   s = await stato(page);
   expect(s.daCassetto).toBe(s.totale);
   console.log(`audio: secondo avvio, ${s.totale} suoni dal cassetto in ${s.msPronti} ms`);

@@ -15,6 +15,7 @@ import { AppigliRender, puoAggrapparsi } from './appigli';
 import { Effetti } from './effetti';
 import { Forme, sprite, type IdForma } from './forme';
 import { TerrenoRender } from './terreno';
+import { TerrenoHd, type MisureHd } from './terreno-hd';
 import { PezziPirata, RigPirata, SCALA_MIN_PUPAZZO } from './pirata-rig';
 import {
   armaPosa, bersaglio, mossaDaStato, nuovaPosa, nuoviParametri, RIALZATA_MS, risolvi, sfuma, SFUMA_MS,
@@ -159,6 +160,9 @@ export class ScenaBattaglia {
   private cieloW = 0;
   private cieloH = 0;
   readonly terreno: TerrenoRender;
+  /** terreno HD (Fase 2): quando la mappa ha hd/ prende il posto di `terreno` appena le tessere sono caricate */
+  private hd: TerrenoHd | null = null;
+  private distrutta = false;
   readonly effetti: Effetti;
   private readonly forme: Forme;
   private readonly pezzi: PezziPirata;
@@ -230,6 +234,14 @@ export class ScenaBattaglia {
       this.decorazioni.push(sp);
     }
     if (mappa.arte) {
+      // terreno HD: si carica in parallelo agli sfondi; finché non arriva resta il terreno dipinto sulla CPU
+      void TerrenoHd.carica(mappa.arte, s.terreno, this.terreno.maschera0, renderer).then((hd) => {
+        if (!hd) return;
+        if (this.distrutta) { hd.distruggi(); return; }
+        this.hd = hd;
+        this.mondo.addChildAt(hd.radice, this.mondo.getChildIndex(this.terreno.radice));
+        this.terreno.spegni();
+      });
       const sfondi = new SfondiMappa(mappa.arte, s.terreno.w, s.terreno.h);
       this.sfondi = sfondi;
       this.cielo.addChild(sfondi.radice);
@@ -381,7 +393,8 @@ export class ScenaBattaglia {
         case 'appiglioRotto': this.appigli.rotto(e.appiglio, e.x, e.yAlto, e.yBasso); break;
         case 'cratere':
           this.effetti.zolle(e.x, e.y, e.raggio, this.terreno.coloreOriginale(e.x, e.y, e.raggio));
-          this.terreno.cratere(e.x, e.y, e.raggio); this.decorazioniSenzaTerra(e.x, e.y, e.raggio);
+          this.terreno.cratere(e.x, e.y, e.raggio); this.hd?.cratere(e.x, e.y, e.raggio);
+          this.decorazioniSenzaTerra(e.x, e.y, e.raggio);
           break;
         case 'esplosione': this.effetti.esplosione(e.x, e.y, e.raggio); break;
         case 'splash': this.effetti.splash(e.x, e.y, e.grande); break;
@@ -472,6 +485,7 @@ export class ScenaBattaglia {
     const aSchermo = (x: number, y: number) => camera.schermoDaMondo(x, y);
 
     this.terreno.aggiorna();
+    this.hd?.aggiorna();
     this.disegnaCielo(camera, deltaMS);
     this.sfondi?.aggiorna(camera, this.s.terreno.mare);
     this.disegnaAcqua(camera);
@@ -835,8 +849,13 @@ export class ScenaBattaglia {
     void camera;
   }
 
+  /** misure del terreno HD (caricamento, tessere, memoria), o null se la mappa non lo ha (o non è ancora pronto) */
+  get misureHd(): MisureHd | null { return this.hd?.misure ?? null; }
+
   distruggi(): void {
+    this.distrutta = true;
     this.sfondi?.distruggi();
+    this.hd?.distruggi();
     this.terreno.distruggi();
     this.effetti.distruggi();
     this.cielo.destroy({ children: true });

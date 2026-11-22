@@ -28,6 +28,8 @@ export class TerrenoRender {
   private coda: number[] = [];
   /** grafica dipinta della mappa fatta a mano (RGBA w×h), o null: terreno coi colori dei materiali */
   private arte: Uint8ClampedArray | null = null;
+  /** il terreno HD ha preso il posto di questo: niente più pittura, restano maschera iniziale e colori (zolle) */
+  private spento = false;
 
   constructor(private readonly terreno: Terreno) {
     this.colonne = Math.ceil(terreno.w / LATO_TILE);
@@ -52,8 +54,25 @@ export class TerrenoRender {
     }
   }
 
+  /** Maschera all'inizio della battaglia (serve anche al terreno HD). */
+  get maschera0(): Uint8Array { return this.originale; }
+
+  /**
+   * Il terreno HD è pronto (terreno-hd.ts): le tile dipinte sulla CPU si buttano e i crateri non si ridipingono
+   * più. Restano la maschera iniziale e il quadro a 1× per il colore delle zolle.
+   */
+  spegni(): void {
+    if (this.spento) return;
+    this.spento = true;
+    this.coda = [];
+    for (const t of this.tiles) t.texture.destroy(true);
+    this.radice.destroy({ children: true });
+    this.tiles = [];
+  }
+
   /** Evento `cratere` della sim: segna le tile da ridipingere. */
   cratere(x: number, y: number, raggio: number): void {
+    if (this.spento) return;
     const [x0, y0, x1, y1] = rettangoloCratere(x, y, raggio);
     for (const i of tileToccate(x0, y0, x1, y1, this.colonne, this.righe)) {
       const t = this.tiles[i];
@@ -89,6 +108,7 @@ export class TerrenoRender {
   impostaArte(rgba: Uint8ClampedArray): void {
     if (rgba.length !== this.terreno.w * this.terreno.h * 4) return;
     this.arte = rgba;
+    if (this.spento) return;
     this.tiles.forEach((t, i) => {
       if (!t.sporco) this.coda.push(i);
       t.sporco = [t.tx, t.ty, t.tx + LATO_TILE, t.ty + LATO_TILE];
@@ -113,6 +133,7 @@ export class TerrenoRender {
   }
 
   distruggi(): void {
+    if (this.spento) return;
     for (const t of this.tiles) t.texture.destroy(true);
     this.radice.destroy({ children: true });
     this.tiles = [];

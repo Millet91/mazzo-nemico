@@ -8,7 +8,7 @@ import { T } from '../testi/it';
 import { tocco } from '../piattaforma/haptics';
 
 type ModuloReplay = { rigiocaReplay?: (r: Replay, m: MappaGenerata) => unknown };
-type ModuloFps = { provaFps?: () => Promise<Record<string, number>>; provaSuperata?: (r: never) => boolean };
+type ModuloFps = { provaFps?: () => Promise<Record<string, number> & { disegno?: Record<'zoomNormale' | 'zoomMinimo', { p95: number }> }>; provaSuperata?: (r: never) => boolean };
 
 const REPLAY = import.meta.glob<Replay>('../../tests/replay/*.json', { import: 'default' });
 const MODULI_REPLAY = import.meta.glob<ModuloReplay>('../battaglia/sim/replay.ts');
@@ -89,7 +89,8 @@ async function provaFps() {
     const voto = superata ? (superata(r as never) ? '✅ ' : '❌ ') : '';
     statoFps.value = voto + T.diagnostica.provaRisultato(
       Math.round(n('medio', 'fpsMedio')), Math.round(n('minimo', 'fpsMinimo')),
-      n('frameLenti', 'lenti', 'frameOltre20ms'), n('msSimPerTick', 'msSim', 'simMs'));
+      n('frameLenti', 'lenti', 'frameOltre20ms'), n('msSimPerTick', 'msSim', 'simMs'))
+      + (r.disegno ? `\n${T.diagnostica.provaDisegno(n('msDisegnoMedio'), r.disegno.zoomNormale.p95, r.disegno.zoomMinimo.p95)}` : '');
   } catch (e) {
     console.error(e);
     statoFps.value = T.diagnostica.errore;

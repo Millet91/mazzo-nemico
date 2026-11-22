@@ -1,7 +1,7 @@
 // Fase 3: sostegno strutturale (sim/crolli.ts). Pezzi staccati attorno a un punto, appoggi, tetto del costo.
 import { describe, it, expect } from 'vitest';
 import { MATERIALE } from '../../src/core/tipi';
-import { pezziStaccati, staccaDallaMaschera } from '../../src/battaglia/sim/crolli';
+import { franaPasso, pezziStaccati, staccaDallaMaschera } from '../../src/battaglia/sim/crolli';
 import { scavaCratere } from '../../src/battaglia/sim/terreno';
 import { rettangolo, SUOLO, terrenoPiatto } from './aiuti';
 
@@ -74,5 +74,33 @@ describe('Sostegno strutturale: pezzi staccati', () => {
     const t0 = performance.now();
     for (let k = 0; k < 50; k++) pezziStaccati(t, 1000, SUOLO - 400, 72, OPZ);
     expect((performance.now() - t0) / 50).toBeLessThan(1.5);
+  });
+});
+
+describe('Sabbia che frana', () => {
+  it('un buco piccolo nella sabbia si chiude a metà: le pareti scivolano dentro fino a 45°', () => {
+    const t = terrenoPiatto(MATERIALE.sabbia);
+    // buco a pareti dritte largo 20 e profondo 20 sotto il suolo
+    rettangolo(t, 990, SUOLO, 1010, SUOLO + 20, MATERIALE.aria);
+    let passi = 0;
+    while (franaPasso(t, 950, SUOLO - 5, 1050, SUOLO + 25, passi) && passi < 100) passi++;
+    expect(passi).toBeGreaterThan(0);
+    expect(passi).toBeLessThan(60);
+    // il fondo del buco si è alzato (la sabbia delle pareti è scesa dentro)
+    let fondo = SUOLO;
+    while (t.maschera[fondo * t.w + 1000] === MATERIALE.aria) fondo++;
+    expect(fondo).toBeLessThan(SUOLO + 20);
+    // e nessun granello resta sospeso
+    for (let y = SUOLO - 5; y < SUOLO + 25; y++) for (let x = 950; x <= 1050; x++) {
+      if (t.maschera[y * t.w + x] === MATERIALE.sabbia) expect(t.maschera[(y + 1) * t.w + x]).not.toBe(MATERIALE.aria);
+    }
+  });
+
+  it('roccia e legno non franano; la sabbia ferma non si muove', () => {
+    const t = terrenoPiatto(MATERIALE.roccia);
+    rettangolo(t, 990, SUOLO, 1010, SUOLO + 20, MATERIALE.aria);
+    expect(franaPasso(t, 950, SUOLO - 5, 1050, SUOLO + 25, 0)).toBeNull();
+    const s = terrenoPiatto(MATERIALE.sabbia);
+    expect(franaPasso(s, 950, SUOLO - 5, 1050, SUOLO + 25, 0)).toBeNull();
   });
 });

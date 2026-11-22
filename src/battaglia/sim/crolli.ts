@@ -140,3 +140,47 @@ export function staccaDallaMaschera(t: Terreno, p: PezzoStaccato): { w: number; 
   }
   return { w: pw, h: ph, maschera: forma };
 }
+
+// ─── Sabbia che frana ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Un passo di frana nel rettangolo [x0, x1] × [y0, y1]: ogni pixel di sabbia con aria sotto scende di 1 px; se
+ * sotto è pieno ma in diagonale (giù a sinistra o a destra) c'è aria, ci scivola (pendio di 45° al massimo).
+ * Si scorre dal basso verso l'alto, a righe alterne da sinistra e da destra (così la frana non pende da un lato).
+ * Restituisce il rettangolo dei pixel mossi, o null se la sabbia è ferma.
+ */
+export function franaPasso(t: Terreno, x0: number, y0: number, x1: number, y1: number, passo: number):
+  { x0: number; y0: number; x1: number; y1: number } | null {
+  const { w, h, maschera } = t;
+  const sabbia = MATERIALE.sabbia, aria = MATERIALE.aria;
+  x0 = Math.max(0, x0); x1 = Math.min(w - 1, x1); y0 = Math.max(0, y0); y1 = Math.min(h - 2, y1);
+  let mx0 = w, my0 = h, mx1 = -1, my1 = -1;
+  for (let py = y1; py >= y0; py--) {
+    const daSinistra = ((py + passo) & 1) === 0;
+    for (let k = 0; k <= x1 - x0; k++) {
+      const px = daSinistra ? x0 + k : x1 - k;
+      const i = py * w + px;
+      if (maschera[i] !== sabbia) continue;
+      const sotto = i + w;
+      let j = -1;
+      if (maschera[sotto] === aria) j = sotto;
+      else {
+        // in diagonale: prima dal lato da cui si scorre la riga, poi dall'altro
+        const a = daSinistra ? -1 : 1;
+        for (const d of [a, -a]) {
+          const nx = px + d;
+          if (nx < x0 || nx > x1) continue;
+          if (maschera[sotto + d] === aria && maschera[i + d] === aria) { j = sotto + d; break; }
+        }
+      }
+      if (j < 0) continue;
+      maschera[j] = sabbia; maschera[i] = aria;
+      const jx = j % w;
+      if (Math.min(px, jx) < mx0) mx0 = Math.min(px, jx);
+      if (Math.max(px, jx) > mx1) mx1 = Math.max(px, jx);
+      if (py < my0) my0 = py;
+      if (py + 1 > my1) my1 = py + 1;
+    }
+  }
+  return mx1 < 0 ? null : { x0: mx0, y0: my0, x1: mx1, y1: my1 };
+}

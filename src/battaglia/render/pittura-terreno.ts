@@ -212,6 +212,12 @@ export function rettangoloCratere(x: number, y: number, raggio: number): [number
   return [Math.floor(x - m), Math.floor(y - m), Math.ceil(x + m), Math.ceil(y + m)];
 }
 
+/** Rettangolo da ridipingere dopo un cambio della maschera senza scoppio (Fase 3: pezzo staccato, legno, sabbia). */
+export function rettangoloMaschera(x0: number, y0: number, x1: number, y1: number): [number, number, number, number] {
+  const m = BRUCIATO + ERBA + 2;
+  return [x0 - m, y0 - m, x1 + 1 + m, y1 + 1 + m];
+}
+
 /** Indici delle tile toccate da un rettangolo, in una griglia colonne × righe di lato LATO_TILE. */
 export function tileToccate(x0: number, y0: number, x1: number, y1: number, colonne: number, righe: number): number[] {
   const c0 = Math.max(0, Math.floor(x0 / LATO_TILE)), c1 = Math.min(colonne - 1, Math.floor((x1 - 1) / LATO_TILE));

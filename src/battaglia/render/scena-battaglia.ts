@@ -336,6 +336,7 @@ export class ScenaBattaglia {
           this.effetti.zolle(e.x, e.y, e.raggio, this.terreno.coloreOriginale(e.x, e.y, e.raggio));
           this.terreno.cratere(e.x, e.y, e.raggio); this.decorazioniSenzaTerra(e.x, e.y, e.raggio);
           break;
+        case 'maschera': this.terreno.maschera(e.x0, e.y0, e.x1, e.y1); break; // Fase 3: per ora il pezzo sparisce e basta
         case 'esplosione': this.effetti.esplosione(e.x, e.y, e.raggio); break;
         case 'splash': this.effetti.splash(e.x, e.y, e.grande); break;
         case 'colpoPistola': this.effetti.lineaPistola(e.da.x, e.da.y, e.a.x, e.a.y); break;

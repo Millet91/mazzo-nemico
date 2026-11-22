@@ -162,6 +162,8 @@ export class ScenaBattaglia {
   readonly terreno: TerrenoRender;
   /** terreno HD (Fase 2): quando la mappa ha hd/ prende il posto di `terreno` appena le tessere sono caricate */
   private hd: TerrenoHd | null = null;
+  /** mentre il terreno HD si carica: i rettangoli cambiati nella maschera (estremi compresi), da passargli dopo */
+  private cambiHd: [number, number, number, number][] | null = null;
   private distrutta = false;
   readonly effetti: Effetti;
   private readonly forme: Forme;
@@ -235,9 +237,14 @@ export class ScenaBattaglia {
     }
     if (mappa.arte) {
       // terreno HD: si carica in parallelo agli sfondi; finché non arriva resta il terreno dipinto sulla CPU
+      this.cambiHd = [];
       void TerrenoHd.carica(mappa.arte, s.terreno, this.terreno.maschera0, renderer).then((hd) => {
+        const cambi = this.cambiHd ?? [];
+        this.cambiHd = null;
         if (!hd) return;
         if (this.distrutta) { hd.distruggi(); return; }
+        // i crateri arrivati mentre si caricava: la maschera li ha già, ma una fetta fatta prima no
+        for (const [x0, y0, x1, y1] of cambi) hd.maschera(x0, y0, x1, y1);
         this.hd = hd;
         this.mondo.addChildAt(hd.radice, this.mondo.getChildIndex(this.terreno.radice));
         this.terreno.spegni();
@@ -393,9 +400,10 @@ export class ScenaBattaglia {
         case 'appiglioRotto': this.appigli.rotto(e.appiglio, e.x, e.yAlto, e.yBasso); break;
         case 'cratere':
           this.effetti.zolle(e.x, e.y, e.raggio, this.terreno.coloreOriginale(e.x, e.y, e.raggio));
-          this.terreno.cratere(e.x, e.y, e.raggio); this.hd?.cratere(e.x, e.y, e.raggio);
+          this.terreno.cratere(e.x, e.y, e.raggio); this.hd?.cratere(e.x, e.y, e.raggio); this.cambiHd?.push([e.x - e.raggio, e.y - e.raggio, e.x + e.raggio, e.y + e.raggio]);
           this.decorazioniSenzaTerra(e.x, e.y, e.raggio);
           break;
+        case 'maschera': this.terreno.maschera(e.x0, e.y0, e.x1, e.y1); this.hd?.maschera(e.x0, e.y0, e.x1, e.y1); this.cambiHd?.push([e.x0, e.y0, e.x1, e.y1]); break; // Fase 3: per ora il pezzo sparisce e basta
         case 'esplosione': this.effetti.esplosione(e.x, e.y, e.raggio); break;
         case 'splash': this.effetti.splash(e.x, e.y, e.grande); break;
         case 'colpoPistola': this.effetti.lineaPistola(e.da.x, e.da.y, e.a.x, e.a.y); break;

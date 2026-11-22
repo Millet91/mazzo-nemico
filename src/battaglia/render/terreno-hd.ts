@@ -85,52 +85,82 @@ export const SCAVATO_APERTO = 128;
  * Si ricalcola la colonna intera: un cratere che apre il tetto di una grotta la scopre anche sotto di sé.
  * B (sbordo spento) e A (bordo bruciato) li scrivono `canaleSbordo` e `canaleBruciato`, dopo.
  */
-export function canaliMaschera(maschera: Uint8Array, originale: Uint8Array, w: number, h: number, out: Uint8Array, x0 = 0, x1 = w): void {
+export function canaliMaschera(maschera: Uint8Array, originale: Uint8Array, w: number, h: number, out: Uint8Array, x0 = 0, x1 = w, y0 = 0): void {
   const fondo = fondoOriginale(originale, w, h);
-  x0 = Math.max(0, x0); x1 = Math.min(w, x1);
+  x0 = Math.max(0, x0); x1 = Math.min(w, x1); y0 = Math.max(0, y0);
+  if (x1 <= x0) return;
+  // la cima di adesso di ogni colonna (si scende finché si trova del solido)
+  const rw = x1 - x0;
+  if (cime.length < rw) cime = new Int32Array(rw);
   for (let x = x0; x < x1; x++) {
-    let cima = h;
-    for (let y = 0; y < h; y++) if (maschera[y * w + x] !== MATERIALE.aria) { cima = y; break; }
-    const f = fondo[x];
-    for (let y = 0; y < h; y++) {
-      const i = y * w + x, k = i * 4;
+    let c = h;
+    for (let y = 0, i = x; y < h; y++, i += w) if (maschera[i] !== MATERIALE.aria) { c = y; break; }
+    cime[x - x0] = c;
+  }
+  // poi per righe (in memoria la maschera è per righe)
+  for (let y = y0; y < h; y++) {
+    for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
+      const k = i * 4;
       const solido = maschera[i] !== MATERIALE.aria;
       out[k] = solido ? 255 : 0;
-      out[k + 1] = solido || originale[i] === MATERIALE.aria ? 0 : y > cima && y < f ? SCAVATO_COPERTO : SCAVATO_APERTO;
+      out[k + 1] = solido || originale[i] === MATERIALE.aria ? 0
+        : y > cime[x - x0] && y < fondo[x] ? SCAVATO_COPERTO : SCAVATO_APERTO;
     }
   }
 }
 
+let cime = new Int32Array(0);
 let tmpOriz = new Uint8Array(0);
+let tmpRis = new Uint8Array(0);
+let ultimo = new Int32Array(0);
 
 /**
  * Dilatazione quadrata (lato 2·raggio+1) dei byte non nulli di `src` (passo `passo`, scarto `canale`: per leggere un
  * canale di un RGBA) nel rettangolo [x0, x1) × [y0, y1). Chiama `scrivi(i, vicino)` per ogni px del rettangolo.
- * Massimo separabile: prima in orizzontale, poi in verticale; legge `src` anche fuori dal rettangolo, fino a `raggio`.
+ * Separabile e lineare nell'area: per riga e poi per colonna, la distanza dall'ultimo px acceso a sinistra/sopra e
+ * dal prossimo a destra/sotto. Legge `src` anche fuori dal rettangolo, fino a `raggio`.
  */
 function dilata(src: Uint8Array, passo: number, canale: number, w: number, h: number, raggio: number,
   x0: number, x1: number, y0: number, y1: number, scrivi: (i: number, vicino: boolean) => void): void {
   x0 = Math.max(0, x0); x1 = Math.min(w, x1); y0 = Math.max(0, y0); y1 = Math.min(h, y1);
   if (x1 <= x0 || y1 <= y0) return;
   const ya = Math.max(0, y0 - raggio), yb = Math.min(h, y1 + raggio);
-  const rw = x1 - x0;
+  const xa = Math.max(0, x0 - raggio), xb = Math.min(w, x1 + raggio);
+  const rw = x1 - x0, LONTANO = 1 << 29;
   if (tmpOriz.length < rw * (yb - ya)) tmpOriz = new Uint8Array(rw * (yb - ya));
+  if (tmpRis.length < rw * (y1 - y0)) tmpRis = new Uint8Array(rw * (y1 - y0));
+  if (ultimo.length < rw) ultimo = new Int32Array(rw);
+  const acceso = (x: number, y: number) => src[(y * w + x) * passo + canale] !== 0;
+  // per riga: c'è un px acceso entro `raggio` a sinistra o a destra?
   for (let y = ya; y < yb; y++) {
-    const r = y * w, o = (y - ya) * rw - x0;
-    for (let x = x0; x < x1; x++) {
-      let m = 0;
-      const b = Math.min(w - 1, x + raggio);
-      for (let xx = Math.max(0, x - raggio); xx <= b && !m; xx++) m = src[(r + xx) * passo + canale];
-      tmpOriz[o + x] = m ? 1 : 0;
+    const o = (y - ya) * rw - x0;
+    let ult = -LONTANO;
+    for (let x = xa; x < x0; x++) if (acceso(x, y)) ult = x;
+    for (let x = x0; x < x1; x++) { if (acceso(x, y)) ult = x; tmpOriz[o + x] = x - ult <= raggio ? 1 : 0; }
+    let pros = LONTANO;
+    for (let x = xb - 1; x >= x1; x--) if (acceso(x, y)) pros = x;
+    for (let x = x1 - 1; x >= x0; x--) { if (acceso(x, y)) pros = x; if (pros - x <= raggio) tmpOriz[o + x] = 1; }
+  }
+  // per colonna, scorrendo le righe: dall'alto (ultima riga accesa sopra) e dal basso (prossima sotto)
+  ultimo.fill(-LONTANO, 0, rw);
+  for (let y = ya; y < yb; y++) {
+    const o = (y - ya) * rw, r = (y - y0) * rw;
+    for (let c = 0; c < rw; c++) {
+      if (tmpOriz[o + c]) ultimo[c] = y;
+      if (y >= y0 && y < y1) tmpRis[r + c] = y - ultimo[c] <= raggio ? 1 : 0;
+    }
+  }
+  ultimo.fill(LONTANO, 0, rw);
+  for (let y = yb - 1; y >= ya; y--) {
+    const o = (y - ya) * rw, r = (y - y0) * rw;
+    for (let c = 0; c < rw; c++) {
+      if (tmpOriz[o + c]) ultimo[c] = y;
+      if (y >= y0 && y < y1 && ultimo[c] - y <= raggio) tmpRis[r + c] = 1;
     }
   }
   for (let y = y0; y < y1; y++) {
-    const b = Math.min(yb - 1, y + raggio);
-    for (let x = x0; x < x1; x++) {
-      let m = 0;
-      for (let yy = Math.max(ya, y - raggio); yy <= b && !m; yy++) m = tmpOriz[(yy - ya) * rw + x - x0];
-      scrivi(y * w + x, m !== 0);
-    }
+    const r = (y - y0) * rw - x0;
+    for (let x = x0; x < x1; x++) scrivi(y * w + x, tmpRis[r + x] !== 0);
   }
 }
 
@@ -139,16 +169,20 @@ export function canaleBruciato(out: Uint8Array, w: number, h: number, raggio: nu
   dilata(out, 4, 1, w, h, raggio, x0, x1, y0, y1, (i, v) => { out[i * 4 + 3] = v ? 255 : 0; });
 }
 
-const vicini = new WeakMap<Uint8Array, Uint8Array>();
+/**
+ * 1 dove c'è del solido di prima entro `raggio` px, nelle colonne [x0, x1) di `out` (w×h; nuovo se manca).
+ * Non cambia mai: si calcola una volta per mappa (a fette, mentre il terreno HD si carica).
+ */
+export function vicinoOriginale(originale: Uint8Array, w: number, h: number, raggio: number, out: Uint8Array = new Uint8Array(w * h), x0 = 0, x1 = w): Uint8Array {
+  dilata(originale, 1, 0, w, h, raggio, x0, x1, 0, h, (i, x) => { out[i] = x ? 1 : 0; });
+  return out;
+}
 
-/** 1 dove c'è del solido di prima entro `raggio` px (si calcola una volta per mappa). */
-export function vicinoOriginale(originale: Uint8Array, w: number, h: number, raggio: number): Uint8Array {
-  let v = vicini.get(originale);
-  if (v) return v;
-  const out = new Uint8Array(w * h);
-  dilata(originale, 1, 0, w, h, raggio, 0, w, 0, h, (i, x) => { out[i] = x ? 1 : 0; });
-  vicini.set(originale, (v = out));
-  return v;
+/** C'è almeno uno scavo (canale G) nelle colonne [x0, x1)? */
+export function haScavi(out: Uint8Array, w: number, h: number, x0: number, x1: number): boolean {
+  x0 = Math.max(0, x0); x1 = Math.min(w, x1);
+  for (let y = 0; y < h; y++) for (let k = (y * w + x0) * 4 + 1, f = (y * w + x1) * 4; k < f; k += 4) if (out[k]) return true;
+  return false;
 }
 
 /**
@@ -209,6 +243,7 @@ uniform sampler2D uArte;
 uniform sampler2D uMaschera;
 uniform vec2 uMondo;
 const vec3 BRUCIATO = ${rgbGlsl(PALETTE.bordoBruciato)};
+const vec3 SABBIA = ${rgbGlsl(PALETTE.sabbia)};
 
 void main() {
   vec4 a = texture(uArte, vUV);
@@ -220,7 +255,9 @@ void main() {
 
   // solido: il quadro, bruciato vicino a uno scavo (canale A) con una grana leggera
   float grana = fract(sin(dot(floor(vMondo), vec2(12.9898, 78.233))) * 43758.5453);
-  vec3 pieno = mix(ac, BRUCIATO * (0.85 + 0.3 * grana), smoothstep(0.1, 0.6, m.a) * 0.85);
+  // solido dove il quadro non ha colore (terreno nuovo dove prima c'era aria: sabbia che frana): sabbia granulosa
+  vec3 quadroPieno = mix(SABBIA * (0.92 + 0.16 * grana), ac, smoothstep(0.3, 0.7, a.a));
+  vec3 pieno = mix(quadroPieno, BRUCIATO * (0.85 + 0.3 * grana), smoothstep(0.1, 0.6, m.a) * 0.85);
 
   // aria non scavata: il quadro com'è (contorno dipinto, pareti di grotte e archi), tranne il contorno di un
   // solido che non c'è più (canale B)
@@ -246,6 +283,8 @@ export interface MisureHd {
   tessere: number;
   /** byte stimati sulla GPU: tessere (con le mipmap) e maschera */
   byteTexture: number;
+  /** ms del pezzo di preparazione più lungo (un frame): canali di una fetta o due tessere sulla GPU */
+  passoPeggioreMs: number;
 }
 
 /** Cartella degli asset di una mappa (come sfondi-mappa.ts). */
@@ -267,29 +306,28 @@ export class TerrenoHd {
   readonly radice = new Container();
   private readonly dati: Uint8Array;
   private readonly sorgente: BufferImageSource;
-  private readonly maschera: Texture;
+  private readonly texMaschera: Texture;
   private readonly originale: Uint8Array;
   /** 1 entro SBORDO_PX dal solido di prima */
   private readonly vicinoPrima: Uint8Array;
   /** rettangolo da ricaricare sulla GPU, in px di mondo: x0, y0, x1, y1 */
   private sporco: [number, number, number, number] | null = null;
   private readonly tessere: Texture[] = [];
-  misure: MisureHd = { caricamentoMs: 0, tessere: 0, byteTexture: 0 };
+  misure: MisureHd = { caricamentoMs: 0, tessere: 0, byteTexture: 0, passoPeggioreMs: 0 };
+  private passoPeggiore = 0;
   private distrutto = false;
 
   private constructor(private readonly terreno: Terreno, private readonly renderer: Renderer, originale: Uint8Array) {
     const { w, h } = terreno;
     this.originale = originale;
+    // i canali si calcolano a fette in `precarica`, un frame per fetta
     this.dati = new Uint8Array(w * h * 4);
-    this.vicinoPrima = vicinoOriginale(originale, w, h, SBORDO_PX);
-    canaliMaschera(terreno.maschera, originale, w, h, this.dati);
-    canaleSbordo(terreno.maschera, this.vicinoPrima, w, h, SBORDO_PX, this.dati);
-    canaleBruciato(this.dati, w, h, BRUCIATO_PX);
+    this.vicinoPrima = new Uint8Array(w * h);
     this.sorgente = new BufferImageSource({
       resource: this.dati, width: w, height: h, format: 'rgba8unorm', alphaMode: 'no-premultiply-alpha',
       scaleMode: 'linear', addressMode: 'clamp-to-edge', autoGenerateMipmaps: false,
     });
-    this.maschera = new Texture({ source: this.sorgente });
+    this.texMaschera = new Texture({ source: this.sorgente });
   }
 
   /**
@@ -319,6 +357,7 @@ export class TerrenoHd {
       tessere: lista.length,
       // RGBA8 con le mipmap (+1/3) per le tessere, RGBA8 senza mipmap per la maschera
       byteTexture: Math.round(lista.length * pieno * pieno * 4 * (4 / 3)) + terreno.w * terreno.h * 4,
+      passoPeggioreMs: Math.round(hd.passoPeggiore * 10) / 10,
     };
     return hd;
   }
@@ -353,33 +392,66 @@ export class TerrenoHd {
   }
 
   /**
-   * Manda tessere (con le mipmap) e maschera sulla GPU prima di mostrarle, poche per frame: senza, il primo frame
-   * col terreno HD le caricava tutte insieme (uno scatto di ~35 ms sul container, x4 col freno alla CPU).
+   * Prepara tutto a pezzi, un pezzo per frame, così la battaglia non si ferma: i canali della maschera a fette di
+   * colonne (A e B solo dove ci sono già scavi: altrimenti sono zero), poi maschera e tessere (con le mipmap) sulla
+   * GPU, due per frame. Senza, il primo frame col terreno HD le caricava tutte insieme: uno scatto di ~35 ms sul
+   * container (e ~150 ms di calcolo dei canali tutto in una volta).
    */
   private async precarica(): Promise<void> {
+    const { w, h, maschera } = this.terreno;
+    let t = performance.now();
+    const frame = () => {
+      this.passoPeggiore = Math.max(this.passoPeggiore, performance.now() - t);
+      return new Promise<void>((ok) => requestAnimationFrame(() => { t = performance.now(); ok(); }));
+    };
+    const FETTA = 128;
+    for (let x = 0; x < w; x += FETTA) {
+      canaliMaschera(maschera, this.originale, w, h, this.dati, x, x + FETTA);
+      vicinoOriginale(this.originale, w, h, SBORDO_PX, this.vicinoPrima, x, x + FETTA);
+      await frame();
+      if (this.distrutto) return;
+    }
+    // A e B dipendono dalle fette vicine (fino a 5 px): si fanno dopo, solo dove serve
+    for (let x = 0; x < w; x += FETTA) {
+      if (!haScavi(this.dati, w, h, x - SBORDO_PX, x + FETTA + SBORDO_PX)) continue;
+      canaleSbordo(maschera, this.vicinoPrima, w, h, SBORDO_PX, this.dati, x, x + FETTA);
+      canaleBruciato(this.dati, w, h, BRUCIATO_PX, x, x + FETTA);
+      await frame();
+      if (this.distrutto) return;
+    }
     const r = this.renderer as Renderer & { texture?: { initSource?(s: Texture['source']): void } };
     const init = r.texture?.initSource?.bind(r.texture);
     if (!init) return;
-    const frame = () => new Promise<void>((ok) => requestAnimationFrame(() => ok()));
     init(this.sorgente);
     for (let i = 0; i < this.tessere.length; i++) {
-      await frame();
+      if (i % 2 === 0) await frame();
       if (this.distrutto) return;
       init(this.tessere[i].source);
     }
+    this.passoPeggiore = Math.max(this.passoPeggiore, performance.now() - t);
   }
 
   /** Evento `cratere`: ricalcola i canali nelle colonne toccate e segna il rettangolo da ricaricare. */
   cratere(x: number, y: number, raggio: number): void {
+    this.cambiata(x - raggio, y - raggio, x + raggio, y + raggio);
+  }
+
+  /** Evento `maschera` (Fase 3: pezzo staccato, legno bruciato, sabbia): cambiata nel rettangolo, estremi compresi. */
+  maschera(x0: number, y0: number, x1: number, y1: number): void {
+    this.cambiata(x0, y0, x1 + 1, y1 + 1);
+  }
+
+  private cambiata(ax: number, ay: number, bx: number, by: number): void {
     const { w, h, maschera } = this.terreno;
-    const m = raggio + Math.max(BRUCIATO_PX, SBORDO_PX) + 2;
-    const x0 = Math.max(0, Math.floor(x - m)), x1 = Math.min(w, Math.ceil(x + m));
+    const m = Math.max(BRUCIATO_PX, SBORDO_PX) + 2;
+    const x0 = Math.max(0, Math.floor(ax - m)), x1 = Math.min(w, Math.ceil(bx + m));
+    const ya = Math.floor(ay - m), yb = Math.ceil(by + m);
     if (x1 <= x0) return;
-    canaliMaschera(maschera, this.originale, w, h, this.dati, x0, x1);
-    canaleSbordo(maschera, this.vicinoPrima, w, h, SBORDO_PX, this.dati, x0, x1, Math.floor(y - m), Math.ceil(y + m));
-    canaleBruciato(this.dati, w, h, BRUCIATO_PX, x0, x1, Math.floor(y - m), Math.ceil(y + m));
-    const [y0, yFondo] = righeToccate(this.originale, w, h, x0, x1, Math.floor(y - m));
-    const y1 = Math.min(h, Math.max(yFondo, Math.ceil(y + m)));
+    canaliMaschera(maschera, this.originale, w, h, this.dati, x0, x1, ya);
+    canaleSbordo(maschera, this.vicinoPrima, w, h, SBORDO_PX, this.dati, x0, x1, ya, yb);
+    canaleBruciato(this.dati, w, h, BRUCIATO_PX, x0, x1, ya, yb);
+    const [y0, yFondo] = righeToccate(this.originale, w, h, x0, x1, ya);
+    const y1 = Math.min(h, Math.max(yFondo, yb));
     const s = this.sporco;
     this.sporco = s ? [Math.min(s[0], x0), Math.min(s[1], y0), Math.max(s[2], x1), Math.max(s[3], y1)] : [x0, y0, x1, y1];
   }
@@ -416,6 +488,6 @@ export class TerrenoHd {
     this.distrutto = true;
     // le tessere restano nella cache di Assets (la stessa mappa si rigioca spesso); la maschera no
     this.radice.destroy({ children: true });
-    this.maschera.destroy(true);
+    this.texMaschera.destroy(true);
   }
 }

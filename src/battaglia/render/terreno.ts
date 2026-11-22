@@ -2,7 +2,7 @@
 // rettangolo toccato, e si caricano sulla GPU al massimo 6 tile per frame (00 §1.2).
 import { Container, Sprite, Texture } from 'pixi.js';
 import type { Terreno } from '../../core/tipi';
-import { COLORI_MATERIALE, LATO_TILE, dipingiRettangolo, rettangoloCratere, tileToccate } from './pittura-terreno';
+import { COLORI_MATERIALE, LATO_TILE, dipingiRettangolo, rettangoloCratere, rettangoloMaschera, tileToccate } from './pittura-terreno';
 
 export const CARICAMENTI_PER_FRAME = 6;
 
@@ -72,8 +72,16 @@ export class TerrenoRender {
 
   /** Evento `cratere` della sim: segna le tile da ridipingere. */
   cratere(x: number, y: number, raggio: number): void {
+    this.sporca(...rettangoloCratere(x, y, raggio));
+  }
+
+  /** Fase 3: la maschera è cambiata nel rettangolo (estremi compresi) senza uno scoppio: si ridipinge da lì. */
+  maschera(x0: number, y0: number, x1: number, y1: number): void {
+    this.sporca(...rettangoloMaschera(x0, y0, x1, y1));
+  }
+
+  private sporca(x0: number, y0: number, x1: number, y1: number): void {
     if (this.spento) return;
-    const [x0, y0, x1, y1] = rettangoloCratere(x, y, raggio);
     for (const i of tileToccate(x0, y0, x1, y1, this.colonne, this.righe)) {
       const t = this.tiles[i];
       if (!t.sporco) { t.sporco = [x0, y0, x1, y1]; this.coda.push(i); }

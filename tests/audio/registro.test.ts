@@ -51,7 +51,7 @@ describe('Registro audio', () => {
   });
 
   it('i suoni che si ripetono spesso hanno più varianti', () => {
-    for (const id of ['passo_sabbia', 'passo_legno', 'passo_roccia', 'esp_media', 'arma_cannone', 'pirata_colpito'] as const) {
+    for (const id of ['passo_sabbia', 'passo_legno', 'passo_roccia', 'piolo_legno', 'piolo_corda', 'esp_media', 'arma_cannone', 'pirata_colpito'] as const) {
       expect((AUDIO[id] as VoceAudio).varianti ?? 1, id).toBeGreaterThanOrEqual(2);
     }
   });

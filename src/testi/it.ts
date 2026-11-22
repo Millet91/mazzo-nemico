@@ -63,6 +63,15 @@ export const it = {
     /** tempo di disegno per frame (budget 8 ms): medio e p95 a zoom normale e da lontano */
     provaDisegno: (medio: number, p95Normale: number, p95Lontano: number) =>
       `disegno ${medio.toFixed(1)} ms medi · p95 ${p95Normale.toFixed(1)} ms a zoom normale · ${p95Lontano.toFixed(1)} ms da lontano`,
+    audio: 'Audio',
+    audioNota: 'Suoni pronti, motore audio e da dove vengono i suoni (calcolati ora o tenuti sul telefono).',
+    /** es. "Audio: 73 su 73 suoni pronti in 5,6 s (calcolati) · motore acceso" */
+    audioStato: (pronti: number, totale: number, secondi: number | null, dalTelefono: boolean, contesto: string) => {
+      const motore = contesto === 'running' ? 'motore acceso' : contesto === 'suspended' ? 'motore in pausa'
+        : contesto === 'assente' ? 'il motore si accende al primo tocco' : `motore ${contesto}`;
+      const quando = secondi === null ? '' : ` in ${secondi.toFixed(1).replace('.', ',')} s (${dalTelefono ? 'tenuti sul telefono' : 'calcolati'})`;
+      return `${pronti} su ${totale} suoni pronti${quando} · ${motore}`;
+    },
     nonPronto: 'Non ancora disponibile in questa build.',
     errore: 'Qualcosa è andato storto. Riprova.',
   },

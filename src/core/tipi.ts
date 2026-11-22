@@ -64,7 +64,52 @@ export interface MappaGenerata {
   barili?: Punto[];
   /** scale e liane (segmenti verticali, NON nella maschera): la sim li copia in StatoBattaglia.appigli con un id */
   appigli?: { tipo: TipoAppiglio; x: number; yAlto: number; yBasso: number }[];
+  /**
+   * Fase 3: ancoraggi del sostegno strutturale (rettangoli in px di mondo, estremi compresi). Un pezzo staccato dal
+   * fondale resta su se ha almeno un pixel pieno dentro uno di questi; svuotato il rettangolo, l'ancoraggio non regge
+   * più. Assente = conta solo il fondale (isole generate). Sono dati, non byte della maschera.
+   */
+  sostegni?: Rettangolo[];
+  /** Fase 3: strutture con un comportamento speciale quando crollano (torre, ponte, masso, cengia) */
+  strutture?: StrutturaMappa[];
 }
+
+/** rettangolo in px di mondo, estremi compresi */
+export interface Rettangolo { x0: number; y0: number; x1: number; y1: number }
+
+// ─── Fase 3: il campo si spezza (contratto congelato dal Lead P1 il 22/11/2026) ───────────────────
+
+export type TipoStruttura = 'torre' | 'ponte' | 'masso' | 'cengia';
+
+export interface StrutturaMappa extends Rettangolo {
+  tipo: TipoStruttura;
+  /** solo 'ponte': i due ancoraggi (da sinistra a destra). Tagliato un capo, il ponte resta appeso all'altro */
+  ancoraggi?: [Rettangolo, Rettangolo];
+}
+
+export interface Struttura extends StrutturaMappa { stato: 'intera' | 'caduta' | 'calata' }
+
+/** blocco che cade dritto o masso che rotola: è già fuori dalla maschera; arrivato a terra o in mare si frantuma */
+export interface PezzoCadente {
+  id: number;
+  tipo: 'blocco' | 'masso';
+  /** angolo in alto a sinistra adesso (float) e velocità in px/tick */
+  x: number; y: number; vx: number; vy: number;
+  /** w×h byte di MATERIALE (0 = vuoto): la forma del pezzo */
+  w: number; h: number; maschera: Uint8Array;
+  /** angolo in alto a sinistra da dove si è staccato: il render ritaglia lì l'arte */
+  daX: number; daY: number;
+  /** pirati già colpiti da questo pezzo (un colpo a testa) */
+  colpiti: number[];
+  /** indice in StatoBattaglia.strutture, −1 = nessuna */
+  struttura: number;
+}
+
+/** legno che brucia: sparisce a `finoA` (tick) e lì si ricontrolla il sostegno. Non si propaga */
+export interface Fuoco { id: number; x: number; y: number; r: number; finoA: number }
+
+/** zona di sabbia che si assesta dopo uno scoppio (1 px a tick, fino a 45°) */
+export interface Frana extends Rettangolo { finoA: number }
 
 export interface Decorazione { tipo: 'palma' | 'masso' | 'rovina' | 'cespuglio'; x: number; y: number; scala: number; specchio: boolean }
 
@@ -212,6 +257,8 @@ export interface Pirata {
   bordi?: number;
   /** Fase 1: salti dal muro fatti da quando ha lasciato terra (torna a 0 quando tocca terra); assente = 0 */
   saltiMuro?: number;
+  /** Fase 3: danno da macerie preso in questo turno (tetto BIL.macerie.maxPerTurno); torna a 0 a inizio turno */
+  macerieNelTurno?: number;
 }
 
 /**
@@ -327,6 +374,19 @@ export interface StatoBattaglia {
   prossimoId: number;
   turno: StatoTurno;
   esito: EsitoBattaglia | null;
+  // Fase 3: facoltativi finché la sim non li crea in creaBattaglia (poi sempre presenti ed entrano nell'hash)
+  /** blocchi che cadono e massi che rotolano */
+  pezzi?: PezzoCadente[];
+  /** legno che brucia */
+  fuochi?: Fuoco[];
+  /** sabbia che si assesta */
+  frane?: Frana[];
+  /** strutture della mappa col loro stato (copiate da MappaGenerata.strutture) */
+  strutture?: Struttura[];
+  /** ancoraggi del sostegno (copia di MappaGenerata.sostegni, fatta in creaBattaglia) */
+  sostegni?: Rettangolo[];
+  /** piedi di ogni pirata alla nascita, tutti e due i lati: per il rispetto della zona di caduta */
+  partenze?: Punto[];
 }
 
 // ─── Comandi (input del giocatore o dell'IA) ──────────────────────────────────────────────────────
@@ -410,6 +470,19 @@ export type EventoBattaglia =
   | { t: 'saltoMuro'; pirata: number }
   /** la fuga è stata chiusa col comando 'fatto' */
   | { t: 'fatto'; pirata: number }
+  // ── studio v2, Fase 3: il campo si spezza ──
+  /** un pezzo si stacca ed è già fuori dalla maschera; la forma sta in s.pezzi (il render ritaglia l'arte da daX, daY) */
+  | { t: 'crollo'; pezzo: number; tipo: 'blocco' | 'masso'; x: number; y: number; w: number; h: number; materiale: number }
+  /** il pezzo arriva a terra o in mare e si frantuma (polvere, schegge, suono) */
+  | { t: 'macerie'; pezzo: number; x: number; y: number; inMare: boolean; materiale: number }
+  /** la maschera è cambiata in questo rettangolo senza uno scoppio (pezzo staccato, legno bruciato, sabbia) */
+  | { t: 'maschera'; x0: number; y0: number; x1: number; y1: number }
+  /** il legno prende fuoco (inizio) o finisce di bruciare e sparisce */
+  | { t: 'fuoco'; fuoco: number; x: number; y: number; r: number; inizio: boolean }
+  /** la sabbia frana dentro un buco */
+  | { t: 'frana'; x: number; y: number }
+  /** il ponte tagliato da un lato resta appeso all'altro capo */
+  | { t: 'ponteCalato'; struttura: number }
   // ── Pacchetto 2: scontro Bandiera ──
   | { t: 'bandieraPresa'; pirata: number }
   | { t: 'fine'; esito: EsitoBattaglia };
@@ -453,4 +526,6 @@ export interface EsitoColpo {
   impatto: Punto | null;
   /** tick simulati */
   tick: number;
+  /** Fase 3: pezzi che si staccherebbero, nella posizione da cui partono, per l'anteprima in rosso */
+  crolli?: { x: number; y: number; w: number; h: number; maschera: Uint8Array }[];
 }

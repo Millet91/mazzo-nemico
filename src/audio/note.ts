@@ -3,6 +3,7 @@
 // la suona come un campione: due nodi per nota invece di otto, nessun oscillatore acceso durante la partita.
 import { BRANI, type Nota } from './musica';
 import { suonaNota, type Strumento } from './strumenti';
+import { a16, chiaveBuild, da16, leggi, scrivi, type Conservato } from './cache';
 
 interface Forma { freq: number; durata: number; tenuta: boolean }
 /** frequenza di campionamento e durata per strumento: i suoni cupi (basso) si tengono a frequenza bassa, pesano meno */
@@ -49,8 +50,15 @@ export function preparaNote(): Promise<void> {
   const Offline = g.OfflineAudioContext ?? g.webkitOfflineAudioContext;
   if (!Offline) return (lavoro = Promise.resolve());
   lavoro = (async () => {
+    const chiave = chiaveBuild();
+    // dal secondo avvio le note sono già nel cassetto del telefono (cache.ts)
+    const cassetto = await leggi('note', chiave).catch(() => null);
+    let calcolate = 0;
     for (const n of noteNecessarie()) {
       const f = FORME[n.s];
+      const salvata = cassetto?.get(chiaveNota(n.s, n.m));
+      if (salvata && salvata.freq === f.freq) { pronte.set(chiaveNota(n.s, n.m), { dati: da16(salvata.dati), freq: f.freq }); continue; }
+      calcolate++;
       try {
         const off = new Offline(1, Math.ceil(f.durata * f.freq), f.freq);
         // volume 1: il volume vero lo mette il sequencer quando la suona
@@ -60,6 +68,11 @@ export function preparaNote(): Promise<void> {
       } catch (e) {
         console.warn('audio: nota non calcolata', n, e);
       }
+    }
+    if (calcolate) {
+      const voci = new Map<string, Conservato>();
+      for (const [k, p] of pronte) voci.set(k, { dati: a16(p.dati), freq: p.freq });
+      void scrivi('note', chiave, voci);
     }
   })();
   return lavoro;

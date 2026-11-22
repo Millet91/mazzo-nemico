@@ -6,12 +6,14 @@ Chi sta fuori da questa cartella usa solo `avviaAudio()` (una volta, all'avvio) 
 | File | Cosa c'è |
 |---|---|
 | `registro.ts` | `AUDIO`: ogni suono con canale, volume, varianti e ricetta sintetica. Compilando `sample` si userà il file (08 §4). |
-| `ricette/*.ts` | le ricette sintetiche (segnaposto fatti in casa, niente file) |
+| `ricette/*.ts` | le ricette sintetiche (segnaposto fatti in casa, niente file); `crolli.ts` = Fase 3: crolli, macerie, masso, fuoco, frana, ponte |
 | `sintesi.ts` | gli attrezzi delle ricette: toni, rumore filtrato, corpi che risuonano (legno, ferro, campane), voce a formanti |
 | `eventi.ts` | **funzioni pure**: eventi della sim e `VistaBattaglia` → richieste di suono. Qui si decide "quale suono per quale evento" |
 | `polifonia.ts` | funzioni pure: massimo 24 voci, 3 per suono (si ruba la più vecchia) |
 | `mix.ts` | costanti del mix: canali, attenuazioni (ducking), pan |
 | `magazzino.ts` | i suoni pronti: ogni voce del registro sintetizzata una volta (fuori dal filo principale) e normalizzata |
+| `cache.ts` | il cassetto: i suoni e le note pronti restano sul telefono (IndexedDB, 16 bit), dal secondo avvio niente sintesi |
+| `RigaDiagnostica.tsx` | la riga dell'audio in Impostazioni → Diagnostica (pronti/totale, in quanto, calcolati o dal telefono, motore) |
 | `motore.ts` | WebAudio: canali musica / effetti / voci / tasti, limitatore, ducking |
 | `musica.ts`, `strumenti.ts`, `note.ts` | musica segnaposto procedurale in re dorico (menu e battaglia a due strati); le note sono calcolate una volta e suonate come campioni |
 | `ambiente.ts` | mare, vento e versi lontani sotto la battaglia |
@@ -25,8 +27,18 @@ Come si lavora:
   suonano come campioni: in battaglia un suono costa 3 nodi. Ogni suono è normalizzato, il volume sta nel registro.
   Misure del 22/11/2026 (Chromium senza schermo): tutto pronto in circa 2 s dall'apertura, 11 MB di memoria
   (7 MB effetti, 4 MB note), 40 s di battaglia piena = 3% di un processore.
+- **Avvio sul profilo lento** (`tests/audio/misura-avvio.ts`, Chromium con CPU ×4, 22/11/2026): al primo avvio tutto pronto
+  in circa 5,4 s, e intanto il menu perde circa un quarto dei frame (le ricette si COSTRUISCONO sul filo principale:
+  oscillatori, filtri, inviluppi). Prepararle a fette, un pezzo per frame, non toglieva scatti e allungava a 8 s:
+  per questo i suoni pronti vanno nel cassetto (`cache.ts`). Dal secondo avvio: pronti in 0,5 s, menu fluido come
+  senza audio. La chiave del cassetto è il file della build: un aggiornamento dell'app rifà i suoni una volta.
+- **Eventi veri**: `tests/audio/battaglia-vera.test.ts` fa giocare la sim (Balzo, scale, liane, battaglie intere sulla
+  Cala v3) e passa ogni tick dall'audio: un evento nuovo della sim si prova lì, non solo con eventi scritti a mano.
 - **Gancio di prova**: con `?prova` nell'indirizzo, `window.__kaboomAudio.stato()` dice cosa è stato chiesto e cosa è
   partito (lo usano `tests/e2e/audio.spec.ts` e la QA per "nessun evento senza suono").
 - **Ascoltare senza telefono**: `npx tsx tests/audio/ascolto.ts` scrive in `test-results/audio/` un file WAV per suono,
   una battaglia finta di 40 s (`battaglia.wav`) e la tabella dei livelli.
+- **Fase 3** (crolli): il crollo suona per famiglia di materiale (legno, roccia, sabbia) e per grandezza (`PEZZO_PICCOLO`,
+  `PEZZO_GRANDE` in `eventi.ts`); masso e fuoco girano in ciclo. A turno nuovo si fermano i cicli tranne i fuochi
+  (bruciano anche nel turno dopo e si spengono col loro evento). Ascolto: `/mnt/project-files/audio-p1/fase3-crolli-fuoco-frane-23s.mp3`.
 - Niente "boing" e "sproing": i pirati non sono vermi (decisione dello studio v2).

@@ -6,6 +6,7 @@ import { signal } from '@preact/signals';
 import type { MappaGenerata, Replay } from '../core/tipi';
 import { T } from '../testi/it';
 import { tocco } from '../piattaforma/haptics';
+import { RigaDiagnosticaAudio } from '../audio/RigaDiagnostica';
 
 type ModuloReplay = { rigiocaReplay?: (r: Replay, m: MappaGenerata) => unknown };
 type ModuloFps = { provaFps?: () => Promise<Record<string, number> & { disegno?: Record<'zoomNormale' | 'zoomMinimo', { p95: number }> }>; provaSuperata?: (r: never) => boolean };
@@ -115,6 +116,7 @@ export function Diagnostica() {
         <p class="nota">{T.diagnostica.provaNota}</p>
         {statoFps.value && <p class="stato" data-testid="stato-fps" role="status">{statoFps.value}</p>}
       </section>
+      <RigaDiagnosticaAudio />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  canaleBruciato, canaleSbordo, canaliMaschera, indiceValido, nomeTessera, righeToccate, tessereDaCaricare, vicinoOriginale,
+  canaleBruciato, canaleSbordo, canaliMaschera, haScavi, indiceValido, nomeTessera, righeToccate, tessereDaCaricare, vicinoOriginale,
   SCAVATO_APERTO, SCAVATO_COPERTO, type IndiceHd,
 } from '../../src/battaglia/render/terreno-hd';
 
@@ -96,6 +96,15 @@ describe('canali della maschera', () => {
     expect(canale(out, 1, 7, 3)).toBe(SCAVATO_APERTO);
   });
 
+  it('haScavi trova uno scavo solo nelle colonne dove c\'è', () => {
+    const out = RGBA();
+    canaliMaschera(dopo, prima, W, H, out);
+    expect(haScavi(out, W, H, 0, 3)).toBe(true); // colonna 2, righe 2-3
+    expect(haScavi(out, W, H, 10, 12)).toBe(false);
+    canaliMaschera(prima, prima, W, H, out);
+    expect(haScavi(out, W, H, 0, W)).toBe(false);
+  });
+
   it('A = bruciato entro il raggio da uno scavo', () => {
     const out = RGBA();
     canaliMaschera(dopo, prima, W, H, out);
@@ -132,7 +141,7 @@ describe('canali della maschera', () => {
     for (const [cx, cy, r] of [[30, 20, 7], [12, 34, 6]]) {
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) ora[y * w + x] = 0;
       const m = r + 5 + 2;
-      canaliMaschera(ora, orig, w, h, inc, cx - m, cx + m);
+      canaliMaschera(ora, orig, w, h, inc, cx - m, cx + m, cy - m);
       canaleSbordo(ora, vicinoOriginale(orig, w, h, 5), w, h, 5, inc, cx - m, cx + m, cy - m, cy + m);
       canaleBruciato(inc, w, h, 3, cx - m, cx + m, cy - m, cy + m);
       expect(inc).toEqual(tutto(ora));

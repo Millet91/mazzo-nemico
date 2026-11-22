@@ -9,6 +9,7 @@ import { danneggia, staccaPirata } from './pirata';
 import { tagliaAppigli } from './appigli';
 import { SPINTA_MIN_SU } from './costanti';
 import { accendiOggetti } from './oggetti';
+import { controllaSostegno } from './pezzi';
 
 /** Danno di un'arma per una ciurma, con il tratto del Teschio Rosso (+10% sugli esplosivi, per difetto). */
 export function dannoArma(arma: IdArma, ciurma: IdCiurma): number {
@@ -95,7 +96,12 @@ export function esplodi(
   }
   accendiOggetti(s, x, y, raggio);
   tagliaAppigli(s, x, y, raggio, eventi);
+  // Fase 3: i pezzi rimasti senza appoggio attorno al cratere (il cratere arriva a raggio × 1,2 nella sabbia)
+  controllaSostegno(s, x, y, raggio * MOLT_CRATERE_MAX + 2, eventi);
 }
+
+/** il moltiplicatore del cratere più grande tra i materiali */
+const MOLT_CRATERE_MAX = Math.max(...BIL.fisica.moltiplicatoreCratere);
 
 /** Raggio e danno pieno di un'esplosione (senza tratti): armi da ARMA, lapide e barile da BIL. */
 export function parametriEsplosione(arma: IdArma | 'lapide'): { raggio: number; danno: number } {

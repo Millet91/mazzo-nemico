@@ -3,6 +3,7 @@
 import { AUDIO, ID_SUONI, type IdSuono } from './registro';
 import type { VoceAudio } from './tipi';
 import { creaSint } from './sintesi';
+import { a16, chiaveBuild, da16, leggi, scrivi, type Conservato } from './cache';
 
 /** 32 kHz: basta per l'altoparlante del telefono e tiene bassa la memoria (circa 7 MB in tutto). */
 export const FREQ_SINTESI = 32000;
@@ -45,6 +46,9 @@ export async function sintetizza(id: string, v: VoceAudio, variante: number, Off
 
 const pronti = new Map<string, Float32Array[]>();
 let lavoro: Promise<void> | null = null;
+/** per la Diagnostica: quanto ci è voluto a preparare tutto, e quanti suoni sono venuti dal cassetto */
+const info = { inizio: 0, ms: null as number | null, daCassetto: 0 };
+export function infoPreparazione(): { ms: number | null; daCassetto: number } { return { ms: info.ms, daCassetto: info.daCassetto }; }
 
 export function campioni(id: IdSuono): Float32Array[] | undefined { return pronti.get(id); }
 export function quantiPronti(): number { return pronti.size; }
@@ -76,19 +80,37 @@ export function preparaSuoni(): Promise<void> {
   if (lavoro) return lavoro;
   const Offline = offline();
   if (!Offline) return (lavoro = Promise.resolve());
-  const coda = ordineDiPreparazione();
-  const operaio = async (): Promise<void> => {
-    for (let id = coda.shift(); id; id = coda.shift()) {
-      const v: VoceAudio = AUDIO[id];
-      const varianti: Float32Array[] = [];
-      try {
-        for (let k = 0; k < (v.varianti ?? 1); k++) varianti.push(await sintetizza(id, v, k, Offline));
-        pronti.set(id, varianti);
-      } catch (e) {
-        console.warn('audio: suono non sintetizzato', id, e);
-      }
+  info.inizio = performance.now();
+  lavoro = (async () => {
+    const chiave = chiaveBuild();
+    // dal secondo avvio: i suoni sono già nel cassetto del telefono
+    const cassetto = await leggi('suoni', chiave).catch(() => null);
+    const coda: IdSuono[] = [];
+    for (const id of ordineDiPreparazione()) {
+      const n = (AUDIO[id] as VoceAudio).varianti ?? 1;
+      const salvate = cassetto ? Array.from({ length: n }, (_, k) => cassetto.get(`${id}#${k}`)) : [];
+      if (salvate.length === n && salvate.every((c) => c && c.freq === FREQ_SINTESI)) { pronti.set(id, salvate.map((c) => da16(c!.dati))); info.daCassetto++; }
+      else coda.push(id);
     }
-  };
-  lavoro = Promise.all(Array.from({ length: IN_PARALLELO }, operaio)).then(() => {});
+    if (!coda.length) { info.ms = performance.now() - info.inizio; return; }
+    const operaio = async (): Promise<void> => {
+      for (let id = coda.shift(); id; id = coda.shift()) {
+        const v: VoceAudio = AUDIO[id];
+        const varianti: Float32Array[] = [];
+        try {
+          for (let k = 0; k < (v.varianti ?? 1); k++) varianti.push(await sintetizza(id, v, k, Offline));
+          pronti.set(id, varianti);
+        } catch (e) {
+          console.warn('audio: suono non sintetizzato', id, e);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: IN_PARALLELO }, operaio));
+    info.ms = performance.now() - info.inizio;
+    // nel cassetto per il prossimo avvio (in sottofondo: il gioco non lo aspetta)
+    const voci = new Map<string, Conservato>();
+    for (const [id, varianti] of pronti) varianti.forEach((d, k) => voci.set(`${id}#${k}`, { dati: a16(d), freq: FREQ_SINTESI }));
+    void scrivi('suoni', chiave, voci);
+  })();
   return lavoro;
 }

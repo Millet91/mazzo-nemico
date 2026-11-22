@@ -32,8 +32,10 @@ export function controllaSostegno(s: StatoBattaglia, x: number, y: number, r: nu
   const trovati = pezziStaccati(s.terreno, x, y, r, { pezzoMax: C.pezzoMaxPx, sostegni: sostegniDi(s), ricercheMax: C.ricercheMax });
   const strutture = s.strutture ?? [];
   for (const p of trovati) {
-    if (p.pixel.length >= C.briciolePx && partenzaSotto(s, p)) continue;
+    const briciole = p.pixel.length < C.briciolePx;
+    if (!briciole && partenzaSotto(s, p)) continue;
     eventi.push({ t: 'maschera', x0: p.x0, y0: p.y0, x1: p.x1, y1: p.y1 });
+    if (briciole) { staccaDallaMaschera(s.terreno, p); continue; }
     const im = massoIn(s, p);
     if (im >= 0) {
       const st = strutture[im];
@@ -195,9 +197,9 @@ function muovi(s: StatoBattaglia, p: PezzoCadente, eventi: EventoBattaglia[]): b
 
 /** frazione della velocità contro il terreno che torna indietro */
 const RIMBALZO_MASSO = 0.2;
-/** frenata di rotolamento a contatto col terreno (px/tick²): circa la gravità lungo un pendio di 14°, quindi su un
+/** frenata di rotolamento a contatto col terreno (px/tick²): circa la gravità lungo un pendio di 21°, quindi su un
  * pendio più dolce il masso rallenta e si ferma, su uno più ripido continua ad accelerare */
-const FRENATA_MASSO = 0.04;
+const FRENATA_MASSO = 0.06;
 /** sotto questa velocità (px/tick), a contatto col terreno, il masso è fermo */
 const FERMO_MASSO = 0.12;
 

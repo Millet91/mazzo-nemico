@@ -22,6 +22,36 @@ export interface RisultatoProvaFps {
   hzSchermo: number;
   /** secondi esclusi dal minimo perché dentro c'era l'avvio di una battaglia */
   secondiCaricamento: number;
+  /**
+   * Tempo di disegno per frame in ms (scena + Pixi sulla CPU, senza la sim; budget 8 ms, P1-contratti §1), su
+   * tutta la prova e per fascia di zoom: 'normale' = attorno al predefinito 1,4, 'minimo' = zoom ≤ 0,6. Esclusi i
+   * secondi di caricamento.
+   */
+  msDisegnoMedio: number;
+  msDisegnoPeggiore: number;
+  disegno: { tutti: MisuraDisegno; zoomNormale: MisuraDisegno; zoomMinimo: MisuraDisegno };
+}
+
+export interface MisuraDisegno { medio: number; p95: number; peggiore: number; frame: number }
+
+/** un frame di disegno: ms e zoom della camera */
+export interface FrameDisegno { ms: number; zoom: number; secondo: number }
+
+/** fasce di zoom della misura del disegno */
+export const ZOOM_NORMALE: readonly [number, number] = [1.2, 1.6];
+export const ZOOM_MINIMO = 0.6;
+
+const arrotonda = (x: number) => Math.round(x * 100) / 100;
+
+export function misuraDisegno(ms: readonly number[]): MisuraDisegno {
+  if (!ms.length) return { medio: 0, p95: 0, peggiore: 0, frame: 0 };
+  const s = [...ms].sort((a, b) => a - b);
+  return {
+    medio: arrotonda(s.reduce((a, b) => a + b, 0) / s.length),
+    p95: arrotonda(s[Math.min(s.length - 1, Math.floor(s.length * 0.95))]),
+    peggiore: arrotonda(s[s.length - 1]),
+    frame: s.length,
+  };
 }
 
 export interface DatiProva {
@@ -35,6 +65,8 @@ export interface DatiProva {
   tick: number;
   /** durata della prova in ms */
   durataMs: number;
+  /** tempo di disegno di ogni frame (facoltativo: le prove vecchie non l'hanno) */
+  disegno?: readonly FrameDisegno[];
 }
 
 export function mediana(xs: readonly number[]): number {
@@ -56,7 +88,16 @@ export function calcolaRisultato(d: DatiProva): RisultatoProvaFps {
   const med = mediana(d.delta);
   const hz = med > 0 ? 1000 / med : 0;
   const hzSchermo = hz ? FREQUENZE.reduce((a, b) => (Math.abs(b - hz) < Math.abs(a - hz) ? b : a)) : 0;
+  const disegno = (d.disegno ?? []).filter((f) => !d.secondiAvvio.has(f.secondo));
+  const tutti = misuraDisegno(disegno.map((f) => f.ms));
   return {
+    msDisegnoMedio: tutti.medio,
+    msDisegnoPeggiore: tutti.peggiore,
+    disegno: {
+      tutti,
+      zoomNormale: misuraDisegno(disegno.filter((f) => f.zoom >= ZOOM_NORMALE[0] && f.zoom <= ZOOM_NORMALE[1]).map((f) => f.ms)),
+      zoomMinimo: misuraDisegno(disegno.filter((f) => f.zoom <= ZOOM_MINIMO).map((f) => f.ms)),
+    },
     fpsMedio: secondi > 0 ? Math.round((frame / secondi) * 10) / 10 : 0,
     fpsMinimo: validi.length ? Math.min(...validi) : frame,
     frameLenti: d.delta.filter((x) => x > 20).length,

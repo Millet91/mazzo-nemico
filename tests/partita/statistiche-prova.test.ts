@@ -40,3 +40,23 @@ describe('Prova 60 fps · conti', () => {
     expect(mediana([4, 1, 3, 2])).toBe(2.5);
   });
 });
+
+describe('Prova 60 fps · tempo di disegno (Fase 1, Render n.7)', () => {
+  it('medio, p95 e peggiore, per fascia di zoom, senza i secondi di caricamento', async () => {
+    const { calcolaRisultato, misuraDisegno } = await import('../../src/battaglia/partita/statistiche-prova');
+    expect(misuraDisegno([])).toEqual({ medio: 0, p95: 0, peggiore: 0, frame: 0 });
+    expect(misuraDisegno([2, 4, 6])).toMatchObject({ medio: 4, peggiore: 6, frame: 3 });
+    const r = calcolaRisultato({
+      perSecondo: [60, 60, 60], secondiAvvio: new Set([0]), delta: Array(180).fill(1000 / 60), msSim: 0, tick: 0, durataMs: 3000,
+      disegno: [
+        { ms: 40, zoom: 1.4, secondo: 0 }, // caricamento: non conta
+        { ms: 3, zoom: 1.4, secondo: 1 }, { ms: 5, zoom: 1.3, secondo: 1 },
+        { ms: 6, zoom: 0.5, secondo: 2 }, { ms: 2, zoom: 0.9, secondo: 2 },
+      ],
+    });
+    expect(r.msDisegnoPeggiore).toBe(6);
+    expect(r.msDisegnoMedio).toBe(4);
+    expect(r.disegno.zoomNormale).toMatchObject({ medio: 4, peggiore: 5, frame: 2 });
+    expect(r.disegno.zoomMinimo).toMatchObject({ medio: 6, frame: 1 });
+  });
+});

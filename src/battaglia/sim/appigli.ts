@@ -127,6 +127,7 @@ export function aggiornaAppeso(s: StatoBattaglia, p: Pirata, su: -1 | 0 | 1, eve
   const inCima = a !== undefined && p.y <= cima + A.piediCima;
   if (!a || !aPortata(a, p.x, p.y, inCima ? A.passaggioCima : A.presa)) { lascia(t, p, eventi); return false; }
   p.vx = 0; p.vy = 0;
+  const y0 = p.y;
   if (su === -1) {
     if (p.y > cima) versoAsse(t, p, a, 1, false);
     const ny = Math.max(cima, p.y - BIL.movimento.scalaVel);
@@ -154,7 +155,15 @@ export function aggiornaAppeso(s: StatoBattaglia, p: Pirata, su: -1 | 0 | 1, eve
     p.y = ny;
   }
   p.yInizioCaduta = p.y;
+  piolo(p, a, y0, eventi);
   return true;
+}
+
+/** Evento `piolo` (solo audio e pupazzo): uno ogni BIL.movimento.pioloPx px di arrampicata, su e giù. */
+function piolo(p: Pirata, a: Appiglio, y0: number, eventi: EventoBattaglia[]): void {
+  const passo = BIL.movimento.pioloPx;
+  if (Math.floor(y0 / passo) === Math.floor(p.y / passo)) return;
+  eventi.push({ t: 'piolo', pirata: p.id, x: p.x, y: p.y, liana: a.tipo === 'liana' });
 }
 
 /**

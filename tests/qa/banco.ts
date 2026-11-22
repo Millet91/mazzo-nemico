@@ -5,7 +5,7 @@ import type { Comando, ComandoRegistrato, ConfigBattaglia, EventoBattaglia, IdAr
 import { VERSIONE_REGOLE } from '../../src/core/tipi';
 import { casuale, intero, semeIniziale, type ConRng } from '../../src/core/rng';
 import { creaBattaglia, eseguiComando, avanzaTick, hashStato } from '../../src/battaglia/sim';
-import { generaMappa } from '../../src/battaglia/gen';
+import { mappaDiConfig } from '../../src/battaglia/mappa-config';
 import { mappaFatta } from '../../src/battaglia/mappe';
 import { decidi } from '../../src/battaglia/ia';
 import { BIL, TICK_AL_SECONDO } from '../../src/contenuti/bilanciamento';
@@ -35,7 +35,7 @@ export function configCaso(seme: number, perLato?: [number, number], mappaFissa?
 export function mappaPer(cfg: ConfigBattaglia): MappaGenerata {
   const fissa = cfg.mappaFissa ? mappaFatta(cfg.mappaFissa, cfg) : null;
   if (cfg.mappaFissa && !fissa) throw new Error(`mappa fatta a mano sconosciuta: ${cfg.mappaFissa}`);
-  return fissa ?? generaMappa({ seme: cfg.seme, bioma: cfg.bioma, variante: cfg.variante, piratiPerLato: [cfg.squadre[0].pirati, cfg.squadre[1].pirati] });
+  return fissa ?? mappaDiConfig(cfg);
 }
 
 export function nuovaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata = mappaPer(cfg)): StatoBattaglia {
@@ -79,13 +79,21 @@ export function pilotaScalatore(seme: number): Pilota {
   };
 }
 
-/** Le due squadre giocano con l'IA (decidi): arma, mira, miccia e fuoco appena entra in 'azione'. */
+/**
+ * Le due squadre giocano con l'IA (decidi): arma, mira, miccia e fuoco appena entra in 'azione'; poi, come fa il
+ * ciclo di gioco (partita.ts), in fuga corre nella direzione scelta dall'IA per tutta la fuga.
+ */
 export function pilotaIa(): Pilota {
-  let fatto = -1;
+  let fatto = -1, fuga: -1 | 0 | 1 = 0, corre = -1;
   return (s) => {
+    if (s.turno.fase === 'fuga' && fatto === s.turno.numero && corre !== s.turno.numero && fuga !== 0) {
+      corre = s.turno.numero;
+      return [{ t: 'muovi', dir: fuga }];
+    }
     if (s.turno.fase !== 'azione' || fatto === s.turno.numero) return [];
     fatto = s.turno.numero;
     const p = decidi(s, s.squadre[s.turno.squadra].livelloIa ?? 'mozzo');
+    fuga = p.fuga;
     const c: Comando[] = [{ t: 'arma', arma: p.arma }, { t: 'mira', mezziGradi: p.mezziGradi, potenza: p.potenza }];
     if (p.miccia) c.push({ t: 'miccia', secondi: p.miccia });
     c.push({ t: 'fuoco' });
@@ -161,7 +169,7 @@ export function gioca(cfg: ConfigBattaglia, pilota: Pilota, controlli = true, ma
     // ogni turno si chiude: dallo sparo al turno dopo al massimo 15 s simulati (+ la fuga)
     if (s.turno.sparato && sparoTick < 0) sparoTick = s.tick;
     if (s.turno.numero !== turno) { turno = s.turno.numero; inizioTurno = s.tick; sparoTick = -1; }
-    if (!SIM_SEGNAPOSTO && sparoTick >= 0 && s.tick - sparoTick > BIL.turno.fugaTick + 15 * TICK_AL_SECONDO) {
+    if (!SIM_SEGNAPOSTO && sparoTick >= 0 && s.tick - sparoTick > BIL.ritmo.fugaTick + 15 * TICK_AL_SECONDO) {
       v(`turno ${turno} non si chiude da ${(s.tick - sparoTick) / TICK_AL_SECONDO} s dopo lo sparo (13 caso 8)`);
       sparoTick = Infinity;
     }

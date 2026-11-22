@@ -145,7 +145,7 @@ describe('Determinismo e replay', () => {
     while (s.turno.fase !== 'azione') avanzaTick(s, ev);
     const T = s.tick + 3;
     const { stato } = giocaComandi(cfg, mappa, [{ tick: T, c: { t: 'fuoco' } }], { fermaA: T + 1 });
-    expect(stato.turno.fase).toBe('volo');
+    expect(stato.turno.fase).toBe('fuga'); // la fuga parte allo sparo (Fase 1)
   });
 });
 
@@ -167,7 +167,7 @@ describe('simulaColpo (per l\'IA)', () => {
     inAzione(s);
     const previsto = simulaColpo(s, { pirata: 0, arma: 'cannone', mezziGradi: 0, potenza: 100 });
     spara(s, 'cannone', 0, 100);
-    const ev = avanzaFinche(s, (x) => x.turno.fase === 'fuga');
+    const ev = avanzaFinche(s, (x) => x.turno.fase === 'risoluzione');
     const vero = eventiDi(ev, 'danno').filter((e) => e.pirata === 1).reduce((a, e) => a + e.quanto, 0);
     expect(previsto.danni[1]).toBe(vero);
     expect(previsto.impatto).not.toBeNull();
@@ -233,7 +233,7 @@ describe('traiettoria', () => {
     expect(punti.every((q) => q.x < 1000)).toBe(true); // non passa il muro
     // l'ultimo punto coincide con l'esplosione vera
     eseguiComando(s, { t: 'fuoco' });
-    const ev = avanzaFinche(s, (x) => x.turno.fase === 'fuga');
+    const ev = avanzaFinche(s, (x) => x.turno.fase === 'risoluzione');
     const esp = eventiDi(ev, 'esplosione')[0];
     expect(esp.x).toBeCloseTo(punti[punti.length - 1].x, 6);
     expect(esp.y).toBeCloseTo(punti[punti.length - 1].y, 6);

@@ -1,6 +1,6 @@
 # APK Android di prova (debug, Capacitor). Gira a ogni push su main e sui rami claude/**, e a mano.
-# Tutti i rami caricano l'APK come artifact del workflow. Solo main, i rami claude/*-integrazione e claude/m0-*
-# aggiornano la pre-release "apk-prova" scaricabile dal telefono (14: un solo APK di prova, i rami paralleli non si pestano).
+# Tutti i rami caricano l'APK come artifact del workflow. Solo main, i rami claude/*-integrazione (tranne
+# claude/p1-integrazione, vedi sotto) e claude/m0-* aggiornano la pre-release "apk-prova" scaricabile dal telefono (14: un solo APK di prova, i rami paralleli non si pestano).
 name: APK Android
 on:
   push:
@@ -40,11 +40,16 @@ jobs:
         with:
           name: kaboom-ahoy-prova-apk
           path: kaboom-ahoy-prova.apk
+      # Studio v2: finché esistono i due rami di integrazione, la pre-release la aggiorna solo claude/p2-integrazione,
+      # che unisce sempre claude/p1-integrazione prima di ogni push (accordo tra i Lead P1 e P2, 22/11/2026). Così
+      # l'APK del proprietario ha sempre battaglia e carriera insieme. Il ramo P1 carica l'APK solo come artifact.
+      # Quando i due rami tornano uno solo, togliere l'eccezione.
       - name: Pre-release "apk-prova"
         if: >-
+          github.ref_name != 'claude/p1-integrazione' && (
           github.ref_name == 'main' ||
           (startsWith(github.ref_name, 'claude/') && endsWith(github.ref_name, '-integrazione')) ||
-          startsWith(github.ref_name, 'claude/m0-')
+          startsWith(github.ref_name, 'claude/m0-'))
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

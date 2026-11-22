@@ -41,7 +41,8 @@ export function SceltaSchermaglia() {
         <Contatore lato={1} ciurma="marina" etichetta={T.schermaglia.nemici} />
         <div class="contatore scelta-mappa" role="radiogroup" aria-label={T.schermaglia.mappa}>
           <span class="etichetta">{T.schermaglia.mappa}</span>
-          {([['cala-pappagallo', T.schermaglia.mappaCala], ['', T.schermaglia.mappaCasuale]] as const).map(([id, nome]) => (
+          {/* Cala v3: in prova finché non sostituisce la Cala (Fase 2, la decide il Lead P1) */}
+          {([['cala-pappagallo', T.schermaglia.mappaCala], ['cala-pappagallo-v3', T.schermaglia.mappaCalaNuova], ['', T.schermaglia.mappaCasuale]] as const).map(([id, nome]) => (
             <button type="button" id={`mappa-${id || 'casuale'}`} role="radio" aria-checked={mappaSchermaglia.value === id}
               class={`btn ${mappaSchermaglia.value === id ? 'primario' : 'secondario'}`}
               onClick={() => { tocco(); mappaSchermaglia.value = id; }}>{nome}</button>

@@ -76,7 +76,7 @@ export function esplodi(
     if (q.stato !== 'vivo' || q.id === salvo) continue;
     const e = effettoEsplosione(x, y, raggio, danno, spinta, q.x, q.y);
     if (!e) continue;
-    staccaPirata(q, eventi);
+    staccaPirata(q, eventi, s.tick);
     q.vx += e.vx; q.vy += e.vy;
     danneggia(q, e.danno, eventi);
   }

@@ -9,12 +9,15 @@
 // - lo scavalco non ha altro stato: sale accostato al muretto finché non supera lo spigolo, poi fa il passo sopra.
 
 import type { EventoBattaglia, IdMossa, MossaPirata, Pirata, StatoBattaglia, Terreno } from '../../core/tipi';
-import { normalizza } from '../../core/trig';
+import { coseno, daGradi, normalizza, seno } from '../../core/trig';
 import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { capsulaUrta, materialeSottoPiedi, solido, MEZZA_ALTEZZA_PIRATA, MEZZA_LARGHEZZA_PIRATA } from './terreno';
 import { annega, controllaAppoggio, danneggia, espelli, inAcqua, passo, stacca, vola, volaPulito, type Corpo } from './pirata';
 import { aggiornaAppeso, aggrappa, appiglioVicino, lascia, provaAggrappo } from './appigli';
-import { A_TERRA_TICK, MURO_ACCANTO_PX, RINCORSA, SALTI_MURO_MAX, SONDA_PENDENZA_PX } from './costanti';
+import {
+  A_TERRA_TICK, BORDO_APPESO_TICK, BORDO_CERCA_PX, MURO_ACCANTO_PX, RINCORSA, SALTI_MURO_MAX, SCIVOLATA_FINE_GRADI,
+  SONDA_PENDENZA_PX, SONDA_SCIVOLATA_PX,
+} from './costanti';
 
 const M = BIL.movimento;
 /** accelerazione della corsa (da ferma a corsaVel in corsaAccelTick) e frenata (si ferma in frenataPx), px/tick² */
@@ -26,6 +29,10 @@ const SCAVALCO_VEL = M.scavalcoMax / (M.scavalcoTick - 6);
 const SCAVALCO_AVANTI = 2;
 /** controllo in aria durante il salto, px/tick² */
 const ARIA_ACCEL = M.ariaAccel / (TICK_AL_SECONDO * TICK_AL_SECONDO);
+/** scivolata: parte oltre questa discesa (px su SONDA_SCIVOLATA_PX) e continua finché resta oltre la seconda */
+const tangente = (gradi: number): number => seno(daGradi(gradi)) / coseno(daGradi(gradi));
+const SCIVOLATA_INIZIO = SONDA_SCIVOLATA_PX * tangente(M.scivolataGradi);
+const SCIVOLATA_FINE = SONDA_SCIVOLATA_PX * tangente(SCIVOLATA_FINE_GRADI);
 
 /** Cambia mossa (se è già quella non tocca `mossaDa`: l'animazione non riparte). */
 export function mossaA(p: Pirata, m: MossaPirata, tick: number): void {
@@ -150,6 +157,126 @@ function aggiornaScavalco(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1): void {
   else if (r === -1) cade(p, s.tick);
 }
 
+// ─── Scivolata ───────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Quanto scende il pendio davanti (px su SONDA_SCIVOLATA_PX, verso `dir`): 0 se non è una discesa continua
+ * (piano, salita, gradino singolo, ciglio o muro). Le due metà della sonda devono scendere tutte e due: così un
+ * gradino di 8 px su un piano non conta come pendio.
+ */
+export function discesa(t: Terreno, x: number, y: number, dir: -1 | 1): number {
+  const meta = SONDA_SCIVOLATA_PX / 2;
+  const k1 = dislivello(t, x, y, dir * meta, meta, SONDA_SCIVOLATA_PX);
+  const k2 = dislivello(t, x, y, dir * SONDA_SCIVOLATA_PX, meta, 2 * SONDA_SCIVOLATA_PX);
+  if (k1 === null || k2 === null || k1 <= 0 || k2 <= k1) return 0;
+  return k2;
+}
+
+/** Il pendio verso `dir` è abbastanza ripido per far partire una scivolata (oltre BIL.movimento.scivolataGradi)? */
+export function pendioDaScivolata(t: Terreno, x: number, y: number, dir: -1 | 1): boolean {
+  return discesa(t, x, y, dir) > SCIVOLATA_INIZIO;
+}
+
+function iniziaScivolata(s: StatoBattaglia, p: Pirata, d: -1 | 1, v: number, eventi: EventoBattaglia[]): void {
+  gira(s, p, d);
+  p.vx = d * Math.min(M.scivolataVelMax, Math.max(M.passoVel, v));
+  mossaA(p, 'scivolata', s.tick);
+  eventi.push({ t: 'scivola', pirata: p.id, inizio: true, materiale: materialeSottoPiedi(s.terreno, p.x, p.y) });
+}
+
+function fineScivolata(s: StatoBattaglia, p: Pirata, eventi: EventoBattaglia[]): void {
+  eventi.push({ t: 'scivola', pirata: p.id, inizio: false, materiale: materialeSottoPiedi(s.terreno, p.x, p.y) });
+}
+
+/**
+ * Un tick di scivolata per il corpo, nel verso di `vx`: giù per il pendio accelera con la gravità fino a
+ * scivolataVelMax. 'scivola' = continua; 'fine' = il pendio è tornato sotto i 15° (non si è mosso); 'muro' = si è
+ * fermato contro un ostacolo (vx = 0); 'cade' = è uscito da un ciglio e vola con lo slancio (anche in giù).
+ * Lo usa anche l'esploratore della QA.
+ */
+export function scivolaCorpo(t: Terreno, c: Corpo): 'scivola' | 'fine' | 'muro' | 'cade' {
+  const d: -1 | 1 = c.vx < 0 ? -1 : 1;
+  const k = discesa(t, c.x, c.y, d);
+  if (k < SCIVOLATA_FINE) return 'fine';
+  // seno e coseno del pendio senza trigonometria nativa (00 §1.2): solo la radice, che è esatta ovunque
+  const lungo = Math.sqrt(k * k + SONDA_SCIVOLATA_PX * SONDA_SCIVOLATA_PX);
+  const sen = k / lungo, cos = SONDA_SCIVOLATA_PX / lungo;
+  const v = Math.min(M.scivolataVelMax, Math.abs(c.vx) + BIL.fisica.gravita * sen);
+  const dist = v * cos;
+  const passi = Math.max(1, Math.ceil(dist));
+  for (let i = 0; i < passi; i++) {
+    if (!passo(t, c, d, dist / passi, dist)) { c.vx = 0; return 'muro'; }
+    if (!c.aTerra) { c.vy = v * sen; return 'cade'; }
+  }
+  c.vx = d * v;
+  return 'scivola';
+}
+
+/**
+ * Un tick di scivolata del pirata (partito su un pendio oltre 25°, camminando in discesa o atterrandoci). Le frecce
+ * non la fermano. Dove il pendio torna sotto i 15° esce di corsa (se tiene la freccia in discesa) o frenando;
+ * contro un muro si ferma; da un ciglio cade con lo slancio. Continua anche se il turno passa a un altro pirata.
+ */
+function scivola(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, eventi: EventoBattaglia[]): void {
+  const r = p.vita > 0 ? scivolaCorpo(s.terreno, p as Corpo) : 'fine';
+  if (r === 'scivola') return;
+  fineScivolata(s, p, eventi);
+  if (r === 'muro') mossaA(p, 'fermo', s.tick);
+  else if (r === 'cade') mossaA(p, 'caduta', s.tick);
+  else {
+    const d: -1 | 1 = p.vx < 0 ? -1 : 1;
+    if (dir === d && p.vita > 0) { p.vx = d * Math.min(Math.abs(p.vx), M.corsaVel); p.mossa = 'corsa'; p.mossaDa = s.tick; }
+    else mossaA(p, 'frenata', s.tick); // muoviATerra la fa scivolare ancora un po' e la ferma
+  }
+}
+
+// ─── Salvataggio al bordo ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Dove si appende il pirata che è appena caduto da un ciglio (Balzo entro bordoTick): la quota del ciglio è quella
+ * da cui ha lasciato terra (`yInizioCaduta`); il ciglio si cerca prima alle sue spalle, poi davanti, fino a
+ * BORDO_CERCA_PX. Il posto è subito sotto lo spigolo, con la testa all'altezza dei piedi di chi ci stava sopra e la
+ * parete accanto (`lato`). null = nessun ciglio a portata.
+ */
+export function cercaBordo(t: Terreno, p: Pirata): { x: number; y: number; lato: -1 | 1 } | null {
+  const yL = p.yInizioCaduta;
+  const g = BIL.pirata.gradinoMax;
+  /** quota del centro di chi sta in piedi in colonna x vicino a yL (−g…+2 px), o null */
+  const inPiedi = (x: number): number | null => {
+    for (let y = yL - g; y <= yL + 2; y++) if (!capsulaUrta(t, x, y) && capsulaUrta(t, x, y + 1)) return y;
+    return null;
+  };
+  const avanti = versoVolo(p);
+  for (const lato of [(-avanti) as -1 | 1, avanti]) {
+    for (let k = 0; k <= BORDO_CERCA_PX; k++) {
+      const sx = p.x + lato * k;
+      if (capsulaUrta(t, sx, yL - g)) break; // un muro prima del ciglio
+      const ys0 = inPiedi(sx);
+      if (ys0 === null) continue; // ancora vuoto sotto
+      // la quota vera del ciglio si legge un po' più dentro (sullo spigolo la capsula tonda scende di qualche px)
+      const ys = inPiedi(sx + lato * MEZZA_LARGHEZZA_PIRATA) ?? ys0;
+      // il posto appeso è appena fuori, sotto lo spigolo, con la parete accanto
+      for (let dy = 0; dy <= 4; dy++) {
+        const hy = ys + 2 * MEZZA_ALTEZZA_PIRATA - dy;
+        for (let j = 0; j <= 2 * MEZZA_LARGHEZZA_PIRATA + 4; j++) {
+          const hx = sx - lato * j;
+          if (capsulaUrta(t, hx, hy)) continue;
+          if (capsulaUrta(t, hx + lato, hy)) return { x: hx, y: hy, lato };
+          break;
+        }
+      }
+      break;
+    }
+  }
+  return null;
+}
+
+/** Appeso al ciglio dopo il salvataggio: resta un attimo fermo, poi si issa da solo come su un muretto. */
+function aggiornaBordo(s: StatoBattaglia, p: Pirata): void {
+  p.vx = 0; p.vy = 0; p.yInizioCaduta = p.y;
+  if (s.tick - (p.mossaDa ?? 0) >= BORDO_APPESO_TICK) mossaA(p, 'scavalco', s.tick);
+}
+
 /**
  * Un tick a terra. `dir` = freccia tenuta (solo per il pirata di turno, quando può muoversi).
  * Tocco breve = passo corto a passoVel; tenendo oltre corsaDopoTick parte la corsa, che accelera fino a corsaVel
@@ -158,6 +285,7 @@ function aggiornaScavalco(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1): void {
  */
 function muoviATerra(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, eventi: EventoBattaglia[]): void {
   const t = s.terreno;
+  if (p.mossa === 'scivolata') { scivola(s, p, dir, eventi); return; }
   let v = p.vx;
   if (dir === 0 || p.vita <= 0) {
     // freccia lasciata: dal passo si ferma subito, dalla corsa frena
@@ -185,6 +313,12 @@ function muoviATerra(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, eventi: Even
     }
   }
   const d: -1 | 1 = v > 0 ? 1 : -1;
+  // in discesa su un pendio oltre 25° il pirata di turno parte in scivolata (mossa premio: Schermaglia e Prologo l'hanno)
+  if (dir === d && p.vita > 0 && haMossa(s, p, 'scivolata') && pendioDaScivolata(t, p.x, p.y, d)) {
+    iniziaScivolata(s, p, d, Math.abs(v), eventi);
+    scivola(s, p, dir, eventi);
+    return;
+  }
   const pen = pendenza(t, p.x, p.y, d);
   const dist = Math.abs(v) * (1 - M.pendenzaFrazione * Math.max(-1, Math.min(1, pen)));
   const passi = Math.max(1, Math.ceil(dist));
@@ -210,7 +344,7 @@ function muoviATerra(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, eventi: Even
 
 // ─── Balzo ───────────────────────────────────────────────────────────────────────────────────────
 
-export type EsitoBalzo = 'salto' | 'scavalca' | 'afferra' | 'stacca' | 'muro';
+export type EsitoBalzo = 'salto' | 'scavalca' | 'afferra' | 'stacca' | 'muro' | 'bordo';
 
 /** La squadra del pirata ha questa mossa premio? (senza elenco le ha tutte: Schermaglia, Prologo) */
 function haMossa(s: StatoBattaglia, p: Pirata, m: IdMossa): boolean {
@@ -227,18 +361,20 @@ function versoVolo(p: Pirata): -1 | 1 {
  * Cosa fa il Balzo (comando `salta`) per questo pirata, senza toccare lo stato. null = niente.
  * - appeso: 'stacca' (salta via dall'appiglio, nel verso in cui guarda);
  * - in aria: 'afferra' se ha una scala o una liana a portata, 'muro' se ha una parete accanto nel verso in cui
- *   vola e non ha già usato il salto dal muro; chi è stato sbalzato da un colpo non può niente finché non tocca terra;
+ *   vola e non ha già usato il salto dal muro, 'bordo' se è caduto da un ciglio da meno di bordoTick e ha ancora il
+ *   salvataggio (uno per battaglia); chi è stato sbalzato da un colpo non può niente finché non tocca terra;
  * - a terra: 'afferra' se è ai piedi di una scala o liana che sale, 'scavalca' se ha davanti un muretto fino a
  *   28 px, 'muro' se ha davanti una parete più alta e il comando è `indietro: true`, altrimenti 'salto'.
  */
 export function decidiBalzo(s: StatoBattaglia, p: Pirata, indietro: boolean): EsitoBalzo | null {
   if (p.appeso >= 0) return 'stacca';
-  if (p.mossa === 'scavalco') return null;
+  if (p.mossa === 'scavalco' || p.mossa === 'bordo') return null;
   const t = s.terreno;
   const a = appiglioVicino(s, p.x, p.y);
   if (!p.aTerra) {
     if (p.mossa === 'aTerra') return null;
     if (a) return 'afferra';
+    if (p.mossa === 'caduta' && s.tick - (p.mossaDa ?? 0) <= M.bordoTick && (p.bordi ?? 0) < M.bordoPerBattaglia && cercaBordo(t, p)) return 'bordo';
     if ((p.saltiMuro ?? 0) < SALTI_MURO_MAX && capsulaUrta(t, p.x + versoVolo(p) * MURO_ACCANTO_PX, p.y)) return 'muro';
     return null;
   }
@@ -276,6 +412,17 @@ export function balzo(s: StatoBattaglia, p: Pirata, indietro: boolean, eventi: E
     case 'scavalca':
       iniziaScavalco(s, p, p.verso, eventi);
       break;
+    case 'bordo': {
+      // salvataggio al bordo: si aggrappa allo spigolo da cui è caduto, poi si issa (aggiornaBordo)
+      const b = cercaBordo(s.terreno, p)!;
+      p.x = b.x; p.y = b.y; p.vx = 0; p.vy = 0; p.yInizioCaduta = b.y;
+      gira(s, p, b.lato);
+      p.bordi = (p.bordi ?? 0) + 1;
+      p.saltiMuro = 0;
+      mossaA(p, 'bordo', s.tick);
+      eventi.push({ t: 'bordo', pirata: p.id });
+      break;
+    }
     case 'muro': {
       // spinta sulla parete: riparte dall'altra parte, come un salto in avanti
       const d = p.aTerra ? p.verso : versoVolo(p);
@@ -287,7 +434,8 @@ export function balzo(s: StatoBattaglia, p: Pirata, indietro: boolean, eventi: E
     }
     case 'salto': {
       // con la rincorsa: chi sta correndo porta nel salto una parte della velocità
-      const corre = (p.mossa === 'corsa' || p.mossa === 'frenata') && p.vx * p.verso > 0 && haMossa(s, p, 'saltoAppoggio');
+      if (p.mossa === 'scivolata') fineScivolata(s, p, eventi);
+      const corre = (p.mossa === 'corsa' || p.mossa === 'frenata' || p.mossa === 'scivolata') && p.vx * p.verso > 0 && haMossa(s, p, 'saltoAppoggio');
       salta(p.verso * (sa.vx + (corre ? RINCORSA * Math.abs(p.vx) : 0)));
       eventi.push({ t: 'salto', pirata: p.id });
       break;
@@ -311,6 +459,16 @@ function muoviInAria(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, eventi: Even
     return;
   }
   p.saltiMuro = 0;
+  if (pulito && p.vita > 0 && haMossa(s, p, 'scivolata')) {
+    // atterra su un pendio oltre 25°: parte in scivolata (prima nel verso del volo) e non prende danno da caduta
+    const avanti = versoVolo(p);
+    for (const d of [avanti, (-avanti) as -1 | 1]) {
+      if (!pendioDaScivolata(s.terreno, p.x, p.y, d)) continue;
+      eventi.push({ t: 'atterrato', pirata: p.id, dannoCaduta: 0 });
+      iniziaScivolata(s, p, d, p.vx * d > 0 ? Math.abs(p.vx) : 0, eventi);
+      return;
+    }
+  }
   eventi.push({ t: 'atterrato', pirata: p.id, dannoCaduta: danno });
   if (danno > 0) danneggia(p, danno, eventi);
   if (pulito) {
@@ -360,9 +518,10 @@ export function aggiornaPirata(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, ev
   }
   if (espelli(t, p)) {
     controllaAppoggio(t, p);
-    if (p.mossa === 'scavalco') mossaA(p, p.aTerra ? 'fermo' : 'caduta', s.tick);
+    if (p.mossa === 'scavalco' || p.mossa === 'bordo') mossaA(p, p.aTerra ? 'fermo' : 'caduta', s.tick);
   }
   if (p.mossa === 'scavalco') aggiornaScavalco(s, p, dir);
+  else if (p.mossa === 'bordo') aggiornaBordo(s, p);
   else if (p.aTerra) muoviATerra(s, p, dir, eventi);
   else muoviInAria(s, p, dir, eventi);
   // sbalzato e ormai fermo da un po': si rialza (chi è a 0 PV resta giù fino alla lapide)

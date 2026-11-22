@@ -3,18 +3,27 @@
 // per volta, gradino 8 px), lo scavalco dei muretti fino a 28 px (`altezzaScavalco` + `saleScavalco`), l'uscita di
 // corsa da un ciglio, il salto in avanti da fermo (`volaPulito`: atterra in piedi), e scale e liane (`provaAggrappo` + `aggiornaAppeso`).
 // Non usa la rincorsa (mossa premio: una squadra della carriera può non averla) né il salto dal muro:
-// la mappa non deve dipenderne.
+// la mappa non deve dipenderne. Nemmeno il salvataggio al bordo (uno per battaglia).
+// Scivolata (mossa premio, Fase 1): con `{ scivolata: true }` l'esploratore fa come un pirata che ce l'ha (Schermaglia,
+// Prologo): in discesa su un pendio oltre 25° non può fermarsi a metà, scivola (`scivolaCorpo`) fino in fondo, contro
+// un ostacolo o giù da un ciglio. Senza, cammina come chi non ce l'ha. La mappa deve funzionare in tutti e due i modi.
 // Chi finisce in mare è morto: quel passo non conta. Il danno da caduta non ferma l'esplorazione.
 // Proprietario: Lead test/QA. Lo usa tests/mappe/percorribilita.test.ts.
 import type { Appiglio, MappaGenerata, Pirata, Punto, StatoBattaglia, Terreno } from '../../src/core/tipi';
 import { BIL } from '../../src/contenuti/bilanciamento';
 import { cammina, espelli, inAcqua, passo, vola, volaPulito, type Corpo } from '../../src/battaglia/sim/pirata';
-import { altezzaScavalco, saleScavalco } from '../../src/battaglia/sim/movimento';
+import { altezzaScavalco, pendioDaScivolata, saleScavalco, scivolaCorpo } from '../../src/battaglia/sim/movimento';
 import { aggiornaAppeso, provaAggrappo } from '../../src/battaglia/sim/appigli';
 import { capsulaUrta, MEZZA_ALTEZZA_PIRATA } from '../../src/battaglia/sim/terreno';
 
 const TICK_VOLO_MAX = 900;
 const TICK_SCALA_MAX = 900;
+const TICK_SCIVOLATA_MAX = 900;
+
+export interface OpzioniEsploratore {
+  /** il pirata ha la Scivolata (mossa premio): in discesa sui pendi oltre 25° scivola invece di camminare */
+  scivolata?: boolean;
+}
 
 export interface Esplorazione {
   /** il pirata può arrivare a stare in piedi entro `raggio` px da (x, piedi)? */
@@ -27,7 +36,7 @@ export interface Esplorazione {
 }
 
 /** Esploratore con memoria: gli archi (da un posto, dove si arriva) si calcolano una volta sola per mappa. */
-export function esploratore(mappa: MappaGenerata) {
+export function esploratore(mappa: MappaGenerata, opz: OpzioniEsploratore = {}) {
   const t: Terreno = { ...mappa.terreno, maschera: mappa.terreno.maschera };
   const appigli: Appiglio[] = (mappa.appigli ?? []).map((a, i) => ({ id: i, tipo: a.tipo, x: a.x, yAlto: Math.min(a.yAlto, a.yBasso), yBasso: Math.max(a.yAlto, a.yBasso) }));
   const stato = { terreno: t, appigli } as unknown as StatoBattaglia;
@@ -45,6 +54,33 @@ export function esploratore(mappa: MappaGenerata) {
     return -1;
   }
 
+  /** scivola da (x, y) verso dir finché si ferma: chiave del posto in cui resta in piedi, o −1 (mare) */
+  function scivolaGiu(x: number, y: number, dir: -1 | 1): number {
+    const c: Corpo = { x, y, vx: dir * BIL.movimento.passoVel, vy: 0, aTerra: true, yInizioCaduta: y };
+    for (let k = 0; k < TICK_SCIVOLATA_MAX; k++) {
+      const r = scivolaCorpo(t, c);
+      if (inAcqua(c, t.mare)) return -1;
+      if (r === 'scivola') continue;
+      if (r === 'cade') return atterraScivolando(c);
+      return chiave(Math.floor(c.x), Math.floor(c.y)); // in fondo (poi frena: un tratto piano che si fa anche a piedi)
+    }
+    return -1;
+  }
+
+  /** dopo il ciglio: vola, e se riatterra su un altro pendio ripido continua a scivolare */
+  function atterraScivolando(c: Corpo): number {
+    const k = atterra(c);
+    if (k < 0) return -1;
+    const avanti: -1 | 1 = c.vx < 0 ? -1 : 1;
+    for (const d of [avanti, (-avanti) as -1 | 1]) if (pendioDaScivolata(t, c.x, c.y, d)) return scivolaGiu(c.x, c.y, d);
+    return k;
+  }
+
+  /** il pirata di turno atterra: con la Scivolata, su un pendio ripido continua a scivolare */
+  function atterraPirata(c: Corpo): number {
+    return opz.scivolata ? atterraScivolando(c) : atterra(c);
+  }
+
   function pirataIn(x: number, y: number): Pirata {
     return {
       id: 0, squadra: 0, nome: '', x, y, vx: 0, vy: 0, vita: 70, vitaMax: 70, verso: 1, aTerra: true, stato: 'vivo',
@@ -55,16 +91,23 @@ export function esploratore(mappa: MappaGenerata) {
   function calcola(x: number, y: number): Archi {
     const out: Archi = { verso: [], saliti: [], scesi: [] };
     for (const dir of [-1, 1] as const) {
+      if (opz.scivolata && pendioDaScivolata(t, x, y, dir)) {
+        // pendio da scivolata: non si scende a passi, si arriva dove finisce la scivolata
+        out.verso.push(scivolaGiu(x, y, dir));
+        const s: Corpo = { x, y, vx: BIL.pirata.saltoAvanti.vx * dir, vy: BIL.pirata.saltoAvanti.vy, aTerra: false, yInizioCaduta: y };
+        out.verso.push(atterraPirata(s));
+        continue;
+      }
       // un passo
       const c: Corpo = { x, y, vx: 0, vy: 0, aTerra: true, yInizioCaduta: y };
       if (cammina(t, c, dir)) {
         if (c.aTerra) out.verso.push(chiave(Math.floor(c.x), Math.floor(c.y)));
         else {
           // è uscito da un ciglio: al passo, oppure di corsa (cade più in là)
-          out.verso.push(atterra(c));
+          out.verso.push(atterraPirata(c));
           const r: Corpo = { x, y, vx: 0, vy: 0, aTerra: true, yInizioCaduta: y };
           passo(t, r, dir, BIL.pirata.camminata, BIL.movimento.corsaVel);
-          out.verso.push(atterra(r));
+          out.verso.push(atterraPirata(r));
         }
       } else if (altezzaScavalco(t, x, y, dir) > 0) {
         // muretto fino a 28 px: si issa da solo
@@ -75,7 +118,7 @@ export function esploratore(mappa: MappaGenerata) {
       }
       // un salto in avanti
       const s: Corpo = { x, y, vx: BIL.pirata.saltoAvanti.vx * dir, vy: BIL.pirata.saltoAvanti.vy, aTerra: false, yInizioCaduta: y };
-      out.verso.push(atterra(s));
+      out.verso.push(atterraPirata(s));
     }
     // scale e liane: su e giù fino in fondo, tenendo il comando
     for (const su of [-1, 1] as const) {
@@ -86,7 +129,7 @@ export function esploratore(mappa: MappaGenerata) {
       for (let k = 0; k < TICK_SCALA_MAX && appeso; k++) appeso = aggiornaAppeso(stato, p, su, []);
       if (appeso) continue; // fermo a metà: non è arrivato da nessuna parte
       const piedi = p.y + MEZZA_ALTEZZA_PIRATA;
-      const arrivo = p.aTerra ? chiave(Math.floor(p.x), Math.floor(p.y)) : atterra(p);
+      const arrivo = p.aTerra ? chiave(Math.floor(p.x), Math.floor(p.y)) : atterraPirata(p);
       if (arrivo < 0) continue;
       out.verso.push(arrivo);
       if (su === -1 && p.aTerra && piedi <= a.yAlto + 2) out.saliti.push(a.id);

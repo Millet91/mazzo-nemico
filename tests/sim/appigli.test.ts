@@ -68,6 +68,25 @@ describe('Scale e liane', () => {
     }
   });
 
+  it('un evento piolo ogni pioloPx px di arrampicata, su e giù; liana: true solo sulle liane', () => {
+    for (const tipo of ['scala', 'liana'] as const) {
+      const s = conScala(882, SUOLO, tipo);
+      inAzione(s);
+      eseguiComando(s, { t: 'arrampica', dir: -1 });
+      avanza(s, 2);
+      const y0 = pirata(s, 0).y;
+      const su = eventiDi(avanza(s, 60), 'piolo');
+      const salito = y0 - pirata(s, 0).y;
+      expect(su.length).toBeGreaterThanOrEqual(Math.floor(salito / BIL.movimento.pioloPx));
+      expect(su.length).toBeLessThanOrEqual(Math.ceil(salito / BIL.movimento.pioloPx));
+      expect(su.every((e) => e.pirata === 0 && e.liana === (tipo === 'liana'))).toBe(true);
+      eseguiComando(s, { t: 'arrampica', dir: 1 }); // ferma
+      expect(eventiDi(avanza(s, 20), 'piolo')).toHaveLength(0);
+      eseguiComando(s, { t: 'arrampica', dir: 1 }); // scende
+      expect(eventiDi(avanza(s, 30), 'piolo').length).toBeGreaterThan(0);
+    }
+  });
+
   it('dalla cima scende fino al suolo e appoggia i piedi senza danno da caduta', () => {
     const s = conScala(898, CIMA);
     inAzione(s);

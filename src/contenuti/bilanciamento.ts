@@ -132,6 +132,8 @@ export const BIL = {
     pendenzaFrazione: 0.3,
     /** un evento `passo` ogni tanti px percorsi */
     passoPx: 14,
+    /** un evento `piolo` ogni tanti px di arrampicata su scale e liane (solo audio e pupazzo, non cambia la sim) */
+    pioloPx: 20,
     /** scavalco automatico: si issa da solo sui muretti fino a questa altezza (oltre il gradino di 8 px) */
     scavalcoMax: 28,
     scavalcoTick: Math.round(0.25 * S),

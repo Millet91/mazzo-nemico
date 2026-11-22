@@ -3,8 +3,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   alzo, bannerDaEventi, barraVento, celleGriglia, comandiVisibili, configSchermaglia, creaDoppioTocco, creaFrecce,
-  creaGrilletto, creaGrillettoUnico, creaRipetitore, creaSalto, micciaSuccessiva, miraAttiva, PASSO_MIRA, RIPETI_OGNI_MS,
-  DURATA_BANNER_MS, SALTO_ALTO_MS, type Tempi,
+  creaGrilletto, creaGrillettoUnico, creaRipetitore, micciaSuccessiva, miraAttiva, PASSO_MIRA, RIPETI_OGNI_MS,
+  DURATA_BANNER_MS, balzoDi, comandoBalzo, fattoVisibile, secondiTimer, type Tempi,
 } from '../../src/ui/battaglia/logica';
 import { dotazioneIniziale } from '../../src/contenuti/armi';
 import { BIL } from '../../src/contenuti/bilanciamento';
@@ -49,12 +49,12 @@ function vista(p: Partial<VistaBattaglia> = {}): VistaBattaglia {
 }
 
 describe('Schermaglia di M1', () => {
-  it('Teschio Rosso umano attaccante contro Marina Reale IA Mozzo, 3 contro 3, 30 s, traiettoria intera', () => {
+  it('Teschio Rosso umano attaccante contro Marina Reale IA Mozzo, 3 contro 3, 25 s per sparo, traiettoria intera', () => {
     const c = configSchermaglia(1234);
     expect(c.bioma).toBe('isola');
     expect(c.squadre[0]).toMatchObject({ ciurma: 'teschio', ruolo: 'attaccante', controllo: 'umano', pirati: 3 });
     expect(c.squadre[1]).toMatchObject({ ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: 3 });
-    expect(c.timerSecondi).toBe(30);
+    expect(c.timerSecondi).toBe(25);
     expect(c.traiettoriaCompleta).toBe(true);
     expect(configSchermaglia(-1).seme).toBe(0xffffffff);
   });
@@ -204,33 +204,44 @@ describe('comandi v3 · FUOCO al rilascio', () => {
   });
 });
 
-describe('comandi v3 · SALTA', () => {
-  it('tocco breve = salto lungo in avanti, subito al rilascio', () => {
-    const { t, avanza: avanti } = orologio();
-    const c: string[] = [];
-    const s = creaSalto(() => c.push('avanti'), () => c.push('alto'), t);
-    s.premi(); avanti(90); s.rilascia();
-    expect(c).toEqual(['avanti']);
-    avanti(1000);
-    expect(c).toEqual(['avanti']);
+describe('Fase 1 · timer per sparo (BIL.ritmo)', () => {
+  it('12 s di norma, 25 col Mozzo e nel Prologo, 45 col Timer lungo (che vince su tutto)', () => {
+    expect(secondiTimer()).toBe(12);
+    expect(secondiTimer({ livelloIa: 'capitano' })).toBe(12);
+    expect(secondiTimer({ livelloIa: 'mozzo' })).toBe(25);
+    expect(secondiTimer({ prologo: true, livelloIa: 'nostromo' })).toBe(25);
+    expect(secondiTimer({ livelloIa: 'mozzo', timerLungo: true })).toBe(45);
+    expect([secondiTimer(), secondiTimer({ prologo: true }), secondiTimer({ timerLungo: true })])
+      .toEqual([BIL.ritmo.timerSparo, BIL.ritmo.timerSparoMozzo, BIL.ritmo.timerSparoLungo]);
   });
+});
 
-  it('tenuto premuto = salto alto all\'indietro, una volta sola', () => {
-    const { t, avanza: avanti } = orologio();
-    const c: string[] = [];
-    const s = creaSalto(() => c.push('avanti'), () => c.push('alto'), t);
-    s.premi(); avanti(SALTO_ALTO_MS + 10);
-    expect(c).toEqual(['alto']);
-    s.rilascia();
-    expect(c).toEqual(['alto']);
+describe('Fase 1 · tasto Balzo', () => {
+  it('manda sempre salta; indietro solo per il salto dal muro', () => {
+    expect(comandoBalzo('salto')).toEqual({ t: 'salta', indietro: false });
+    for (const b of ['scavalca', 'afferra', 'stacca'] as const) expect(comandoBalzo(b)).toEqual({ t: 'salta', indietro: false });
+    expect(comandoBalzo('muro')).toEqual({ t: 'salta', indietro: true });
   });
+  it('senza indicazione è il salto, e ogni Balzo ha il suo nome', () => {
+    expect(balzoDi(null)).toBe('salto');
+    expect(balzoDi(vista())).toBe('salto');
+    expect(balzoDi(vista({ balzo: 'afferra' }))).toBe('afferra');
+    for (const b of ['salto', 'scavalca', 'afferra', 'stacca', 'muro'] as const) expect(T.battaglia.balzo[b].length).toBeGreaterThan(3);
+  });
+});
 
-  it('annullato (fine del turno col dito sopra) non salta', () => {
-    const { t, avanza: avanti } = orologio();
-    const c: string[] = [];
-    const s = creaSalto(() => c.push('avanti'), () => c.push('alto'), t);
-    s.premi(); s.annulla(); avanti(1000); s.rilascia();
-    expect(c).toEqual([]);
+describe('Fase 1 · tasto FATTO', () => {
+  it('solo in fuga, nel turno del giocatore, a battaglia aperta', () => {
+    expect(fattoVisibile(vista({ fase: 'fuga', puoFinire: true }))).toBe(true);
+    expect(fattoVisibile(vista({ fase: 'azione', puoFinire: false }))).toBe(false);
+    expect(fattoVisibile(vista({ fase: 'fuga', puoFinire: true, tocca: 'ia' }))).toBe(false);
+    expect(fattoVisibile(vista({ fase: 'volo', puoFinire: false }))).toBe(false);
+    expect(fattoVisibile(vista({ fase: 'fuga', puoFinire: false }))).toBe(false);
+    expect(fattoVisibile(null)).toBe(false);
+  });
+  it('il suggerimento del mirino sta su due righe corte', () => {
+    expect(T.battaglia.suggerimentoMirino).toHaveLength(2);
+    for (const r of T.battaglia.suggerimentoMirino) expect(r.length).toBeLessThanOrEqual(24);
   });
 });
 

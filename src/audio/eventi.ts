@@ -62,7 +62,12 @@ export const MUTI_PER_SCELTA: Partial<Record<EventoBattaglia['t'], string>> = {
   fase: 'cambio di fase interno: i momenti che contano hanno già il loro evento (sparo, turnoIniziato, fine)',
   timerAvviato: 'il timer parte in silenzio; suona solo negli ultimi 5 secondi (tic-tac dalla VistaBattaglia)',
   cratere: 'serve al disegno del terreno: il botto è già nell\'evento esplosione',
-  piolo: 'evento nuovo del Lead (22/11): muto finché Audio non collega i suoni del piolo di legno e della corda',
+  crollo: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
+  macerie: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
+  fuoco: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
+  frana: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
+  ponteCalato: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
+  maschera: 'serve al disegno del terreno: il suono è già negli eventi crollo, fuoco e frana',
 };
 
 const PASSI: Record<number, { id: IdSuono; intonazione?: number }> = {
@@ -143,7 +148,11 @@ export function suoniPerEventi(eventi: readonly EventoBattaglia[], vista: VistaB
         break;
       }
       case 'salto': una({ id: 'salto' }); break;
-      case 'saltoMuro': una({ id: 'salto_muro' }); break;
+      case 'saltoMuro':
+        // la spinta sul muro è una prodezza: il pirata la accompagna col suo "hup!" (le voci restano distanziate)
+        una({ id: 'salto_muro' });
+        parla(e.pirata, 'sforzo', 1);
+        break;
       case 'atterrato': una({ id: e.dannoCaduta > 0 ? 'caduta_tonfo' : 'atterra' }); break;
       case 'rimbalzo': una({ id: 'arma_granata_rimbalzo', pan: panDaX(e.x) }); break;
       case 'esplosione': if (!botto || e.raggio > botto.raggio) botto = e; break;
@@ -181,6 +190,8 @@ export function suoniPerEventi(eventi: readonly EventoBattaglia[], vista: VistaB
         if (e.corsa) una({ id: 'fibbia', pan: panDaX(e.x), ritardo: 0.03 });
         break;
       }
+      // su per la scala o la liana: un colpetto ogni piolo (la sim ne manda uno ogni 20 px), così la salita non è muta
+      case 'piolo': una({ id: e.liana ? 'piolo_corda' : 'piolo_legno', pan: panDaX(e.x) }); break;
       case 'scavalco':
         una({ id: 'scavalco' });
         parla(e.pirata, 'sforzo', 0);
@@ -210,7 +221,7 @@ export function suoniPerEventi(eventi: readonly EventoBattaglia[], vista: VistaB
         break;
       }
       case 'fase': case 'timerAvviato': case 'cratere': break;
-      case 'piolo': break; // muto finché Audio non collega i suoni del piolo e della corda
+      case 'crollo': case 'macerie': case 'maschera': case 'fuoco': case 'frana': case 'ponteCalato': break; // Fase 3: li collega Audio
       default: {
         // un evento nuovo nei contratti deve passare da qui: il compilatore si ferma su questa riga
         const mai: never = e;

@@ -3,7 +3,7 @@
 // è lo stesso che può usare la QA per "nessun evento senza suono".
 import { test, expect, type Page } from '@playwright/test';
 
-interface Stato { contesto: string; pronti: number; totale: number; brano: string | null; scena: string | null; ambiente: boolean; percussioni: boolean; chiesti: string[]; suonati: number; voci: number }
+interface Stato { contesto: string; pronti: number; totale: number; msPronti: number | null; daCassetto: number; brano: string | null; scena: string | null; ambiente: boolean; percussioni: boolean; chiesti: string[]; suonati: number; voci: number }
 const stato = (page: Page) => page.evaluate(() => (window as any).__kaboomAudio.stato() as Stato);
 
 test('Impostazioni: due cursori (musica, effetti e voci), salvati sul telefono', async ({ page }) => {
@@ -143,4 +143,33 @@ test('eventi della Fase 1 sul bus (passo, scivolata, mare che sale, fine): il mo
   s = await stato(page);
   expect(s.chiesti).toContain('mus_vittoria');
   expect(s.brano).toBeNull();
+});
+
+test('Diagnostica: la riga dell\'audio; al secondo avvio i suoni vengono dal telefono, senza ricalcolarli', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 360 });
+  await page.goto('/?prova');
+  await expect.poll(async () => { const s = await stato(page); return s.pronti === s.totale; }, { timeout: 30000 }).toBe(true);
+  let s = await stato(page);
+  expect(s.daCassetto).toBe(0);
+  expect(s.msPronti).toBeGreaterThan(0);
+  await page.locator('#apri-impostazioni').click();
+  await page.locator('#apri-diagnostica').click();
+  const riga = page.getByTestId('stato-audio');
+  await expect(riga).toContainText(`${s.totale} su ${s.totale} suoni pronti`);
+  await expect(riga).toContainText('calcolati');
+  await expect(riga).toContainText('motore acceso');
+  await page.screenshot({ path: 'test-results/screenshot/diagnostica-audio-20x9.png' });
+  // il cassetto si scrive in sottofondo appena tutto è pronto: poi si ricarica come un secondo avvio dell'app
+  await page.waitForTimeout(1500);
+  await page.reload();
+  await expect.poll(async () => { const x = await stato(page); return x.pronti === x.totale; }, { timeout: 10000 }).toBe(true);
+  s = await stato(page);
+  expect(s.daCassetto).toBe(s.totale);
+  console.log(`audio: secondo avvio, ${s.totale} suoni dal cassetto in ${s.msPronti} ms`);
+  expect(s.msPronti!).toBeLessThan(3000);
+  await page.locator('#apri-impostazioni').click();
+  await page.locator('#apri-diagnostica').click();
+  await expect(page.getByTestId('stato-audio')).toContainText('tenuti sul telefono');
+  // e i suoni del cassetto suonano davvero (i tocchi su Impostazioni e Diagnostica)
+  await expect.poll(async () => (await stato(page)).suonati, { timeout: 5000 }).toBeGreaterThanOrEqual(1);
 });

@@ -95,7 +95,7 @@ export function colpoIstantaneo(s: StatoBattaglia, p: Pirata, eventi: EventoBatt
     const q = s.pirati.find((x) => x.id === r.pirata)!;
     const spinta = ((a.spintaFissa ?? 0) / TICK_AL_SECONDO);
     const dir = direzioneSpinta(p.x, p.y, q.x, q.y);
-    staccaPirata(q, eventi);
+    staccaPirata(q, eventi, s.tick);
     q.vx += dir.x * spinta; q.vy += dir.y * spinta;
     danneggia(q, dannoArma(a.id, s.squadre[p.squadra].ciurma), eventi);
   }
@@ -123,7 +123,7 @@ export function colpoMischia(s: StatoBattaglia, p: Pirata, eventi: EventoBattagl
   eventi.push({ t: 'colpoSciabola', pirata: p.id, colpiti: colpiti.map((q) => q.id) });
   const sp = spintaMischia(a, p.verso);
   for (const q of colpiti) {
-    staccaPirata(q, eventi);
+    staccaPirata(q, eventi, s.tick);
     q.vx += sp.vx; q.vy += sp.vy;
     danneggia(q, dannoArma(a.id, s.squadre[p.squadra].ciurma), eventi);
   }

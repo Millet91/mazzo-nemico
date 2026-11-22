@@ -92,8 +92,8 @@ describe('Fase 0 · raggiungibilità', () => {
     }
   });
 
-  it('uno scalino di 24 px a piedi non si sale (gradino massimo 8), uno di 60 non si salta', () => {
-    const s = conScalino(24, 560);
+  it('uno scalino di 40 px a piedi non si sale (lo scavalco arriva a 28), uno di 60 non si salta', () => {
+    const s = conScalino(40, 560);
     inAzione(s);
     eseguiComando(s, { t: 'muovi', dir: 1 });
     avanza(s, 120);
@@ -112,8 +112,12 @@ describe('Fase 0 · raggiungibilità', () => {
     const p = pirata(s);
     const x0 = p.x;
     eseguiComando(s, { t: 'muovi', dir: p.x < 530 ? 1 : -1 });
-    avanza(s, 90);
-    expect(Math.abs(pirata(s).x - x0)).toBeCloseTo(90 * BIL.pirata.camminata, 6);
+    avanza(s, 20);
+    eseguiComando(s, { t: 'muovi', dir: 0 });
+    avanza(s, 1);
+    eseguiComando(s, { t: 'muovi', dir: p.x < 530 ? 1 : -1 });
+    avanza(s, 20);
+    expect(Math.abs(pirata(s).x - x0)).toBeCloseTo(40 * BIL.pirata.camminata, 6); // a passi corti: 1 px a tick
   });
 });
 

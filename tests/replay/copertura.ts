@@ -10,7 +10,7 @@ export const COPERTURA_M1 = [
   // passata di ritmo (m1-ritmo §9): barili di polvere e casse Rum/Trappola
   'barile', 'cassaCaduta', 'cassa:rum', 'cassa:trappola',
   // mappe fatte a mano (#41)
-  'mappa:cala-pappagallo',
+  'mappa:cala-pappagallo-v3',
 ] as const;
 /** Desiderabile ma raro: si prende se il generatore lo trova. */
 export const COPERTURA_FACOLTATIVA = ['fine:tempo-parita', 'fine:ritirata', 'dannoCaduta'] as const;

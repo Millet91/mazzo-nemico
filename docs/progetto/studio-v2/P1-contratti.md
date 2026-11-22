@@ -125,3 +125,17 @@ Fase 2, subito dopo:
 2. Misura sul profilo lento (CPU ×4 di Chromium) la preparazione all'avvio e i frame persi al menu: sopra 6 s o se scatta, prepara a pezzi più piccoli.
 3. Una riga in Diagnostica con `statoAudio()` (pronti/totale, contesto).
 Poi Fase 3 (crolli, fuoco, sabbia) e Fase 4 (rampino, armi nuove). La taratura a orecchio la dà il proprietario (MP3 in `/mnt/project-files/audio-p1/`).
+
+## 7. Fase 3 · contratto congelato (Lead P1, 22/11/2026)
+
+Dalle proposte di Fisica (`/mnt/project-files/p1/fase3-contratto-fisica.md`) e di Mappa (`fase3-strutture.md`). Tipi in `src/core/tipi.ts`, numeri in `BIL.crolli`, `BIL.fuoco`, `BIL.sabbia`, `BIL.macerie`.
+
+- **Ancoraggi come dato, non nella maschera** (scelta di Mappa): `MappaGenerata.sostegni?: Rettangolo[]`. Niente `MATERIALE.ancora`. Appoggi = fondale, ferro, un pixel pieno dentro un sostegno, oppure ricerca che supera `pezzoMaxPx` (**6000 px**, la soglia di Mappa: le tre masse alte della Cala, 44-71 mila px, non cadono mai intere).
+- **Ponti**: gli ancoraggi sono rettangoli in `StrutturaMappa.ancoraggi`. Tagliato un capo resta appeso all'altro (`ponteCalato`); la scala di corda che ne nasce è per la Fase 4.
+- **"Sotto 24 px"** = briciole: i pezzi sotto `briciolePx` spariscono in polvere. Ogni altro pezzo staccato entro `pezzoMaxPx` cade in blocco.
+- **Anti-frustrazione**: niente crolli prima del turno 2; un pezzo non cade se uno spawn iniziale sta nella sua zona di caduta (il pezzo prolungato fino al mare) allargata di 24 px per lato. È la proposta di Mappa per i ponti, valida per tutti; le distanze ≥ 120 px dagli elementi restano una regola di disegno, controllata dalle prove di Mappa.
+- **Macerie** 8 PV, masso 20 con spinta, tetto 20 a turno per pirata, lasciano sempre almeno 1 PV (mai morte sicura).
+- **Fuoco** 4 s, anello 1,3 × raggio, 6 PV a fine turno a chi ci sta dentro (può uccidere: si può scappare). Non si propaga.
+- **Masso** sulle cengie basse della Rocca (non sulla Mesa); **Vedetta della Duna su pali** alla quota di oggi: approvati.
+- I campi nuovi di `StatoBattaglia` (`pezzi`, `fuochi`, `frane`, `strutture`) sono facoltativi finché Fisica non li crea in `creaBattaglia`; da lì sono sempre presenti ed entrano nell'hash (replay in commit a parte).
+- Ordine delle PR di Fisica come nel suo §8. Mappa aggiunge `sostegni`, strutture, massi e pezzi alla Cala v3 dopo la PR 2 di Fisica; Render fa ritaglio dell'arte e anteprima in rosso; Audio i suoni di crollo, macerie, fuoco e frana.

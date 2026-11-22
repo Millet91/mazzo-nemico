@@ -166,6 +166,24 @@ export const PIRATA = {
     s.modi({ base: s.tra(600, 690), rapporti: [1, 2.76, 5.4], code: [0.13, 0.08, 0.05], vol: 0.7 });
     s.rumore({ durata: 0.012, vol: 0.7, filtro: 'highpass', da: 2500 });
   }, 2),
+  // ── arrampicata in un tocco (evento `piolo` della sim, uno ogni 20 px: circa 4 al secondo) ──
+  /** mano (o stivale) su un piolo di legno: colpetto secco e il legno che risuona appena */
+  piolo_legno: {
+    canale: 'effetti', volume: 0.26, durata: 0.12, varianti: 3, maxIstanze: 2,
+    ricetta(s) {
+      s.rumore({ durata: 0.018, vol: 0.8, filtro: 'bandpass', da: s.tra(1500, 2100), q: 1.2 });
+      s.modi({ t: 0.003, base: s.tra(360, 450), rapporti: [1, 2.3, 3.8], code: [0.06, 0.04, 0.025], pesi: [1, 0.6, 0.35], vol: 0.7 });
+      s.tono({ da: s.tra(170, 200), a: 120, durata: 0.03, vol: 0.35 });
+    },
+  },
+  /** mano che risale la liana: la corda che scricchiola e il palmo che struscia */
+  piolo_corda: {
+    canale: 'effetti', volume: 0.24, durata: 0.18, varianti: 3, maxIstanze: 2,
+    ricetta(s) {
+      s.rumore({ durata: 0.1, vol: 0.7, attacco: 0.02, filtro: 'bandpass', da: s.tra(1300, 1700), a: s.tra(900, 1100), q: 1 });
+      scricchiolio(s, 0.01, 0.15, 0.7, s.tra(900, 1250));
+    },
+  },
   /** tintinnio delle fibbie quando corre */
   fibbia: {
     canale: 'effetti', volume: 0.14, durata: 0.12, varianti: 2, maxIstanze: 2,

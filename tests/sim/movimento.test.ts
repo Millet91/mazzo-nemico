@@ -84,6 +84,7 @@ describe('Corsa a falcate', () => {
       const s = passo > 0
         ? (rampa(t, 800, 400, 1, 1), battagliaPiatta([780], [1700], { terreno: t }))
         : (() => { for (let x = 800; x < 1100; x++) rettangolo(t, x, SUOLO - 300 + (x - 799), x + 1, SUOLO, MATERIALE.roccia); return battagliaPiatta([780], [1700], { terreno: t }); })();
+      s.config.squadre[0].mosse = []; // senza la Scivolata: a 45° in discesa cammina (con la mossa scivolerebbe)
       inAzione(s);
       eseguiComando(s, { t: 'muovi', dir: 1 });
       avanza(s, 60);

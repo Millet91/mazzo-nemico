@@ -200,14 +200,16 @@ export function pirataAttivo(s: StatoBattaglia): Pirata | undefined {
 /**
  * Cosa farebbe adesso il Balzo del pirata attivo (per l'etichetta del tasto, `VistaBattaglia.balzo`), o undefined
  * se non può fare niente (fuori fase, a metà scavalco, sbalzato in volo, in aria senza pareti né appigli).
- * Con 'muro' il tasto manda `salta` con `indietro: true`. Non muta `s`.
+ * Con 'muro' il tasto manda `salta` con `indietro: true`; il salvataggio al bordo si mostra come 'afferra'.
+ * Non muta `s`.
  */
-export function balzoPossibile(s: StatoBattaglia): EsitoBalzo | undefined {
+export function balzoPossibile(s: StatoBattaglia): Exclude<EsitoBalzo, 'bordo'> | undefined {
   const t = s.turno;
   const p = pirataAttivo(s);
   if (s.esito || !p || !inGioco(p)) return undefined;
   if (t.fase !== 'azione' && !(t.fase === 'fuga' && s.tick - t.inizioFase >= durataColpi(t.arma))) return undefined;
-  return decidiBalzo(s, p, false) ?? undefined;
+  const b = decidiBalzo(s, p, false);
+  return b === 'bordo' ? 'afferra' : b ?? undefined;
 }
 
 /**

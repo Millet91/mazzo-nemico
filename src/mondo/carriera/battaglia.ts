@@ -35,7 +35,10 @@ export function battagliaDaAttacco(cap: DefCapitolo, s: StatoCarriera, seme: num
         ? { ciurma: 'marina', ruolo: 'difensore', controllo: 'ia', livelloIa: 'mozzo', pirati: dif }
         : { ciurma: 'teschio', ruolo: 'difensore', controllo: 'umano', pirati: dif },
     ],
-    timerSecondi: s.battaglieGiocate < BATTAGLIE_TIMER_LUNGO ? BIL.turno.timerMozzo : BIL.turno.timerNormale,
+    // timer per sparo (P1, BIL.ritmo): stessa regola di secondiTimer() in ui/battaglia/logica.ts, qui ripetuta
+    // perché questa cartella è pura e non importa ui/. Timer di Mozzo nelle prime battaglie e a difficoltà Mozzo.
+    timerSecondi: s.battaglieGiocate < BATTAGLIE_TIMER_LUNGO || (s.difficolta ?? 'mozzo') === 'mozzo'
+      ? BIL.ritmo.timerSparoMozzo : BIL.ritmo.timerSparo,
     traiettoriaCompleta: true,
   };
   return { carriera: { isola: a.verso, scontro }, config };

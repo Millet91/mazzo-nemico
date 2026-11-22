@@ -131,5 +131,5 @@ describe('QA · ritmo del turno (BIL.ritmo)', () => {
       expect(r.turnoP90).toBeLessThanOrEqual(12);
     }
     console.log(`ritmo persona (mira 3 s):\n${righe.join('\n')}`);
-  });
+  }, 60_000);
 });

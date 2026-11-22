@@ -142,6 +142,11 @@ export interface ConfigBattaglia {
   traiettoriaCompleta: boolean;
   /** mappa fatta a mano (battaglia/mappe, 06 §6) al posto di quella generata dal seme; resta nel replay */
   mappaFissa?: string;
+  /**
+   * seme della sola mappa generata (carriera, P2): se c'è, il generatore usa questo e `seme` resta per vento, casse
+   * e IA; assente = la mappa nasce da `seme`. Con `mappaFissa` non conta. Lo legge battaglia/mappa-config.ts.
+   */
+  semeMappa?: number;
   /** tipo di scontro (carriera, P2); assente = assalto */
   scontro?: ConfigScontro;
 }
@@ -279,6 +284,12 @@ export interface StatoTurno {
   sparato: boolean;
   /** in 'risoluzione': tick da cui tutto è fermo (−1 = qualcosa si muove). La sim lo azzera a −1 a ogni cambio di fase */
   fermoDa: number;
+  /**
+   * Fase 1: richiesta lasciata da eseguiComando che la sim applica al prossimo avanzaTick e poi cancella
+   * ('fatto' = chiudi la fuga, 'balzo' = Balzo, 'balzoMuro' = Balzo con `indietro: true`). Assente = nessuna.
+   * Sostituisce i valori sentinella in `fermoDa`.
+   */
+  richiesta?: 'fatto' | 'balzo' | 'balzoMuro';
 }
 
 /** 'bandiera' = scontro Bandiera vinto strappandola (P2) */

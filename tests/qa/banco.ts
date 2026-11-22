@@ -5,7 +5,7 @@ import type { Comando, ComandoRegistrato, ConfigBattaglia, EventoBattaglia, IdAr
 import { VERSIONE_REGOLE } from '../../src/core/tipi';
 import { casuale, intero, semeIniziale, type ConRng } from '../../src/core/rng';
 import { creaBattaglia, eseguiComando, avanzaTick, hashStato } from '../../src/battaglia/sim';
-import { generaMappa } from '../../src/battaglia/gen';
+import { mappaDiConfig } from '../../src/battaglia/mappa-config';
 import { mappaFatta } from '../../src/battaglia/mappe';
 import { decidi } from '../../src/battaglia/ia';
 import { BIL, TICK_AL_SECONDO } from '../../src/contenuti/bilanciamento';
@@ -35,7 +35,7 @@ export function configCaso(seme: number, perLato?: [number, number], mappaFissa?
 export function mappaPer(cfg: ConfigBattaglia): MappaGenerata {
   const fissa = cfg.mappaFissa ? mappaFatta(cfg.mappaFissa, cfg) : null;
   if (cfg.mappaFissa && !fissa) throw new Error(`mappa fatta a mano sconosciuta: ${cfg.mappaFissa}`);
-  return fissa ?? generaMappa({ seme: cfg.seme, bioma: cfg.bioma, variante: cfg.variante, piratiPerLato: [cfg.squadre[0].pirati, cfg.squadre[1].pirati] });
+  return fissa ?? mappaDiConfig(cfg);
 }
 
 export function nuovaBattaglia(cfg: ConfigBattaglia, mappa: MappaGenerata = mappaPer(cfg)): StatoBattaglia {

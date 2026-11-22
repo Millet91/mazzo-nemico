@@ -1,12 +1,11 @@
-// Fisica del pirata: camminata con gradino, salti, volo con rimbalzo, attrito, danno da caduta,
-// espulsione dal solido (caso 7) e annegamento. Le funzioni sul "Corpo" non sanno nulla di eventi e PV:
+// Fisica del corpo del pirata: passo con gradino, volo con rimbalzo, attrito, danno da caduta,
+// espulsione dal solido (caso 7) e annegamento. Le mosse (corsa, scavalco, Balzo…) stanno in movimento.ts. Le funzioni sul "Corpo" non sanno nulla di eventi e PV:
 // così le usa anche simulaColpo (IA) su copie, senza toccare lo stato.
 
-import type { EventoBattaglia, Pirata, StatoBattaglia, Terreno } from '../../core/tipi';
+import type { EventoBattaglia, Pirata, Terreno } from '../../core/tipi';
 import { BIL } from '../../contenuti/bilanciamento';
 import { capsulaUrta, materialeSottoPiedi, solido, MEZZA_ALTEZZA_PIRATA, MEZZA_LARGHEZZA_PIRATA } from './terreno';
 import { ESPULSIONE_MAX_PX } from './costanti';
-import { aggiornaAppeso, lascia, provaAggrappo } from './appigli';
 
 export interface Corpo {
   x: number; y: number; vx: number; vy: number; aTerra: boolean; yInizioCaduta: number;
@@ -37,10 +36,14 @@ export function stacca(c: Corpo): void {
   if (appeso) c.appeso = -1;
 }
 
-/** Come stacca, per un pirata spinto da un colpo: se era appeso esce l'evento `staccato`. */
-export function staccaPirata(p: Pirata, eventi: EventoBattaglia[]): void {
+/**
+ * Come stacca, per un pirata spinto da un colpo: se era appeso esce l'evento `staccato`. Da qui la sua mossa è
+ * 'aTerra' (sbalzato): vola e rimbalza come un corpo, e resta così fino a mezzo secondo dopo che si è fermato.
+ */
+export function staccaPirata(p: Pirata, eventi: EventoBattaglia[], tick: number): void {
   if (p.appeso >= 0) eventi.push({ t: 'staccato', pirata: p.id });
   stacca(p);
+  if (p.mossa !== 'aTerra' || p.aTerra) { p.mossa = 'aTerra'; p.mossaDa = tick; }
 }
 
 /**
@@ -55,11 +58,19 @@ function muroDavanti(t: Terreno, nx: number, y: number, dir: -1 | 1): boolean {
 }
 
 /**
- * Un passo di camminata a terra (1 tick). Sale gradini fino a 8 px, scende pendii fino a 8 px;
+ * Un passo di camminata a terra (1 px). Sale gradini fino a 8 px, scende pendii fino a 8 px;
  * oltre, il pirata si stacca e cade. Restituisce true se si è mosso.
  */
 export function cammina(t: Terreno, c: Corpo, dir: -1 | 1): boolean {
-  const nx = c.x + dir * P.camminata;
+  return passo(t, c, dir, P.camminata, P.camminata);
+}
+
+/**
+ * Come `cammina`, ma lungo `dist` px (al più 1): lo usa la corsa, che fa più passi corti in un tick.
+ * Se sotto non c'è più suolo il corpo si stacca e parte con la velocità orizzontale `vCaduta` (lo slancio).
+ */
+export function passo(t: Terreno, c: Corpo, dir: -1 | 1, dist: number, vCaduta: number): boolean {
+  const nx = c.x + dir * dist;
   if (!capsulaUrta(t, nx, c.y)) {
     c.x = nx;
     // cerca il suolo sotto, al massimo un gradino più in basso
@@ -67,7 +78,7 @@ export function cammina(t: Terreno, c: Corpo, dir: -1 | 1): boolean {
       if (capsulaUrta(t, c.x, c.y + k)) { c.y += k - 1; return true; }
     }
     // niente suolo: cade
-    c.aTerra = false; c.yInizioCaduta = c.y; c.vx = dir * P.camminata; c.vy = 0;
+    c.aTerra = false; c.yInizioCaduta = c.y; c.vx = dir * vCaduta; c.vy = 0;
     return true;
   }
   if (muroDavanti(t, nx, c.y, dir)) return false;
@@ -205,38 +216,6 @@ export function annega(p: Pirata, eventi: EventoBattaglia[]): void {
   p.vx = 0; p.vy = 0;
   eventi.push({ t: 'splash', x: p.x, y: p.y + MEZZA_ALTEZZA_PIRATA, grande: true });
   eventi.push({ t: 'morto', pirata: p.id, causa: 'mare' });
-}
-
-/**
- * Un tick di fisica per un pirata in campo (anche a 0 PV: il corpo cade e può essere spinto).
- * `dir` = camminata richiesta, `su` = arrampicata richiesta (solo per il pirata attivo nelle fasi in cui può muoversi).
- */
-export function aggiornaPirata(s: StatoBattaglia, p: Pirata, dir: -1 | 0 | 1, eventi: EventoBattaglia[], su: -1 | 0 | 1 = 0): void {
-  if (p.stato !== 'vivo') return;
-  const t = s.terreno;
-  if (p.appeso >= 0 && p.vita <= 0) lascia(t, p, eventi); // a terra con 0 PV: cade giù
-  if (p.appeso < 0 && su !== 0 && p.vita > 0) provaAggrappo(s, p, su, eventi);
-  if (p.appeso >= 0) {
-    if (espelli(t, p)) p.yInizioCaduta = p.y;
-    if (aggiornaAppeso(s, p, su, eventi)) {
-      if (inAcqua(p, t.mare)) annega(p, eventi);
-      return;
-    }
-    if (inAcqua(p, t.mare)) annega(p, eventi);
-    return;
-  }
-  if (espelli(t, p)) controllaAppoggio(t, p);
-  if (p.aTerra) {
-    if (dir !== 0 && p.vita > 0) cammina(t, p, dir);
-    else controllaAppoggio(t, p);
-  } else {
-    const danno = vola(t, p);
-    if (danno >= 0) {
-      eventi.push({ t: 'atterrato', pirata: p.id, dannoCaduta: danno });
-      if (danno > 0) danneggia(p, danno, eventi);
-    }
-  }
-  if (inAcqua(p, t.mare)) annega(p, eventi);
 }
 
 /** Il pirata è fermo (o fuori dal campo)? */

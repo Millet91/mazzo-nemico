@@ -25,6 +25,7 @@ import { ARMA, dotazioneIniziale } from '../../contenuti/armi';
 import { T } from '../../testi/it';
 import { MEZZA_ALTEZZA_PIRATA } from './terreno';
 import { inGioco, stacca } from './pirata';
+import { gira } from './movimento';
 import { avanza, FATTO, iniziaTurno, miraIniziale, pirataDelTurno, ritirata } from './turno';
 import { hashDi } from './hash';
 import { creaBarili } from './oggetti';
@@ -101,11 +102,8 @@ export function eseguiComando(s: StatoBattaglia, c: Comando): void {
   switch (c.t) {
     case 'muovi': {
       t.camminata = c.dir === -1 || c.dir === 1 ? c.dir : 0;
-      if (t.camminata !== 0 && t.camminata !== p.verso) {
-        p.verso = t.camminata;
-        // girandosi il pirata tiene la stessa elevazione della mira
-        if (inAzione) t.mira.mezziGradi = normalizza(360 - t.mira.mezziGradi);
-      }
+      // girandosi il pirata tiene la stessa elevazione della mira; a metà scavalco non si gira (lo interrompe)
+      if (t.camminata !== 0 && p.mossa !== 'scavalco') gira(s, p, t.camminata);
       break;
     }
     case 'arrampica': {

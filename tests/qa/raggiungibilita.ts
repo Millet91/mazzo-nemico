@@ -1,12 +1,14 @@
 // Raggiungibilità (QA studio v2 §3.2, PIANO Fase 0): da dove parte un pirata, dove arriva con le MOSSE VERE della sim?
 // Esplora i posti in cui un pirata può stare in piedi, usando le stesse funzioni della battaglia: `cammina` (un px
-// per volta, gradino 8 px), il salto in avanti (`vola`), e scale e liane (`provaAggrappo` + `aggiornaAppeso`).
+// per volta, gradino 8 px), lo scavalco dei muretti fino a 28 px (`altezzaScavalco` + `saleScavalco`), l'uscita di
+// corsa da un ciglio, il salto in avanti (`vola`), e scale e liane (`provaAggrappo` + `aggiornaAppeso`).
 // Non usa il salto all'indietro (lo studio v2 lo abolisce): la mappa non deve dipenderne.
 // Chi finisce in mare è morto: quel passo non conta. Il danno da caduta non ferma l'esplorazione.
 // Proprietario: Lead test/QA. Lo usa tests/mappe/percorribilita.test.ts.
 import type { Appiglio, MappaGenerata, Pirata, Punto, StatoBattaglia, Terreno } from '../../src/core/tipi';
 import { BIL } from '../../src/contenuti/bilanciamento';
-import { cammina, espelli, inAcqua, vola, type Corpo } from '../../src/battaglia/sim/pirata';
+import { cammina, espelli, inAcqua, passo, vola, type Corpo } from '../../src/battaglia/sim/pirata';
+import { altezzaScavalco, saleScavalco } from '../../src/battaglia/sim/movimento';
 import { aggiornaAppeso, provaAggrappo } from '../../src/battaglia/sim/appigli';
 import { capsulaUrta, MEZZA_ALTEZZA_PIRATA } from '../../src/battaglia/sim/terreno';
 
@@ -54,7 +56,22 @@ export function esploratore(mappa: MappaGenerata) {
     for (const dir of [-1, 1] as const) {
       // un passo
       const c: Corpo = { x, y, vx: 0, vy: 0, aTerra: true, yInizioCaduta: y };
-      if (cammina(t, c, dir)) out.verso.push(c.aTerra ? chiave(Math.floor(c.x), Math.floor(c.y)) : atterra(c));
+      if (cammina(t, c, dir)) {
+        if (c.aTerra) out.verso.push(chiave(Math.floor(c.x), Math.floor(c.y)));
+        else {
+          // è uscito da un ciglio: al passo, oppure di corsa (cade più in là)
+          out.verso.push(atterra(c));
+          const r: Corpo = { x, y, vx: 0, vy: 0, aTerra: true, yInizioCaduta: y };
+          passo(t, r, dir, BIL.pirata.camminata, BIL.movimento.corsaVel);
+          out.verso.push(atterra(r));
+        }
+      } else if (altezzaScavalco(t, x, y, dir) > 0) {
+        // muretto fino a 28 px: si issa da solo
+        const m: Corpo = { x, y, vx: 0, vy: 0, aTerra: false, yInizioCaduta: y };
+        let r: -1 | 0 | 1 = 0;
+        for (let k = 0; k <= 2 * BIL.movimento.scavalcoTick && r === 0; k++) r = saleScavalco(t, m, dir);
+        if (r === 1) out.verso.push(chiave(Math.floor(m.x), Math.floor(m.y)));
+      }
       // un salto in avanti
       const s: Corpo = { x, y, vx: BIL.pirata.saltoAvanti.vx * dir, vy: BIL.pirata.saltoAvanti.vy, aTerra: false, yInizioCaduta: y };
       out.verso.push(atterra(s));

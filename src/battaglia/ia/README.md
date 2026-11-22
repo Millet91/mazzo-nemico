@@ -12,4 +12,4 @@ scelta tra i migliori); in M2 vanno aggiunte le posizioni candidate (K) e le arm
 Ritmo (studio v2, Fase 1): il turno dell'IA deve stare in `BIL.ritmo.iaTurnoMaxTick` (4 s). `VOLO_IA_MAX` è il tempo
 di volo che resta tolte inquadratura, mira visibile e risoluzione: tra i tiri migliori l'IA sceglie quelli che arrivano in
 tempo se valgono almeno il 70% del primo, e un pallonetto lento conta come caduto 25 px più in là. `PASSI_FUGA` è la
-strada della fuga di 1,5 s. Misura in `tests/qa/ritmo.test.ts`.
+strada della fuga di 1,5 s, al passo e poi di corsa (circa 143 px). Misura in `tests/qa/ritmo.test.ts`.

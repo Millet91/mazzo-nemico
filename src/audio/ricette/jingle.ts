@@ -7,7 +7,7 @@ import { MOTIVO_MAGGIORE } from '../musica';
 
 export const JINGLE = {
   mus_vittoria: {
-    canale: 'musica', volume: 0.9, durata: 3.6, maxIstanze: 1,
+    freq: 16000, canale: 'musica', volume: 0.9, durata: 3.6, maxIstanze: 1,
     ricetta(s) {
       const b = 0.25; // un ottavo a 120 BPM
       const tempi = [0, 1, 2, 3, 5]; // in ottavi
@@ -25,7 +25,7 @@ export const JINGLE = {
     },
   },
   mus_sconfitta: {
-    canale: 'musica', volume: 0.8, durata: 3.8, maxIstanze: 1,
+    freq: 16000, canale: 'musica', volume: 0.8, durata: 3.8, maxIstanze: 1,
     ricetta(s) {
       const b = 0.75;
       suonaNota(s.ctx, s.out, 'fisa', 65, 0, b * 0.9, 0.5);

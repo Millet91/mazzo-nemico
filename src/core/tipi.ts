@@ -60,6 +60,8 @@ export interface MappaGenerata {
   decorazioni: Decorazione[];
   /** mappa fatta a mano con grafica dipinta: cartella in public/assets/mappe/ (terreno, cielo, sfondi). Solo grafica. */
   arte?: string;
+  /** Fase 2: sottocartella delle tessere HD dentro `arte` (assente = 'hd'; il Prologo usa 'hd-prologo'). Solo grafica. */
+  arteHd?: string;
   /** barili di polvere già piazzati (centro della base, appoggiati al suolo); la sim li crea come proiettili 'barile' fermi senza miccia, che esplodono se colpiti */
   barili?: Punto[];
   /** scale e liane (segmenti verticali, NON nella maschera): la sim li copia in StatoBattaglia.appigli con un id */
@@ -85,6 +87,11 @@ export interface StrutturaMappa extends Rettangolo {
   tipo: TipoStruttura;
   /** solo 'ponte': i due ancoraggi (da sinistra a destra). Tagliato un capo, il ponte resta appeso all'altro */
   ancoraggi?: [Rettangolo, Rettangolo];
+  /**
+   * Il pezzo staccato cade in blocco e, dove tocca, si ferma e torna terreno col suo materiale invece di frantumarsi
+   * (palma-ponte, carico della gru: Pacchetto 2). Per ora solo su mappe senza arte HD: lo shader non sposta l'arte.
+   */
+  riappoggia?: boolean;
 }
 
 export interface Struttura extends StrutturaMappa { stato: 'intera' | 'caduta' | 'calata' }

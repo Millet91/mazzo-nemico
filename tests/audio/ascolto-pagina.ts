@@ -2,7 +2,7 @@
 // Sintetizza ogni suono del registro e una battaglia finta, con lo stesso motore del gioco ma fuori linea.
 import { AUDIO, ID_SUONI } from '../../src/audio/registro';
 import type { VoceAudio } from '../../src/audio/tipi';
-import { sintetizza, preparaSuoni, FREQ_SINTESI } from '../../src/audio/magazzino';
+import { sintetizza, preparaSuoni, freqDi } from '../../src/audio/magazzino';
 import { Motore } from '../../src/audio/motore';
 import { Musica, type IdBrano } from '../../src/audio/musica';
 import { Ambiente } from '../../src/audio/ambiente';
@@ -13,7 +13,7 @@ import type { VistaBattaglia } from '../../src/core/bus';
 import { generatore } from '../../src/audio/sintesi';
 import { COPIONE, vistaFinta } from './copione';
 
-export interface Misura { id: string; variante: number; durata: number; picco: number; rmsDb: number; fortiDb: number; centroideHz: number; volume: number; canale: string }
+export interface Misura { id: string; variante: number; durata: number; picco: number; rmsDb: number; fortiDb: number; centroideHz: number; volume: number; canale: string; freq: number }
 
 const dbfs = (x: number): number => (x > 1e-9 ? 20 * Math.log10(x) : -120);
 
@@ -41,7 +41,7 @@ async function tuttiISuoni(): Promise<{ misure: Misura[]; dati: Record<string, n
     const v: VoceAudio = AUDIO[id];
     for (let k = 0; k < (v.varianti ?? 1); k++) {
       const d = await sintetizza(id, v, k, OfflineAudioContext);
-      misure.push({ id, variante: k, durata: v.durata, volume: v.volume, canale: v.canale, ...misura(d, FREQ_SINTESI) });
+      misure.push({ id, variante: k, durata: v.durata, volume: v.volume, canale: v.canale, freq: freqDi(v), ...misura(d, freqDi(v)) });
       dati[`${id}_${k}`] = Array.from(d);
     }
   }

@@ -2,8 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO, ID_SUONI, secondiTotali } from '../../src/audio/registro';
 import type { VoceAudio } from '../../src/audio/tipi';
-import { creaSint } from '../../src/audio/sintesi';
-import { FREQ_SINTESI, normalizza, PICCO, semeDi } from '../../src/audio/magazzino';
+import { CODA_CICLO, creaSint } from '../../src/audio/sintesi';
+import { chiudiGiro, FREQ_SINTESI, freqDi, normalizza, PICCO, semeDi } from '../../src/audio/magazzino';
 import { db, panDaX, PAN_MAX, VOLUME_CANALE } from '../../src/audio/mix';
 import { daVolumeUnico } from '../../src/audio/preferenze';
 import { contestoFinto } from './finto';
@@ -32,7 +32,7 @@ describe('Registro audio', () => {
     const problemi: string[] = [];
     for (const [id, v] of voci) {
       for (let k = 0; k < (v.varianti ?? 1); k++) {
-        const f = contestoFinto(FREQ_SINTESI);
+        const f = contestoFinto(freqDi(v));
         v.ricetta(creaSint(f.ctx, {} as AudioNode, semeDi(id, k)), k);
         problemi.push(...f.errori.map((e) => `${id}_${k}: ${e}`));
         if (!f.nodi.length) problemi.push(`${id}_${k}: ricetta vuota`);
@@ -41,6 +41,34 @@ describe('Registro audio', () => {
         const fine = Math.max(...f.nodi.flatMap((n) => n.fermate), 0);
         if (fine > v.durata + 0.25) problemi.push(`${id}_${k}: finisce a ${fine.toFixed(2)} s ma dura ${v.durata}`);
       }
+    }
+    expect(problemi).toEqual([]);
+  });
+
+  it('i suoni a frequenza bassa non suonano toni sopra la metà della loro frequenza (si piegherebbero in fischi)', () => {
+    const problemi: string[] = [];
+    for (const [id, v] of voci) {
+      if (v.freq !== undefined && ![16000, 24000, 32000].includes(v.freq)) problemi.push(`${id}: frequenza ${v.freq}`);
+      if (freqDi(v) >= FREQ_SINTESI) continue;
+      for (let k = 0; k < (v.varianti ?? 1); k++) {
+        const f = contestoFinto(freqDi(v));
+        v.ricetta(creaSint(f.ctx, {} as AudioNode, semeDi(id, k)), k);
+        const alto = Math.max(0, ...f.di('Oscillator').map((n) => n.picchi.frequency ?? 0));
+        if (alto > freqDi(v) / 2) problemi.push(`${id}_${k}: tono a ${Math.round(alto)} Hz con ${freqDi(v)} Hz`);
+      }
+    }
+    expect(problemi).toEqual([]);
+  });
+
+  it('nei suoni in ciclo niente va oltre la coda che si ripiega sul giro (si taglierebbe a ogni giro con uno scatto)', () => {
+    const problemi: string[] = [];
+    for (const [id, v] of voci) {
+      if (!v.ciclo) continue;
+      const f = contestoFinto(freqDi(v));
+      v.ricetta(creaSint(f.ctx, {} as AudioNode, semeDi(id, 0)), 0);
+      const fine = Math.max(...f.nodi.flatMap((n) => n.fermate), 0);
+      // la coda dopo il giro si ripiega sull'inizio; i nodi si fermano 50 ms dopo la fine del loro inviluppo (già a zero)
+      if (fine > v.durata + CODA_CICLO + 0.05 + 0.001) problemi.push(`${id}: finisce a ${(fine - 0.05).toFixed(3)} s ma il giro più la coda dura ${v.durata + CODA_CICLO}`);
     }
     expect(problemi).toEqual([]);
   });
@@ -64,6 +92,22 @@ describe('Registro audio', () => {
 });
 
 describe('Suoni pronti in memoria', () => {
+  it('chiudiGiro: un rumore che continua oltre il giro si ripiega senza salti né buchi', () => {
+    // un segnale continuo (una rampa lenta più un'onda) calcolato per 1000 campioni di giro e 150 di coda
+    const f = (i: number) => 0.5 + 0.3 * Math.sin(i / 37);
+    const d = Float32Array.from({ length: 1150 }, (_, i) => f(i));
+    const g = chiudiGiro(d, 1000, 100);
+    expect(g.length).toBe(1000);
+    // l'ultimo campione del giro si attacca al primo come due campioni vicini
+    const passo = Math.max(...Array.from({ length: 999 }, (_, i) => Math.abs(g[i + 1] - g[i])));
+    expect(Math.abs(g[0] - g[999])).toBeLessThanOrEqual(passo * 1.5);
+    // dopo la dissolvenza il giro è il suono di prima
+    expect(g[500]).toBeCloseTo(d[500]);
+    // niente buco: nella dissolvenza non scende sotto il più basso dei due pezzi (meno un po')
+    for (let i = 0; i < 100; i++) expect(g[i]).toBeGreaterThan(Math.min(d[i], d[1000 + i]) * 0.99);
+  });
+
+
   it('normalizza porta il picco a −1 dB e sfuma la fine', () => {
     const d = normalizza(Float32Array.from({ length: 1000 }, (_, i) => 0.2 * Math.sin(i / 5)));
     expect(Math.max(...d.map(Math.abs))).toBeCloseTo(PICCO, 1);

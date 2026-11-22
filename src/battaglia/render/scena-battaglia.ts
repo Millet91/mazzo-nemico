@@ -15,6 +15,7 @@ import { AppigliRender, puoAggrapparsi } from './appigli';
 import { Effetti } from './effetti';
 import { Forme, sprite, type IdForma } from './forme';
 import { TerrenoRender } from './terreno';
+import { TerrenoHd, type MisureHd } from './terreno-hd';
 import { PezziPirata, RigPirata, SCALA_MIN_PUPAZZO } from './pirata-rig';
 import {
   armaPosa, bersaglio, mossaDaStato, nuovaPosa, nuoviParametri, RIALZATA_MS, risolvi, sfuma, SFUMA_MS,
@@ -50,6 +51,34 @@ const SCALA_MIN_NOMI = 0.9;
 /** il nome si vede solo sul pirata di turno e sul bersaglio: chi sta entro questi px dal punto d'impatto mostrato */
 const RAGGIO_BERSAGLIO = 80;
 
+/** etichetta sopra la testa, px CSS: barra dei PV, pillola del numero (larghezza minima) */
+const ETICHETTA = { barra: 34, pillolaMin: 24 } as const;
+
+/**
+ * Segno della squadra sopra la testa, ~12 px: teschio (la ciurma del giocatore) o àncora (i nemici), chiaro col
+ * contorno scuro della ciurma.
+ */
+export function disegnaSegno(g: Graphics, tipo: 'teschio' | 'ancora', scuro: string): Graphics {
+  const bordo = { width: 1.5, color: hex(scuro) };
+  const chiaro = hex(PALETTE.testo);
+  if (tipo === 'teschio') {
+    g.circle(0, -1.5, 5).fill(chiaro).stroke(bordo)
+      .roundRect(-3, 1.5, 6, 4, 1.2).fill(chiaro).stroke(bordo)
+      .circle(-1.9, -1.6, 1.4).fill(hex(PALETTE.inchiostro))
+      .circle(1.9, -1.6, 1.4).fill(hex(PALETTE.inchiostro));
+  } else {
+    // contorno scuro largo sotto, linea chiara sopra: si legge su cielo, mare e terreno
+    const tratto = (w: number, c: number) => g
+      .circle(0, -4.5, 1.8).stroke({ width: w, color: c })
+      .moveTo(0, -2.7).lineTo(0, 5.5).stroke({ width: w, color: c, cap: 'round' })
+      .moveTo(-3, -0.8).lineTo(3, -0.8).stroke({ width: w, color: c, cap: 'round' })
+      .moveTo(-5, 2).quadraticCurveTo(-4, 6, 0, 5.5).quadraticCurveTo(4, 6, 5, 2).stroke({ width: w, color: c, cap: 'round' });
+    tratto(4, hex(scuro));
+    tratto(1.8, chiaro);
+  }
+  return g;
+}
+
 interface VisPirata {
   id: number;
   radice: Container;
@@ -60,6 +89,8 @@ interface VisPirata {
   etichetta: Container;
   barra: Graphics;
   pv: Text;
+  /** pillola scura dietro il numero dei PV (studio v2, UX §8) */
+  pillola: Graphics;
   nome: Text;
   ultimaVita: number;
   ultimoX: number;
@@ -129,6 +160,11 @@ export class ScenaBattaglia {
   private cieloW = 0;
   private cieloH = 0;
   readonly terreno: TerrenoRender;
+  /** terreno HD (Fase 2): quando la mappa ha hd/ prende il posto di `terreno` appena le tessere sono caricate */
+  private hd: TerrenoHd | null = null;
+  /** mentre il terreno HD si carica: i rettangoli cambiati nella maschera (estremi compresi), da passargli dopo */
+  private cambiHd: [number, number, number, number][] | null = null;
+  private distrutta = false;
   readonly effetti: Effetti;
   private readonly forme: Forme;
   private readonly pezzi: PezziPirata;
@@ -170,6 +206,11 @@ export class ScenaBattaglia {
   private readonly sfondi: SfondiMappa | null = null;
   private tempo = 0;
   private scala = 1;
+  /** la ciurma del giocatore (teschio sopra la testa); senza giocatore umano (prova 60 fps) la squadra 0 */
+  private get squadraMia(): number {
+    const i = this.s.squadre.findIndex((q) => q.controllo === 'umano');
+    return i < 0 ? 0 : i;
+  }
   private chiaveTraiettoria = '';
   private mareDisegnato = -1;
 
@@ -195,6 +236,19 @@ export class ScenaBattaglia {
       this.decorazioni.push(sp);
     }
     if (mappa.arte) {
+      // terreno HD: si carica in parallelo agli sfondi; finché non arriva resta il terreno dipinto sulla CPU
+      this.cambiHd = [];
+      void TerrenoHd.carica(mappa.arte, s.terreno, this.terreno.maschera0, renderer).then((hd) => {
+        const cambi = this.cambiHd ?? [];
+        this.cambiHd = null;
+        if (!hd) return;
+        if (this.distrutta) { hd.distruggi(); return; }
+        // i crateri arrivati mentre si caricava: la maschera li ha già, ma una fetta fatta prima no
+        for (const [x0, y0, x1, y1] of cambi) hd.maschera(x0, y0, x1, y1);
+        this.hd = hd;
+        this.mondo.addChildAt(hd.radice, this.mondo.getChildIndex(this.terreno.radice));
+        this.terreno.spegni();
+      });
       const sfondi = new SfondiMappa(mappa.arte, s.terreno.w, s.terreno.h);
       this.sfondi = sfondi;
       this.cielo.addChild(sfondi.radice);
@@ -292,18 +346,22 @@ export class ScenaBattaglia {
     nome.anchor.set(0.5, 1);
     nome.y = -10;
     const barra = new Graphics();
+    // PV su pillola scura col bordo della ciurma; a sinistra della barra il teschio (la mia ciurma) o l'àncora
+    // (i nemici): si riconosce la squadra anche senza distinguere i colori (studio v2, UX §8)
     const pv = new Text({
       text: String(p.vita),
-      style: { fontFamily: 'Lilita One, sans-serif', fontSize: 11, fill: hex(col.colore), stroke: { color: hex(PALETTE.inchiostro), width: 3 } },
+      style: { fontFamily: 'Lilita One, sans-serif', fontSize: 12, fill: hex(PALETTE.testo) },
       resolution: Math.min(2, window.devicePixelRatio || 1),
     });
-    pv.anchor.set(0, 0.5);
-    pv.position.set(20, -3);
-    etichetta.addChild(nome, barra, pv);
+    pv.anchor.set(0.5, 0.5);
+    const pillola = new Graphics();
+    const segno = disegnaSegno(new Graphics(), p.squadra === this.squadraMia ? 'teschio' : 'ancora', col.scuro);
+    segno.position.set(-ETICHETTA.barra / 2 - 8, -3);
+    etichetta.addChild(nome, barra, segno, pillola, pv);
     this.schermo.addChildAt(etichetta, 0);
 
     const v: VisPirata = {
-      id: p.id, radice, rig, sagoma, etichetta, barra, pv, nome,
+      id: p.id, radice, rig, sagoma, etichetta, barra, pv, pillola, nome,
       ultimaVita: -1, ultimoX: p.x, ultimoY: p.y, colpito: -1, atterrato: -1, sparo: -1, morte: -1, annegato: false,
       sbalzato: false, cammino: p.id * 9, salita: 0, velX: 0, finestraPx: 0, finestraMs: 0,
       mossa: 'fermo', mossaMs: 1000, chiavePosa: '', sfumaMs: SFUMA_MS, sfumaDurata: SFUMA_MS,
@@ -316,14 +374,22 @@ export class ScenaBattaglia {
 
   private disegnaBarra(v: VisPirata, p: Pirata): void {
     const col = COLORI_CIURMA[this.s.squadre[p.squadra].ciurma];
-    const larghezza = 34, alt = 6;
+    const larghezza = ETICHETTA.barra, alt = 6;
     const k = Math.max(0, Math.min(1, p.vita / p.vitaMax));
     const ks = Math.max(k, Math.min(1, v.vitaScia / p.vitaMax));
     v.barra.clear()
       .roundRect(-larghezza / 2 - 1, -alt / 2 - 1 - 3, larghezza + 2, alt + 2, 3).fill(hex(PALETTE.inchiostro));
     if (ks > k) v.barra.roundRect(-larghezza / 2, -alt / 2 - 3, Math.max(1, larghezza * ks), alt, 2.5).fill(0xffffff);
     if (k > 0) v.barra.roundRect(-larghezza / 2, -alt / 2 - 3, Math.max(1, larghezza * k), alt, 2.5).fill(hex(col.colore));
-    v.pv.text = String(Math.max(0, p.vita));
+    const testo = String(Math.max(0, p.vita));
+    if (v.pv.text !== testo || v.ultimaVita < 0) {
+      v.pv.text = testo;
+      const lw = Math.max(ETICHETTA.pillolaMin, Math.ceil(v.pv.width) + 10);
+      const x0 = larghezza / 2 + 4;
+      v.pillola.clear().roundRect(x0, -3 - 8, lw, 16, 8).fill({ color: hex(PALETTE.abisso), alpha: 0.88 })
+        .stroke({ width: 1.5, color: hex(col.colore) });
+      v.pv.position.set(x0 + lw / 2, -3);
+    }
     v.ultimaVita = p.vita;
   }
 
@@ -334,9 +400,10 @@ export class ScenaBattaglia {
         case 'appiglioRotto': this.appigli.rotto(e.appiglio, e.x, e.yAlto, e.yBasso); break;
         case 'cratere':
           this.effetti.zolle(e.x, e.y, e.raggio, this.terreno.coloreOriginale(e.x, e.y, e.raggio));
-          this.terreno.cratere(e.x, e.y, e.raggio); this.decorazioniSenzaTerra(e.x, e.y, e.raggio);
+          this.terreno.cratere(e.x, e.y, e.raggio); this.hd?.cratere(e.x, e.y, e.raggio); this.cambiHd?.push([e.x - e.raggio, e.y - e.raggio, e.x + e.raggio, e.y + e.raggio]);
+          this.decorazioniSenzaTerra(e.x, e.y, e.raggio);
           break;
-        case 'maschera': this.terreno.maschera(e.x0, e.y0, e.x1, e.y1); break; // Fase 3: per ora il pezzo sparisce e basta
+        case 'maschera': this.terreno.maschera(e.x0, e.y0, e.x1, e.y1); this.hd?.maschera(e.x0, e.y0, e.x1, e.y1); this.cambiHd?.push([e.x0, e.y0, e.x1, e.y1]); break; // Fase 3: per ora il pezzo sparisce e basta
         case 'esplosione': this.effetti.esplosione(e.x, e.y, e.raggio); break;
         case 'splash': this.effetti.splash(e.x, e.y, e.grande); break;
         case 'colpoPistola': this.effetti.lineaPistola(e.da.x, e.da.y, e.a.x, e.a.y); break;
@@ -426,6 +493,7 @@ export class ScenaBattaglia {
     const aSchermo = (x: number, y: number) => camera.schermoDaMondo(x, y);
 
     this.terreno.aggiorna();
+    this.hd?.aggiorna();
     this.disegnaCielo(camera, deltaMS);
     this.sfondi?.aggiorna(camera, this.s.terreno.mare);
     this.disegnaAcqua(camera);
@@ -789,8 +857,13 @@ export class ScenaBattaglia {
     void camera;
   }
 
+  /** misure del terreno HD (caricamento, tessere, memoria), o null se la mappa non lo ha (o non è ancora pronto) */
+  get misureHd(): MisureHd | null { return this.hd?.misure ?? null; }
+
   distruggi(): void {
+    this.distrutta = true;
     this.sfondi?.distruggi();
+    this.hd?.distruggi();
     this.terreno.distruggi();
     this.effetti.distruggi();
     this.cielo.destroy({ children: true });

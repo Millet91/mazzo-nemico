@@ -34,7 +34,8 @@ async function main(): Promise<void> {
   const t0 = Date.now();
   const { misure, dati } = await pagina.evaluate(() => (window as unknown as { banco: { tuttiISuoni(): Promise<{ misure: Misura[]; dati: Record<string, number[]> }> } }).banco.tuttiISuoni());
   const msSintesi = Date.now() - t0;
-  for (const [nome, d] of Object.entries(dati)) writeFileSync(`${USCITA}/suoni/${nome}.wav`, wav([Float32Array.from(d)], 32000));
+  const freqDi = new Map(misure.map((m) => [`${m.id}_${m.variante}`, m.freq]));
+  for (const [nome, d] of Object.entries(dati)) writeFileSync(`${USCITA}/suoni/${nome}.wav`, wav([Float32Array.from(d)], freqDi.get(nome) ?? 32000));
 
   const righe = [`${misure.length} suoni sintetizzati in ${msSintesi} ms (compreso il passaggio dei dati) · ${misure.reduce((s, m) => s + m.durata, 0).toFixed(1)} s in tutto`,
     '', 'id'.padEnd(28) + 'canale   dur   vol   forte(dB)  nel mix(dB)  rms(dB)  centro(Hz)'];

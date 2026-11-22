@@ -14,6 +14,12 @@ export function generatore(seme: number): () => number {
   };
 }
 
+/**
+ * Secondi in più che si calcolano dopo la fine di un suono in ciclo: il magazzino li ripiega sull'inizio del giro
+ * con una dissolvenza incrociata (`chiudiGiro`), così il giro ricomincia senza buchi e senza scatti.
+ */
+export const CODA_CICLO = 0.15;
+
 const rumori = new Map<number, AudioBuffer>();
 /**
  * 2 s di rumore bianco, uno per frequenza di campionamento. Un AudioBuffer si può usare in qualsiasi contesto:

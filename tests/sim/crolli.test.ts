@@ -1,6 +1,7 @@
 // Fase 3: sostegno strutturale (sim/crolli.ts). Pezzi staccati attorno a un punto, appoggi, tetto del costo.
 import { describe, it, expect } from 'vitest';
 import { MATERIALE } from '../../src/core/tipi';
+import { BIL } from '../../src/contenuti/bilanciamento';
 import { franaPasso, pezziStaccati, staccaDallaMaschera } from '../../src/battaglia/sim/crolli';
 import { scavaCratere } from '../../src/battaglia/sim/terreno';
 import { rettangolo, SUOLO, terrenoPiatto } from './aiuti';
@@ -21,13 +22,11 @@ describe('Sostegno strutturale: pezzi staccati', () => {
     expect(p[0].y1).toBe(SUOLO - 191);
   });
 
-  it('un pezzo appoggiato al ferro o a un ancoraggio non cade', () => {
-    for (const appoggio of [MATERIALE.ferro, 7]) {
-      const t = terrenoPiatto();
-      rettangolo(t, 1000, SUOLO - 300, 1004, SUOLO - 280, appoggio); // chiodo nel vuoto
-      rettangolo(t, 1004, SUOLO - 290, 1100, SUOLO - 284, MATERIALE.legno);
-      expect(pezziStaccati(t, 1050, SUOLO - 287, 5, OPZ)).toEqual([]);
-    }
+  it('un pezzo appoggiato al ferro non cade', () => {
+    const t = terrenoPiatto();
+    rettangolo(t, 1000, SUOLO - 300, 1004, SUOLO - 280, MATERIALE.ferro); // chiodo nel vuoto
+    rettangolo(t, 1004, SUOLO - 290, 1100, SUOLO - 284, MATERIALE.legno);
+    expect(pezziStaccati(t, 1050, SUOLO - 287, 5, OPZ)).toEqual([]);
   });
 
   it('oltre pezzoMax pixel conta come corpo dell\'isola: il suolo non cade mai', () => {
@@ -36,12 +35,29 @@ describe('Sostegno strutturale: pezzi staccati', () => {
     expect(pezziStaccati(t, 1000, SUOLO, 62, OPZ)).toEqual([]);
   });
 
-  it('i pixel protetti (vicino a uno spawn) tengono su il pezzo', () => {
+  it('un pixel pieno dentro un sostegno della mappa tiene su il pezzo', () => {
     const t = terrenoPiatto();
     rettangolo(t, 1000, SUOLO - 300, 1100, SUOLO - 290, MATERIALE.roccia); // pezzo sospeso
     expect(pezziStaccati(t, 1050, SUOLO - 300, 4, OPZ)).toHaveLength(1); // si parte dal bordo del pezzo
-    const protetto = (x: number, y: number) => (x - 1090) ** 2 + (y - (SUOLO - 290)) ** 2 < 120 * 120;
-    expect(pezziStaccati(t, 1050, SUOLO - 300, 4, { ...OPZ, protetto })).toEqual([]);
+    const sostegni = [{ x0: 1095, y0: SUOLO - 296, x1: 1110, y1: SUOLO - 280 }];
+    expect(pezziStaccati(t, 1050, SUOLO - 300, 4, { ...OPZ, sostegni })).toEqual([]);
+    // un sostegno che tocca solo aria non tiene niente
+    const vuoto = [{ x0: 1200, y0: SUOLO - 296, x1: 1210, y1: SUOLO - 280 }];
+    expect(pezziStaccati(t, 1050, SUOLO - 300, 4, { ...OPZ, sostegni: vuoto })).toHaveLength(1);
+  });
+
+  it('un pezzo che arriva al fondale è appoggiato', () => {
+    const t = terrenoPiatto();
+    const f = BIL.mondo.inizioFondale;
+    rettangolo(t, 1000, f - 40, 1010, f + 2, MATERIALE.roccia); // pilastro che pesca nel fondale
+    expect(pezziStaccati(t, 1005, f - 40, 4, OPZ)).toEqual([]);
+  });
+
+  it('ricercheMax: oltre il tetto di ricerche lunghe le altre partenze non si guardano', () => {
+    const t = terrenoPiatto();
+    rettangolo(t, 1000, SUOLO - 300, 1040, SUOLO - 290, MATERIALE.legno);
+    rettangolo(t, 1060, SUOLO - 300, 1100, SUOLO - 290, MATERIALE.roccia);
+    expect(pezziStaccati(t, 1050, SUOLO - 295, 15, { ...OPZ, ricercheMax: 1 })).toHaveLength(1);
   });
 
   it('due pezzi separati dallo stesso scoppio: due risultati, nello stesso ordine ogni volta', () => {

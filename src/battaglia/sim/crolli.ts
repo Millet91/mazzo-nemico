@@ -1,22 +1,33 @@
-// Fase 3 (PIANO §3, "il campo si spezza"): sostegno strutturale. Dopo un'esplosione si cercano, solo attorno al
-// punto, i pezzi di terreno non più collegati a un appoggio. Appoggi: ferro, ancora, e il corpo dell'isola (una
-// ricerca che supera `pezzoMax` pixel senza chiudersi è la montagna, non un pezzo: è anche il tetto del costo).
+// Fase 3 (PIANO §3, "il campo si spezza"; P1-contratti §7): sostegno strutturale. Dopo un'esplosione si cercano,
+// solo attorno al punto, i pezzi di terreno non più collegati a un appoggio. Appoggi: il fondale, il ferro, un pixel
+// pieno dentro un sostegno della mappa (`StatoBattaglia.sostegni`), e il corpo dell'isola (una ricerca che supera
+// `pezzoMax` pixel senza chiudersi è la montagna, non un pezzo: è anche il tetto del costo).
 // Tutto con interi e code in ordine fisso: deterministico.
 
-import type { Terreno } from '../../core/tipi';
+import type { Rettangolo, Terreno } from '../../core/tipi';
 import { MATERIALE } from '../../core/tipi';
+import { BIL } from '../../contenuti/bilanciamento';
 
-/** byte della maschera che tengono su gli altri e non cadono mai (ferro; `ancora` = 7 quando il Lead lo congela) */
-export const APPOGGIO = new Uint8Array(256);
+/** byte della maschera che tengono su gli altri e non cadono mai: il ferro */
+const APPOGGIO = new Uint8Array(256);
 APPOGGIO[MATERIALE.ferro] = 1;
-APPOGGIO[7] = 1;
 
 export interface OpzioniSostegno {
-  /** oltre questi pixel una ricerca conta come "collegata al corpo dell'isola" */
+  /** oltre questi pixel una ricerca conta come "collegata al corpo dell'isola" (BIL.crolli.pezzoMaxPx) */
   pezzoMax: number;
-  /** pixel che non cadono mai (entro tot px da uno spawn): restituisce true se (x, y) è protetto */
-  protetto?: (x: number, y: number) => boolean;
+  /** ancoraggi della mappa: un pixel pieno dentro uno di questi tiene su il suo pezzo */
+  sostegni?: readonly Rettangolo[];
+  /** ricerche lunghe (oltre il primo vicinato) al massimo per chiamata; le altre partenze contano come appoggiate */
+  ricercheMax?: number;
 }
+
+function inSostegno(sostegni: readonly Rettangolo[], x: number, y: number): boolean {
+  for (const r of sostegni) if (x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) return true;
+  return false;
+}
+
+/** chiamate a `cerca` che sono andate oltre il vicinato, in questa chiamata di pezziStaccati */
+let lunghe = 0;
 
 /** Un pezzo staccato: indici dei pixel nella maschera (y * w + x), in ordine di visita, e il suo rettangolo. */
 export interface PezzoStaccato {
@@ -44,8 +55,9 @@ export function pezziStaccati(t: Terreno, x: number, y: number, r: number, opz: 
   const { w, h, maschera } = t;
   if (segni.length !== w * h) segni = new Uint8Array(w * h);
   if (coda.length < opz.pezzoMax + 1) { coda = new Int32Array(opz.pezzoMax + 1); pila = new Int32Array(opz.pezzoMax + 1); }
-  nToccati = 0;
+  nToccati = 0; lunghe = 0;
   const out: PezzoStaccato[] = [];
+  const ricercheMax = opz.ricercheMax ?? Infinity;
   const x0 = Math.max(0, Math.floor(x - r)), x1 = Math.min(w - 1, Math.ceil(x + r));
   const y0 = Math.max(0, Math.floor(y - r)), y1 = Math.min(h - 1, Math.ceil(y + r));
   const r2 = r * r;
@@ -59,6 +71,7 @@ export function pezziStaccati(t: Terreno, x: number, y: number, r: number, opz: 
       // si parte solo dal bordo (un vicino d'aria): dentro la roccia piena non c'è niente di nuovo da cercare
       if (!(py > 0 && maschera[i - w] === MATERIALE.aria) && !(px > 0 && maschera[i - 1] === MATERIALE.aria)
         && !(px < w - 1 && maschera[i + 1] === MATERIALE.aria) && !(py < h - 1 && maschera[i + w] === MATERIALE.aria)) continue;
+      if (lunghe >= ricercheMax) break;
       const p = cerca(t, i, opz);
       if (p) out.push(p);
     }
@@ -70,7 +83,7 @@ export function pezziStaccati(t: Terreno, x: number, y: number, r: number, opz: 
 /** Una ricerca a partire dal pixel `inizio`: il pezzo se è staccato, altrimenti null (e i pixel visti restano "appoggiati"). */
 function cerca(t: Terreno, inizio: number, opz: OpzioniSostegno): PezzoStaccato | null {
   const { w, h, maschera } = t;
-  const max = opz.pezzoMax, protetto = opz.protetto;
+  const max = opz.pezzoMax, sostegni = opz.sostegni ?? [], fondale = BIL.mondo.inizioFondale;
   // Due tempi. Prima in larghezza per VICINATO pixel: dal bordo del cratere si incontra subito la zona già
   // controllata da una ricerca precedente. Poi in profondità scendendo per prima (il "giù" esce per primo dalla
   // pila): un pezzo collegato all'isola arriva presto al fondale di ferro senza visitare tutto attorno al cratere.
@@ -84,14 +97,14 @@ function cerca(t: Terreno, inizio: number, opz: OpzioniSostegno): PezzoStaccato 
     else {
       if (!profondita) {
         // fine del primo tempo: quello che resta in coda passa nella pila (in ordine inverso: esce il primo)
-        profondita = true;
+        profondita = true; lunghe++;
         for (let k = n - 1; k >= testa; k--) pila[cima++] = coda[k];
       }
       if (cima === 0) break;
       i = pila[--cima];
     }
     const px = i % w, py = (i - px) / w;
-    if (APPOGGIO[maschera[i]] || py === h - 1 || (protetto !== undefined && protetto(px, py))) { appoggiato = true; break; }
+    if (APPOGGIO[maschera[i]] || py >= fondale || py === h - 1 || (sostegni.length > 0 && inSostegno(sostegni, px, py))) { appoggiato = true; break; }
     if (px < bx0) bx0 = px; if (px > bx1) bx1 = px; if (py < by0) by0 = py; if (py > by1) by1 = py;
     // vicini: su, sinistra, destra, giù (ordine fisso; nella pila esce per primo il giù)
     for (let k = 0; k < 4; k++) {

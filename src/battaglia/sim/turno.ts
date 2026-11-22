@@ -17,6 +17,7 @@ import { esplodi, tiroVicino } from './esplosione';
 import { regoleScontro } from './scontro';
 import { bersagliDi, colpoIstantaneo, durataColpi, fisicaDi, spara, tickColpo } from './armi';
 import { muoviProiettile } from './proiettili';
+import { aggiornaPezzi, frantumaTutti, pezziInCaduta } from './pezzi';
 import { MICCIA_LAPIDE_TICK, VITA_MAX_PROIETTILE } from './costanti';
 import { apriCassa, attivo as proiettileAttivo, bersagliOggetti, centroOggetto, eOggetto, forseCassa, scendiCassa } from './oggetti';
 
@@ -60,7 +61,7 @@ export function iniziaTurno(s: StatoBattaglia, eventi: EventoBattaglia[]): void 
   if (scelto < 0) scelto = 0;
   sq.ultimoPirata = scelto;
   const p = membri[scelto];
-  for (const q of s.pirati) q.dannoNelTurno = 0;
+  for (const q of s.pirati) { q.dannoNelTurno = 0; if (q.macerieNelTurno) q.macerieNelTurno = 0; }
   t.pirata = p.id;
   t.sparato = false;
   t.timerAvviato = false;
@@ -108,6 +109,7 @@ export function concludi(s: StatoBattaglia, vincitore: 0 | 1, motivo: MotivoFine
 /** Porta la battaglia in fase 'fine' (anche dopo una ritirata decisa da eseguiComando). */
 function chiudiBattaglia(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
   s.proiettili = s.proiettili.filter((p) => !proiettileAttivo(p));
+  frantumaTutti(s, eventi);
   s.turno.camminata = 0;
   cambiaFase(s, 'fine', eventi);
   eventi.push({ t: 'fine', esito: s.esito! });
@@ -258,6 +260,7 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
     aggiornaPirata(s, p, mio ? t.camminata : 0, eventi, mio ? t.arrampicata : 0);
   }
   aggiornaProiettili(s, eventi);
+  aggiornaPezzi(s, eventi);
 
   const inFase = s.tick - t.inizioFase;
   const attivoInGioco = attivo !== undefined && inGioco(attivo);
@@ -291,20 +294,21 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
           if (s.tick - t.fermoDa >= BIL.ritmo.fermoFugaTick) chiudi = true;
         } else t.fermoDa = -1;
       }
-      if (chiudi) cambiaFase(s, s.proiettili.some(proiettileAttivo) ? 'volo' : 'risoluzione', eventi);
+      if (chiudi) cambiaFase(s, s.proiettili.some(proiettileAttivo) || pezziInCaduta(s) ? 'volo' : 'risoluzione', eventi);
       break;
     }
     case 'volo':
       // il colpo vola ancora dopo la fuga: si aspetta, il pirata non si muove più
-      if (!s.proiettili.some(proiettileAttivo)) cambiaFase(s, 'risoluzione', eventi);
+      if (!s.proiettili.some(proiettileAttivo) && !pezziInCaduta(s)) cambiaFase(s, 'risoluzione', eventi);
       break;
     case 'risoluzione': {
       // passa appena tutto è fermo da BIL.turno.risoluzioneFermoTick (m1-ritmo §3)
-      let tuttoFermo = !s.proiettili.some(proiettileAttivo) && s.pirati.every(fermo);
+      let tuttoFermo = !s.proiettili.some(proiettileAttivo) && !pezziInCaduta(s) && s.pirati.every(fermo);
       if (!tuttoFermo && inFase >= BIL.turno.risoluzioneMaxTick) {
         // caso 8: chi vibra si ferma d'ufficio, i proiettili in volo spariscono (barili e casse restano)
         for (const p of s.pirati) if (p.stato === 'vivo') { p.vx = 0; p.vy = 0; p.aTerra = p.appeso < 0; p.yInizioCaduta = p.y; }
         s.proiettili = s.proiettili.filter((p) => !proiettileAttivo(p));
+        frantumaTutti(s, eventi);
         tuttoFermo = true;
         t.fermoDa = s.tick - BIL.turno.risoluzioneFermoTick;
       }

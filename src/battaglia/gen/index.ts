@@ -20,7 +20,7 @@ import { MONDO, REGOLE } from './parametri';
 import { conTentativi } from './tentativi';
 import { BIL } from '../../contenuti/bilanciamento';
 import { piazzaBarili } from './barili';
-import { controllaInsieme, distanzaMare, postiValidi, type Posto } from './spawn';
+import { controllaInsieme, controllaPosto, distanzaMare, postiValidi, type Posto } from './spawn';
 import { validaMassa } from './valida';
 import { controllaAppiglio, piazzaAppigli, type AppiglioMappa } from './appigli';
 
@@ -124,7 +124,11 @@ export function tentativo(seme: number, r: RichiestaMappa): MappaGenerata | null
   let sx = scelti[0].map(piedi), dx = scelti[1].map(piedi);
   let barili = piazzaBarili(s, maschera, sup, mare, [...sx, ...dx], appigli.map((a) => a.x), LONTANO_DA_APPIGLI);
   if (barili.length < BIL.barili.min) return null;
-  // le spianate dei barili toccano la maschera: si ricontrollano linee di tiro e colpi
+  // le spianate dei barili toccano la maschera: si ricontrolla ogni posto (piano, sporgenze, spinte) e poi l'insieme
+  // (linee di tiro e colpi). Un posto che cambia quota o non passa più fa scartare il tentativo.
+  const ricontrollati = scelti.map((lato) => lato.map((p) => controllaPosto(maschera, sup, mare, p.x)));
+  if (ricontrollati.some((lato, i) => lato.some((q, j) => typeof q === 'string' || q.y !== scelti![i][j].y))) return null;
+  scelti = ricontrollati as [Posto[], Posto[]];
   if (controllaInsieme(maschera, sup, mare, scelti, true).length) return null;
   if (appigli.some((a) => controllaAppiglio(maschera, mare, a).length)) return null;
   let decor = decorazioni(s, sup, mare, [...sx, ...dx], appigli);

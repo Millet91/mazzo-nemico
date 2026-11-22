@@ -325,6 +325,8 @@ test('Fase 0: avviso sul tiro vicino, tasti trasparenti sopra un pirata, suggeri
 });
 
 test('comandi v3: niente joystick, frecce salto e FUOCO piccoli ai bordi; ARMA nel colore della ciurma', async ({ page }) => {
+  // tre formati di schermo in una prova: sui runner carichi supera i 30 s predefiniti (in CI da 15 a 33 s)
+  test.setTimeout(60000);
   for (const f of FORMATI) {
     await page.setViewportSize({ width: f.width, height: f.height });
     await entraInBattaglia(page, vista({ arma: 'granata' }), false);
@@ -482,6 +484,9 @@ test('comandi v3 · mirino sulla battaglia vera: si trascina sul canvas, resta d
     w.__kaboom.bus.comandi.ascolta((c: unknown) => w.__comandi.push(c));
   });
   const mirino = () => page.evaluate(() => (window as any).__kaboom.mirino() as { x: number; y: number } | null);
+  // la panoramica di inizio turno (Fase 1, fino a 1,2 s quando il nemico non si vede) finisce, poi la camera
+  // finisce di inquadrare il pirata
+  await page.waitForFunction(() => (window as any).__kaboom.camera?.().segui !== 'panoramica', null, { timeout: 5000 });
   await page.waitForTimeout(600); // la camera finisce di inquadrare il pirata
   const m = (await mirino())!;
   // il mirino sta nella parte libera dello schermo, lontano dai tasti
@@ -730,4 +735,47 @@ test('Fase 1: suggerimento del mirino su due righe, lontano dalla scritta del tu
     }
     await page.screenshot({ path: `test-results/screenshot/fase1-suggerimento-${f.nome}.png` });
   }
+});
+
+test('Fase 1: panoramica a inizio turno, frecce rosse per i nemici fuori vista, un tocco porta la camera lì', async ({ page }) => {
+  test.setTimeout(60000);
+  await page.setViewportSize({ width: 915, height: 412 });
+  await page.goto('/?prova');
+  await page.locator('#schermaglia').click();
+  await page.locator('#salpa').click();
+  await page.evaluate(() => {
+    const b = (window as any).__kaboom.bus;
+    b.richiestaBattaglia.value = { ...b.richiestaBattaglia.value, seme: 20261121 };
+  });
+  // a seme fisso i nemici non si vedono dal pirata: la panoramica va a guardarli e poi torna (1,2 s)
+  await expect.poll(() => page.evaluate(() => (window as any).__kaboom.camera?.().segui), { timeout: 15000 }).toBe('panoramica');
+  await page.screenshot({ path: 'test-results/screenshot/fase1-panoramica.png' });
+  await expect.poll(() => page.evaluate(() => (window as any).__kaboom.camera().segui), { timeout: 3000 }).toBe('pirata');
+  // tornati sul pirata: una freccia rossa per nemico fuori vista, mai sotto i tasti
+  const frecce = await page.evaluate(() => (window as any).__kaboom.frecce()) as { id: number; x: number; y: number; metri: number }[];
+  expect(frecce.length).toBeGreaterThan(0);
+  for (const f of frecce) {
+    expect(f.metri).toBeGreaterThan(0);
+    expect(f.y).toBeLessThan(412 - 170);
+  }
+  await page.screenshot({ path: 'test-results/screenshot/fase1-frecce-nemici.png' });
+  // un tocco sulla freccia: la camera va sul nemico e compare "torna sul pirata"
+  const prima = await page.evaluate(() => (window as any).__kaboom.camera());
+  await page.mouse.click(frecce[0].x, frecce[0].y);
+  await expect.poll(() => page.evaluate(() => (window as any).__kaboom.camera().segui)).toBe('libera');
+  await expect(page.getByTestId('ricentra')).toBeVisible({ timeout: 3000 });
+  const dopo = await page.evaluate(() => (window as any).__kaboom.camera());
+  expect(Math.abs(dopo.x - prima.x) + Math.abs(dopo.y - prima.y)).toBeGreaterThan(50);
+  await page.getByTestId('ricentra').click();
+  await expect(page.getByTestId('ricentra')).toHaveCount(0, { timeout: 3000 });
+
+  // in fuga il colpo è in volo: correndo via, la camera resta sul colpo (non torna sul pirata)
+  await page.locator('#tasto-fuoco').click();
+  await expect.poll(() => page.evaluate(() => (window as any).__kaboom.bus.battaglia.value?.fase), { timeout: 3000 }).toBe('fuga');
+  const dx = (await page.locator('#tasto-destra').boundingBox())!;
+  await page.mouse.move(dx.x + dx.width / 2, dx.y + dx.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window as any).__kaboom.camera().segui)).not.toBe('pirata');
+  await page.mouse.up();
 });

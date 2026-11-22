@@ -24,6 +24,10 @@ export interface GestoriInput {
   camera: Camera;
   /** doppio tocco */
   ricentra(): void;
+  /** un dito si è appoggiato sul canvas (ferma la panoramica di inizio turno) */
+  dito?(): void;
+  /** tocco singolo in (x, y) px CSS: true se l'ha usato qualcuno (freccia di un nemico) e non conta per il doppio tocco */
+  tocco?(x: number, y: number): boolean;
   /** il giocatore ha preso la camera: 'sposta' = trascinamento, 'zoom' = pinch o rotella (ha scelto lui lo zoom) */
   cameraManuale(tipo: 'sposta' | 'zoom'): void;
   /** centro del mirino sullo schermo (px CSS del canvas), o null se adesso non si può mirare */
@@ -80,6 +84,7 @@ export class InputBattaglia {
 
   giu(e: PointerEvent): void {
     const p = this.punto(e);
+    this.g.dito?.();
     if (!this.ditoMira && prendeMirino(p.x, p.y, this.g.mirino())) {
       this.ditoMira = { id: e.pointerId, x: p.x, y: p.y, t: this.ora() };
       this.g.miraInizia();
@@ -147,7 +152,9 @@ export class InputBattaglia {
     const p = this.punto(e);
     const ora = this.ora();
     const tocco = !annullato && ora - d.t0 < TOCCO_MAX_MS && Math.abs(p.x - d.x0) + Math.abs(p.y - d.y0) < TOCCO_MAX_PX && this.modo !== 'pinch';
-    if (tocco) {
+    if (tocco && this.g.tocco?.(p.x, p.y)) {
+      this.ultimoTocco = { t: -1e9, x: 0, y: 0 };
+    } else if (tocco) {
       const u = this.ultimoTocco;
       if (ora - u.t < DOPPIO_TOCCO_MS && Math.abs(p.x - u.x) + Math.abs(p.y - u.y) < 40) {
         this.g.ricentra();

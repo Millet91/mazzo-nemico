@@ -88,7 +88,7 @@ export function profilo(s: ConRng): Int32Array {
       ],
       orlo,
       labbro: intero(s, P.labbroMin, P.labbroMax),
-      mezzoLabbro: intero(s, 28, 44),
+      mezzoLabbro: intero(s, P.mezzoLabbroMin, P.mezzoLabbroMax),
     };
   };
   const sx = lato();

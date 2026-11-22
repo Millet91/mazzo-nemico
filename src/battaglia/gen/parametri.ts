@@ -3,6 +3,7 @@
 // Proprietario: agente Generatore (C).
 
 import { BIL } from '../../contenuti/bilanciamento';
+import { ARMA } from '../../contenuti/armi';
 
 const M = BIL.mondo;
 
@@ -36,14 +37,11 @@ export const REGOLE = {
   /** percorso a piedi in un turno (06 §7.2) */
   camminataTurno: 1200,
   /**
-   * Cannone con cui sono tarate le coste e gli spawn (regole v1: danno 45, raggio 55). Lo studio v2 ha alzato il cannone
-   * a 60/70 (PIANO §7): se il generatore leggesse ARMA quasi nessun seme passerebbe più la regola "un colpo diretto non
-   * butta in mare uno spawn" e cambierebbero tutte le impronte. Finché Mappa e livelli non rifà le coste più spesse,
-   * il generatore resta su questi numeri: le mappe sono identiche a prima, ma con le regole v2 quella garanzia
-   * non vale più alla lettera (misura in tests/sim/numeri-v2.test.ts).
+   * Cannone con cui si scelgono gli spawn: quello vero delle regole (studio v2: danno 60, raggio 70). Un colpo diretto,
+   * anche col +10% del Teschio, non deve buttare in mare nessuno spawn (06 §7.2): lo controllano spawn.ts e valida.ts.
    */
-  cannoneDanno: 45,
-  cannoneRaggio: 55,
+  cannoneDanno: ARMA.cannone.danno,
+  cannoneRaggio: ARMA.cannone.raggio,
   /** riempimento: solido tra fineCielo e mare (06 §0: 35-50%; Lead design 21/11/2026 per l'Isola: minimo 20%,
    *  perché con la costa aperta e 5 spawn in piano il 30% chiede montagne fino al cielo).
    *  In M1 tutti i biomi usano il terreno dell'Isola: quando arrivano gli altri biomi questi limiti vanno per bioma. */
@@ -85,9 +83,12 @@ export const ISOLA = {
   orloQuotaMax: 180,
   rivaPerQuotaMin: 130,
   rivaPerQuotaMax: 145,
-  /** orlo rialzato in cima alla riva (06 §7.3; Lead design: 10-40 px) */
-  labbroMin: 10,
-  labbroMax: 40,
+  /** PROVA "promontori di guardia" (opzione B, 22/11/2026, non unita): l'orlo in cima alla riva diventa un promontorio
+   *  alto 140-170 px e largo 160-200, che ferma chi è spinto verso il mare. Prima era 10-40 px, mezza larghezza 28-44. */
+  labbroMin: 140,
+  labbroMax: 170,
+  mezzoLabbroMin: 80,
+  mezzoLabbroMax: 100,
   /** la piana degli spawn sta sopra l'orlo di questi px */
   pianaMin: 0,
   pianaMax: 20,

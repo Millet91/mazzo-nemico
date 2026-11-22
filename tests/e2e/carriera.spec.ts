@@ -157,3 +157,57 @@ test('giro: menu → Carriera → attacco a 1D sulla mappa vera → vittoria →
   await expect.poll(() => animazioni).toContainEqual({ t: 'conquista', isola: '1D' });
   await page.screenshot({ path: 'test-results/carriera-nuovo.png' });
 });
+
+/** Stato preparato: capitolo 1 appena vinto (tutte le isole del giocatore). */
+async function capitoloVinto(page: Page) {
+  await apri(page);
+  await page.click('#carriera');
+  await chiudiAvvisi(page);
+  await page.evaluate(() => {
+    const b = (window as unknown as { __kaboom: K }).__kaboom.bus;
+    const s = JSON.parse(JSON.stringify(b.carriera.value));
+    for (const id of Object.keys(s.isole)) if (id !== '1H') s.isole[id] = { padrone: 'giocatore', pirati: 3, presa: true };
+    Object.assign(s, { fase: 'attacco', rinforzi: 0, usate: [], conquisteRound: [], round: 5 });
+    b.carriera.value = s;
+  });
+  await tocca(page, '1H');
+  await page.click('#car-arrembaggio');
+  await finisciBattaglia(page, 0, [1, 0]);
+  await chiudiAvvisi(page);
+  await expect(page.getByTestId('car-fine')).toBeVisible();
+}
+
+test('paywall a fine cap. 1: «Sblocca tutto» (finto) segna la carriera completa', async ({ page }) => {
+  test.setTimeout(60_000);
+  await capitoloVinto(page);
+  await page.click('#car-continua-viaggio');
+  const pw = page.getByTestId('car-paywall');
+  await expect(pw).toBeVisible();
+  await expect(page.locator('#car-sblocca')).toContainText('1,99');
+  await page.screenshot({ path: 'test-results/carriera-paywall.png' });
+  for (const id of ['#car-sblocca', '#car-gratis', '#car-ripristina']) {
+    const b = await page.locator(id).boundingBox();
+    expect(b!.height).toBeGreaterThanOrEqual(44);
+    expect(b!.y + b!.height).toBeLessThanOrEqual(360);
+  }
+  await page.screenshot({ path: 'test-results/carriera-paywall.png' });
+  // niente da ripristinare prima dell'acquisto
+  await page.click('#car-ripristina');
+  await expect(pw.getByRole('status')).toBeVisible();
+  expect((await stato(page)).completo).toBe(false);
+  await page.click('#car-sblocca');
+  await expect.poll(async () => (await stato(page)).completo).toBe(true);
+  await page.click('#car-paywall-menu');
+  await expect(page.locator('#carriera')).toBeVisible();
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __kaboom: K }).__kaboom.bus.carriera.value?.completo)).toBe(true);
+});
+
+test('paywall: «Continua a giocare gratis» torna al menu senza sbloccare', async ({ page }) => {
+  test.setTimeout(60_000);
+  await capitoloVinto(page);
+  await page.click('#car-continua-viaggio');
+  await page.click('#car-gratis');
+  await expect(page.locator('#carriera')).toBeVisible();
+  expect((await stato(page)).completo).toBe(false);
+});

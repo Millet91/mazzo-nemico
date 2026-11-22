@@ -97,6 +97,19 @@ export function entraInCarriera(): void {
   mostraScena('c1.inizio');
 }
 
+/** Paywall di fine cap. 1: solo dopo il capitolo vinto. */
+export function apriPaywall(): void {
+  const s = bus.carriera.value;
+  if (!s || R.esitoCapitolo(CAP, s) !== 'vinto') return;
+  bus.schermata.value = 'paywall';
+}
+
+/** Acquisto fatto o ripristinato: la carriera ricorda "Sblocca tutto". */
+export function segnaCompleto(): void {
+  const s = bus.carriera.value;
+  if (s && !s.completo) imposta({ ...s, completo: true });
+}
+
 export function tornaAlMenu(): void {
   azzeraUi();
   bus.schermata.value = 'menu';
@@ -407,6 +420,7 @@ export function avviaAscoltoCarriera(): () => void {
 /** Tasto indietro di Android fuori dalla battaglia. false = niente da chiudere qui. */
 export function indietroCarriera(): boolean {
   if (bus.schermata.value === 'menu') return false;
+  if (bus.schermata.value === 'paywall') { bus.schermata.value = 'mondo'; return true; }
   if (avvisi.value[0]) { chiudiAvviso(); return true; }
   if (schedaIsola.value) { schedaIsola.value = null; return true; }
   if (preparazione.value) { annullaPreparazione(); return true; }

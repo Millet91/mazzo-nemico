@@ -10,10 +10,11 @@ import { tocco } from '../../piattaforma/haptics';
 import { CAMPAGNA } from '../../contenuti/campagna';
 import * as R from '../../mondo/carriera/regole';
 import { CartaDiProva, cartaDiProva } from './CartaDiProva';
+import { Paywall } from './Paywall';
 import { iconaPremio, testoPremio } from './premi';
 import { PannelloNuovo, PergamenaScena, urlPremio } from '../kit';
 import {
-  annullaPreparazione, avantiScena, avvisi, banner, CAP, cambiaImbarco, chiudiAvviso, chiudiScheda, confermaRinforzi, defIsola,
+  annullaPreparazione, apriPaywall, avantiScena, avvisi, banner, CAP, cambiaImbarco, chiudiAvviso, chiudiScheda, confermaRinforzi, defIsola,
   difendi, fineTurno, lanciaAttacco, nomeIsola, partenzeAperte, preparazione, riprovaCapitolo, rigaScena, schedaIsola,
   selezionata, tornaAlMenu,
 } from './stato';
@@ -233,12 +234,13 @@ function FineCapitolo() {
               <li class={s.round <= CAMPAGNA.stelle.roundVeloce ? 'ok' : ''}>★ {C.stelleRighe.veloce(CAMPAGNA.stelle.roundVeloce)}</li>
               <li class={s.perditeSfide <= CAMPAGNA.stelle.perditeSfideMax ? 'ok' : ''}>★ {C.stelleRighe.sfide}</li>
             </ul>
-            <p class="car-nota">{C.prossimamente}</p>
+            {s.completo && <p class="car-nota">{C.prossimamente}</p>}
           </>
         ) : <p>{perIsole ? C.persoIsole : C.persoRound(CAP.limiteRound)}</p>}
         <footer>
           <Bottone id="car-fine-menu" onClick={tornaAlMenu}>{C.menuPrincipale}</Bottone>
-          <Bottone tipo="primario" id="car-riprova" onClick={riprovaCapitolo}>{vinto ? C.rigioca : C.riprova}</Bottone>
+          <Bottone tipo={vinto ? 'secondario' : 'primario'} id="car-riprova" onClick={riprovaCapitolo}>{vinto ? C.rigioca : C.riprova}</Bottone>
+          {vinto && !s.completo && <Bottone tipo="primario" id="car-continua-viaggio" onClick={apriPaywall}>{C.continuaViaggio}</Bottone>}
         </footer>
       </section>
     </div>
@@ -249,6 +251,7 @@ function FineCapitolo() {
 export function Carriera() {
   const s = bus.carriera.value;
   if (!s) return null;
+  if (bus.schermata.value === 'paywall') return <Paywall />;
   // con un pannello grande aperto la barra e il pannello della fase si nascondono (a 360 px di altezza non c'è posto)
   const modale = !!preparazione.value || avvisi.value.length > 0 || (s.attacco?.difesa ?? false) || s.fase === 'fine';
   return (

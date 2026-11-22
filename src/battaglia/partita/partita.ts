@@ -8,8 +8,7 @@ import { VERSIONE_REGOLE } from '../../core/tipi';
 import { normalizza } from '../../core/trig';
 import { BIL } from '../../contenuti/bilanciamento';
 import { avanzaTick, creaBattaglia, eseguiComando } from '../sim';
-import { generaMappa } from '../gen';
-import { mappaFatta } from '../mappe';
+import { mappaDiConfig } from '../mappa-config';
 import { creaIa, type ClientIa } from '../ia';
 import { Accumulatore, MS_PER_TICK } from './accumulatore';
 
@@ -58,10 +57,7 @@ export class Partita {
   private readonly orologio: () => number;
 
   constructor(readonly config: ConfigBattaglia, opz: OpzioniPartita = {}) {
-    this.mappa = opz.mappa ?? (config.mappaFissa ? mappaFatta(config.mappaFissa, config) : null) ?? generaMappa({
-      seme: config.seme, bioma: config.bioma, variante: config.variante,
-      piratiPerLato: [config.squadre[0].pirati, config.squadre[1].pirati],
-    });
+    this.mappa = opz.mappa ?? mappaDiConfig(config);
     this.s = creaBattaglia(config, this.mappa);
     this.replay = { versioneRegole: config.versioneRegole ?? VERSIONE_REGOLE, config, comandi: [] };
     this.ia = opz.ia ?? creaIa();

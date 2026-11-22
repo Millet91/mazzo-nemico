@@ -4,7 +4,7 @@
 
 ## 1. Dove si lavora
 
-- **Ramo di integrazione: `claude/p1-integrazione`.** Ci scrive solo il Lead. Ogni push qui costruisce l'APK di prova (pre-release `apk-prova`).
+- **Ramo di integrazione: `claude/p1-integrazione`.** Ci scrive solo il Lead. L'APK del proprietario (pre-release `apk-prova`) lo aggiorna solo `claude/p2-integrazione`, che unisce questo ramo prima di ogni push: così ha sempre battaglia e carriera insieme. Qui l'APK esce solo come artifact della CI.
 - **Un ramo per agente**, che parte da `claude/p1-integrazione`: `claude/p1-fisica`, `claude/p1-render`, `claude/p1-mappa`, `claude/p1-audio`. Ogni agente apre **PR verso `claude/p1-integrazione`** e avvisa il Lead nel suo thread. PR piccole e frequenti: una per punto dell'elenco del §4.
 - Prima di ogni PR: `npm run typecheck`, `npm test`, `npm run build`, `npm run assets:check`, e le prove a schermo (`npm run build` poi `PW_CHROME=/opt/pw-browsers/chromium npx playwright test --trace off`).
 - **Replay d'oro**: chi cambia la simulazione li rigenera con `CON_RITIRATA=1 npx tsx tests/replay/genera.ts` in un **commit separato**, con il motivo nel messaggio. Le impronte delle mappe generate (`tests/gen/impronta.ts`) non devono cambiare senza dirlo al Lead.
@@ -29,7 +29,8 @@ Se serve un campo nuovo si chiede al Lead nel thread, non si aggiunge nel propri
 - **Eventi nuovi**: `passo` (un piede a terra ogni `BIL.movimento.passoPx`, con `corsa` e `materiale`), `scavalco`, `scivola`, `bordo`, `saltoMuro`, `fatto`; `esplosione.materiale` (facoltativo, per l'audio a strati).
 - **`VistaBattaglia.balzo`** (icona e nome del tasto Balzo) e **`puoFinire`** (tasto "fatto" in fuga). Già dalla Fase 0: `avvisoTiro`, `pirataSottoTasti`.
 - **`BIL.movimento`** e **`BIL.ritmo`**: corsa 96 px/s dopo 0,4 s, accelerazione 0,15 s, scavalco fino a 28 px in 0,25 s, scale a 90 px/s in un tocco, scivolata oltre 25° fino a 220 px/s, salvataggio al bordo entro 0,5 s una volta per battaglia; fuga 1,5 s che si chiude col "fatto" o da fermi, timer **per sparo** 12 s (25 con Mozzo e nel Prologo, 45 Timer lungo), turno IA ≤ 4 s con mira visibile 0,8 s, panoramica 1,2 s.
-- **Per il Pacchetto 2**: `ConfigBattaglia.scontro` (`ConfigScontro`, `TipoScontro`), `ConfigSquadra.mosse` (`IdMossa[]`, assente = tutte) e `nomi`, `MotivoFine` con `'bandiera'`, evento `bandieraPresa`. Punto d'aggancio: `src/battaglia/sim/scontro.ts` › `regoleScontro(s, eventi, concludi)`, chiamata da `avanza` a fine tick.
+- **`StatoTurno.richiesta`** (`'fatto' | 'balzo' | 'balzoMuro'`): quello che un comando lascia alla sim per il tick dopo, al posto dei valori sentinella.
+- **Per il Pacchetto 2**: `ConfigBattaglia.semeMappa` (la mappa generata nasce da questo seme, vento e casse da `seme`; lo legge `src/battaglia/mappa-config.ts`, l'unico posto che sceglie la mappa di una battaglia), `ConfigBattaglia.scontro` (`ConfigScontro`, `TipoScontro`), `ConfigSquadra.mosse` (`IdMossa[]`, assente = tutte) e `nomi`, `MotivoFine` con `'bandiera'`, evento `bandieraPresa`. Punto d'aggancio: `src/battaglia/sim/scontro.ts` › `regoleScontro(s, eventi, concludi)`, chiamata da `avanza` a fine tick.
 
 ### Numeri di battaglia di Bilanciamento (PIANO §7): un commit solo
 

@@ -398,6 +398,8 @@ export type EventoBattaglia =
   // ── studio v2, Fase 1: movimento da pirata (per pupazzo, polvere e audio) ──
   /** un piede tocca terra: uno ogni BIL.movimento.passoPx px percorsi; materiale = byte della maschera sotto il piede */
   | { t: 'passo'; pirata: number; x: number; y: number; corsa: boolean; materiale: number }
+  /** mano su un piolo o sulla corda: uno ogni BIL.movimento.pioloPx px di arrampicata (liana: true sulle liane). Solo per audio e pupazzo */
+  | { t: 'piolo'; pirata: number; x: number; y: number; liana: boolean }
   /** comincia a issarsi su un muretto (dura BIL.movimento.scavalcoSec) */
   | { t: 'scavalco'; pirata: number }
   /** comincia (inizio: true) o finisce una scivolata su un pendio ripido */

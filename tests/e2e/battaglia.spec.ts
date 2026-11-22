@@ -482,6 +482,9 @@ test('comandi v3 · mirino sulla battaglia vera: si trascina sul canvas, resta d
     w.__kaboom.bus.comandi.ascolta((c: unknown) => w.__comandi.push(c));
   });
   const mirino = () => page.evaluate(() => (window as any).__kaboom.mirino() as { x: number; y: number } | null);
+  // la panoramica di inizio turno (Fase 1, fino a 1,2 s quando il nemico non si vede) finisce, poi la camera
+  // finisce di inquadrare il pirata
+  await page.waitForFunction(() => (window as any).__kaboom.camera?.().segui !== 'panoramica', null, { timeout: 5000 });
   await page.waitForTimeout(600); // la camera finisce di inquadrare il pirata
   const m = (await mirino())!;
   // il mirino sta nella parte libera dello schermo, lontano dai tasti

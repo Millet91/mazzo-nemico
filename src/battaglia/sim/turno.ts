@@ -18,6 +18,7 @@ import { regoleScontro } from './scontro';
 import { bersagliDi, colpoIstantaneo, durataColpi, fisicaDi, spara, tickColpo } from './armi';
 import { muoviProiettile } from './proiettili';
 import { aggiornaPezzi, frantumaTutti, pezziInCaduta } from './pezzi';
+import { aggiornaFrane, aggiornaFuochi, bruciaPirati } from './fuoco';
 import { MICCIA_LAPIDE_TICK, VITA_MAX_PROIETTILE } from './costanti';
 import { apriCassa, attivo as proiettileAttivo, bersagliOggetti, centroOggetto, eOggetto, forseCassa, scendiCassa } from './oggetti';
 
@@ -29,6 +30,7 @@ export function cambiaFase(s: StatoBattaglia, f: FaseTurno, eventi: EventoBattag
   const t = s.turno;
   t.fase = f; t.inizioFase = s.tick; t.camminata = 0; t.arrampicata = 0; t.fermoDa = -1;
   eventi.push({ t: 'fase', fase: f });
+  if (f === 'risoluzione') bruciaPirati(s, eventi); // Fase 3: chi sta in un fuoco a fine turno
 }
 
 /** Indice della squadra attaccante (in M1 la 0). */
@@ -261,6 +263,8 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
   }
   aggiornaProiettili(s, eventi);
   aggiornaPezzi(s, eventi);
+  aggiornaFrane(s, eventi);
+  aggiornaFuochi(s, eventi);
 
   const inFase = s.tick - t.inizioFase;
   const attivoInGioco = attivo !== undefined && inGioco(attivo);
@@ -315,6 +319,7 @@ export function avanza(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
       if (!tuttoFermo) { t.fermoDa = -1; break; }
       if (t.fermoDa < 0) t.fermoDa = s.tick;
       if (s.tick - t.fermoDa < BIL.turno.risoluzioneFermoTick) break;
+      if (s.frane && s.frane.length > 0) break; // la sabbia si assesta mentre si aspetta: il turno passa quando è ferma
       if (creaLapidi(s, eventi) > 0) { t.inizioFase = s.tick; t.fermoDa = -1; break; } // si aspetta che le lapidi esplodano
       fineTurno(s, eventi);
       break;

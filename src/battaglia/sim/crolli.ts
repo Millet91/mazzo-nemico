@@ -160,10 +160,12 @@ export function staccaDallaMaschera(t: Terreno, p: PezzoStaccato): { w: number; 
  * Un passo di frana nel rettangolo [x0, x1] × [y0, y1]: ogni pixel di sabbia con aria sotto scende di 1 px; se
  * sotto è pieno ma in diagonale (giù a sinistra o a destra) c'è aria, ci scivola (pendio di 45° al massimo).
  * Si scorre dal basso verso l'alto, a righe alterne da sinistra e da destra (così la frana non pende da un lato).
+ * `occupato(x, y)` = lì la sabbia non può entrare (un pirata, un barile).
  * Restituisce il rettangolo dei pixel mossi, o null se la sabbia è ferma.
  */
-export function franaPasso(t: Terreno, x0: number, y0: number, x1: number, y1: number, passo: number):
-  { x0: number; y0: number; x1: number; y1: number } | null {
+export function franaPasso(
+  t: Terreno, x0: number, y0: number, x1: number, y1: number, passo: number, occupato?: (x: number, y: number) => boolean,
+): { x0: number; y0: number; x1: number; y1: number } | null {
   const { w, h, maschera } = t;
   const sabbia = MATERIALE.sabbia, aria = MATERIALE.aria;
   x0 = Math.max(0, x0); x1 = Math.min(w - 1, x1); y0 = Math.max(0, y0); y1 = Math.min(h - 2, y1);
@@ -187,6 +189,7 @@ export function franaPasso(t: Terreno, x0: number, y0: number, x1: number, y1: n
         }
       }
       if (j < 0) continue;
+      if (occupato) { const jx = j % w; if (occupato(jx, (j - jx) / w)) continue; }
       maschera[j] = sabbia; maschera[i] = aria;
       const jx = j % w;
       if (Math.min(px, jx) < mx0) mx0 = Math.min(px, jx);

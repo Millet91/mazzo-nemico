@@ -15,7 +15,7 @@ import { MEZZA_ALTEZZA_PIRATA, MEZZA_LARGHEZZA_PIRATA } from './terreno';
 /** velocità massima di caduta di un pezzo (px/tick): quella di un colpo a piena potenza */
 const VEL_MAX = BIL.fisica.velocitaMaxProiettile;
 
-/** Ci sono pezzi in caduta? (il volo e la risoluzione li aspettano) */
+/** Ci sono pezzi in caduta? (il volo e la risoluzione li aspettano; le frane le aspetta solo la fine del turno) */
 export function pezziInCaduta(s: StatoBattaglia): boolean {
   return s.pezzi !== undefined && s.pezzi.length > 0;
 }
@@ -351,8 +351,9 @@ function frantuma(p: PezzoCadente, inMare: boolean, eventi: EventoBattaglia[]): 
   });
 }
 
-/** Fine forzata (risoluzione oltre il tetto, battaglia finita): tutti i pezzi in caduta si frantumano dove sono. */
+/** Fine forzata (risoluzione oltre il tetto, battaglia finita): i pezzi in caduta si frantumano dove sono, le frane si fermano. */
 export function frantumaTutti(s: StatoBattaglia, eventi: EventoBattaglia[]): void {
+  if (s.frane && s.frane.length) s.frane = [];
   if (!s.pezzi || s.pezzi.length === 0) return;
   for (const p of s.pezzi) frantuma(p, false, eventi);
   s.pezzi = [];

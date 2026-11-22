@@ -3,10 +3,10 @@
 // Strato schermo (px CSS, non scala con lo zoom): nomi e PV, anello di mira, numeri di danno.
 import { Container, Graphics, Sprite, Text } from 'pixi.js';
 import type { Renderer } from 'pixi.js';
-import type { EventoBattaglia, MappaGenerata, Pirata, Punto, StatoBattaglia } from '../../core/tipi';
+import type { EventoBattaglia, MappaGenerata, MossaPirata, Pirata, Punto, StatoBattaglia } from '../../core/tipi';
 import { COLORI_CIURMA, PALETTE, hex } from '../../core/palette';
 import { coseno, seno } from '../../core/trig';
-import { BIL } from '../../contenuti/bilanciamento';
+import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { traiettoria } from '../sim';
 import type { Camera } from './camera';
 import { frecciaBordo } from './bordo';
@@ -15,6 +15,11 @@ import { AppigliRender, puoAggrapparsi } from './appigli';
 import { Effetti } from './effetti';
 import { Forme, sprite, type IdForma } from './forme';
 import { TerrenoRender } from './terreno';
+import { PezziPirata, RigPirata, SCALA_MIN_PUPAZZO } from './pirata-rig';
+import {
+  armaPosa, bersaglio, mossaDaStato, nuovaPosa, nuoviParametri, RIALZATA_MS, risolvi, sfuma, SFUMA_MS,
+  type ArmaPosa, type Parametri, type Posa, type StatoPosa,
+} from './pirata-posa';
 import { ALTEZZA_OGGETTO, SfondiMappa } from './sfondi-mappa';
 
 function mescola(a: string, b: string, t: number): number {
@@ -24,8 +29,12 @@ function mescola(a: string, b: string, t: number): number {
 }
 
 const MEZZA_CAPSULA = BIL.pirata.capsulaAltezza / 2;
-/** durata della morte del segnaposto: 10 f a 12 fps (11 §5) */
+/** durata della morte: 10 f a 12 fps (11 §5) */
 const MORTE_MS = 833;
+/** dopo lo sparo l'arma resta in mano per il rinculo (o il fendente) */
+const ARMA_DOPO_SPARO_MS = 300;
+/** la velocità a piedi si misura su finestre di almeno tanti ms (i tick della sim non cadono uno per frame) */
+const FINESTRA_VEL_MS = 100;
 /**
  * Punti chiesti alla sim per la traiettoria: il cannone ne dà uno ogni 3 tick, quindi 160 = 8 s di volo.
  * Con 60 (3 s) i tiri alti venivano tagliati e il mirino rosso finiva a mezz'aria, lontano dall'impatto vero.
@@ -44,24 +53,47 @@ const RAGGIO_BERSAGLIO = 80;
 interface VisPirata {
   id: number;
   radice: Container;
-  /** si specchia col verso e si schiaccia nelle animazioni */
-  corpo: Container;
-  lampo: Sprite;
-  braccio: Sprite;
+  /** pupazzo a pezzi (pirata-rig.ts) */
+  rig: RigPirata;
+  /** sprite unico per la vista da lontano (sotto SCALA_MIN_PUPAZZO) */
+  sagoma: Sprite;
   etichetta: Container;
   barra: Graphics;
   pv: Text;
   nome: Text;
   ultimaVita: number;
   ultimoX: number;
+  ultimoY: number;
   /** ms dall'ultimo colpo (lampo + tremolio), −1 = niente */
   colpito: number;
-  /** ms dall'atterraggio (schiacciata), −1 = niente */
+  /** ms dall'atterraggio (ginocchia piegate), −1 = niente */
   atterrato: number;
+  /** ms dall'ultimo sparo (rinculo), −1 = niente */
+  sparo: number;
   /** ms dalla morte, −1 = vivo */
   morte: number;
   annegato: boolean;
-  passo: number;
+  /** in aria perché un colpo l'ha sbalzato */
+  sbalzato: boolean;
+  /** px percorsi a piedi e su scale e liane: guidano il passo e le mani (la posa segue la distanza, non il tempo) */
+  cammino: number;
+  salita: number;
+  /** velocità a piedi misurata dal disegno, px/s (serve solo finché la sim non scrive Pirata.mossa) */
+  velX: number;
+  finestraPx: number;
+  finestraMs: number;
+  /** mossa mostrata, da quanti ms, e cosa c'era in mano: quando cambiano la posa sfuma dalla vecchia alla nuova */
+  mossa: MossaPirata;
+  mossaMs: number;
+  chiavePosa: string;
+  sfumaMs: number;
+  sfumaDurata: number;
+  parDa: Parametri;
+  parA: Parametri;
+  parOra: Parametri;
+  posa: Posa;
+  /** dove guarda il pupazzo */
+  verso: 1 | -1;
   /** PV mostrati dalla scia bianca della barra (scende 300 ms dopo il colpo) */
   vitaScia: number;
   /** ms dall'ultimo calo dei PV, per far partire la scia */
@@ -99,6 +131,12 @@ export class ScenaBattaglia {
   readonly terreno: TerrenoRender;
   readonly effetti: Effetti;
   private readonly forme: Forme;
+  private readonly pezzi: PezziPirata;
+  private readonly statoPosa: StatoPosa = {
+    mossa: 'fermo', ciurma: 'teschio', cammino: 0, salita: 0, tempo: 0, daMs: 0, sfasa: 0, mira: null,
+    sparo: -1, colpito: -1, atterrato: -1, sbalzato: false, suolo: true, ko: false, morte: -1, annegato: false,
+  };
+  private readonly miraPosa: { alzo: number; potenza: number; arma: ArmaPosa } = { alzo: 0, potenza: 0, arma: 'cannone' };
   private readonly strato = {
     decorazioni: new Container(), pirati: new Container(), proiettili: new Container(), traiettoria: new Container(),
   };
@@ -137,6 +175,7 @@ export class ScenaBattaglia {
 
   constructor(renderer: Renderer, private readonly s: StatoBattaglia, mappa: MappaGenerata) {
     this.forme = new Forme(renderer);
+    this.pezzi = new PezziPirata(renderer);
     this.terreno = new TerrenoRender(s.terreno);
     this.effetti = new Effetti(this.forme);
     this.mondo.addChild(this.mareDietro, this.strato.decorazioni, this.terreno.radice);
@@ -238,15 +277,10 @@ export class ScenaBattaglia {
     const sq = this.s.squadre[p.squadra];
     const col = COLORI_CIURMA[sq.ciurma];
     const radice = new Container();
-    const corpo = new Container();
-    const c = sprite(this.forme.pirata(sq.ciurma));
-    const lampo = sprite(this.forme.get('lampo'));
-    lampo.alpha = 0;
-    corpo.addChild(c, lampo);
-    const braccio = sprite(this.forme.get('braccio'));
-    braccio.position.set(0, -18);
-    braccio.visible = false;
-    radice.addChild(corpo, braccio);
+    const rig = this.pezzi.pupazzo(sq.ciurma);
+    const sagoma = this.pezzi.sagoma(sq.ciurma);
+    sagoma.visible = false;
+    radice.addChild(rig.radice, sagoma);
     this.strato.pirati.addChild(radice);
 
     const etichetta = new Container();
@@ -269,8 +303,11 @@ export class ScenaBattaglia {
     this.schermo.addChildAt(etichetta, 0);
 
     const v: VisPirata = {
-      id: p.id, radice, corpo, lampo, braccio, etichetta, barra, pv, nome,
-      ultimaVita: -1, ultimoX: p.x, colpito: -1, atterrato: -1, morte: -1, annegato: false, passo: 0,
+      id: p.id, radice, rig, sagoma, etichetta, barra, pv, nome,
+      ultimaVita: -1, ultimoX: p.x, ultimoY: p.y, colpito: -1, atterrato: -1, sparo: -1, morte: -1, annegato: false,
+      sbalzato: false, cammino: p.id * 9, salita: 0, velX: 0, finestraPx: 0, finestraMs: 0,
+      mossa: 'fermo', mossaMs: 1000, chiavePosa: '', sfumaMs: SFUMA_MS, sfumaDurata: SFUMA_MS,
+      parDa: nuoviParametri(), parA: nuoviParametri(), parOra: nuoviParametri(), posa: nuovaPosa(), verso: p.verso,
       vitaScia: p.vita, sciaMs: 0,
     };
     this.pirati.set(p.id, v);
@@ -311,10 +348,36 @@ export class ScenaBattaglia {
           const p = this.s.pirati.find((x) => x.id === e.pirata);
           this.effetti.numero(e.pirata, e.quanto, e.x, e.y, !!p && p.vita <= 0);
           const v = this.pirati.get(e.pirata);
-          if (v) v.colpito = 0;
+          if (v) { v.colpito = 0; v.sbalzato = true; }
           break;
         }
-        case 'atterrato': { const v = this.pirati.get(e.pirata); if (v) v.atterrato = 0; break; }
+        case 'atterrato': {
+          const v = this.pirati.get(e.pirata);
+          if (v) v.atterrato = 0;
+          const p = this.s.pirati.find((x) => x.id === e.pirata);
+          if (p) this.effetti.polvere(p.x, p.y + MEZZA_CAPSULA, 4);
+          break;
+        }
+        case 'sparo': {
+          const v = this.pirati.get(e.pirata);
+          const p = this.s.pirati.find((x) => x.id === e.pirata);
+          if (!v || !p) break;
+          v.sparo = 0;
+          // fumo dalla bocca dell'arma (dov'era nell'ultimo frame disegnato)
+          const posa = armaPosa(e.arma);
+          if (posa === 'cannone' || posa === 'pistola') {
+            const b = RigPirata.nelMondo(v.posa, v.verso, v.posa.boccaX, v.posa.boccaY);
+            this.effetti.fumo(p.x + b.x, p.y + MEZZA_CAPSULA + b.y, posa === 'cannone' ? 4 : 2);
+          }
+          break;
+        }
+        // un piede a terra in corsa (sim della Fase 1): sbuffo di polvere
+        case 'passo': if (e.corsa) this.effetti.polvere(e.x, e.y, 1); break;
+        case 'scivola': {
+          const p = this.s.pirati.find((x) => x.id === e.pirata);
+          if (p && e.inizio) this.effetti.polvere(p.x, p.y + MEZZA_CAPSULA, 3);
+          break;
+        }
         case 'morto': {
           const v = this.pirati.get(e.pirata);
           if (v && v.morte < 0) { v.morte = 0; v.annegato = e.causa === 'mare'; }
@@ -450,67 +513,95 @@ export class ScenaBattaglia {
     if (ridisegna) this.disegnaBarra(v, p);
 
     if (p.stato !== 'vivo' && v.morte < 0) { v.morte = 0; v.annegato = p.stato === 'annegato'; }
+    const st = this.statoPosa;
+    st.ciurma = this.s.squadre[p.squadra].ciurma;
+    st.tempo = this.tempo; st.sfasa = p.id;
+    st.mira = null; st.morte = -1; st.ko = false;
     if (v.morte >= 0) {
-      // morte: giro di 360°, rimpicciolimento fino a 0 (annegato: affonda e svanisce)
+      // morte: un giro intero rimpicciolendo col cappello che vola via (annegato: braccia in alto, affonda e svanisce)
       v.morte += deltaMS;
       const k = Math.min(1, v.morte / MORTE_MS);
       v.etichetta.visible = false;
-      v.braccio.visible = false;
-      if (v.annegato) { v.corpo.rotation = 0; v.corpo.y = k * 30; v.radice.alpha = 1 - k; }
-      else { v.corpo.rotation = k * Math.PI * 2; v.corpo.y = -MEZZA_CAPSULA * k; v.corpo.scale.set(1 - k); }
-      if (k >= 1) v.radice.visible = false;
+      v.sagoma.visible = false; v.rig.radice.visible = k < 1;
+      if (v.annegato) v.radice.alpha = 1 - k;
+      if (k >= 1) { v.radice.visible = false; return; }
+      st.mossa = 'fermo'; st.morte = k; st.annegato = v.annegato;
+      v.rig.lampo(false);
+      v.rig.applica(risolvi(bersaglio(st, v.parOra), null, v.posa), v.verso, null, false);
       return;
     }
 
-    // a 0 PV il pirata resta 'vivo' e a terra fino alla lapide di fine risoluzione (README della sim)
-    if (p.vita <= 0) {
-      v.braccio.visible = false;
-      v.lampo.alpha = 0;
-      v.corpo.scale.set(p.verso, 1);
-      v.corpo.rotation = -p.verso * (Math.PI / 2);
-      v.corpo.position.set(0, -2);
-      const e = aSchermo(p.x, piedi - 20);
-      v.etichetta.position.set(Math.round(e.x), Math.round(e.y));
-      return;
+    // tempi delle reazioni (ms dall'evento)
+    if (v.colpito >= 0) { v.colpito += deltaMS; if (v.colpito > 300) v.colpito = -1; }
+    if (v.atterrato >= 0) { v.atterrato += deltaMS; if (v.atterrato > 180) v.atterrato = -1; }
+    if (v.sparo >= 0) { v.sparo += deltaMS; if (v.sparo > ARMA_DOPO_SPARO_MS) v.sparo = -1; }
+    if (v.sbalzato && p.aTerra && (v.colpito < 0 || v.colpito > 150)) v.sbalzato = false;
+
+    // quanta strada ha fatto: il passo e le mani sulla scala seguono la distanza
+    const dx = p.x - v.ultimoX, dy = p.y - v.ultimoY;
+    v.ultimoX = p.x; v.ultimoY = p.y;
+    if (deltaMS > 0) {
+      const aPiedi = p.aTerra && p.appeso < 0 && Math.abs(dx) < 6;
+      if (aPiedi) v.cammino += Math.abs(dx);
+      if (p.appeso >= 0 && Math.abs(dy) < 6) v.salita += dy;
+      v.finestraPx += aPiedi ? Math.abs(dx) : 0; v.finestraMs += deltaMS;
+      if (v.finestraMs >= FINESTRA_VEL_MS) { v.velX = (v.finestraPx / v.finestraMs) * 1000; v.finestraPx = 0; v.finestraMs = 0; }
+      // appena riparte non si aspetta la finestra: è già un passo
+      else if (aPiedi && Math.abs(dx) > 0.05 && v.velX === 0) v.velX = BIL.pirata.camminata * TICK_AL_SECONDO;
     }
 
     // verso (l'occhio guarda dove va il pirata); chi aspetta fermo si gira verso il pirata attivo (m1-ritmo §10)
-    let sx: number = p.verso, sy = 1, rot = 0, dy = 0;
-    if (attivo && attivo !== p && p.aTerra && Math.abs(p.vx) < 0.01 && Math.abs(attivo.x - p.x) > 4) sx = attivo.x > p.x ? 1 : -1;
-    // idle: respiro 1 → 0,97 in 1 s
-    sy = 1 - 0.015 * (1 + Math.sin((this.tempo / 1000) * Math.PI * 2 + p.id));
-    const cammina = Math.abs(p.x - v.ultimoX) > 0.05 && p.aTerra;
-    v.ultimoX = p.x;
-    if (cammina) {
-      v.passo += deltaMS;
-      const f = Math.floor(v.passo / (1000 / 12)); // 12 fps
-      dy = f % 2 ? -2 : 0;
-      rot = (f % 2 ? 6 : -6) * (Math.PI / 180);
-    }
-    if (!p.aTerra) {
-      if (p.vy < 0) { sx *= 0.85; sy = 1.2; } else { sx *= 1; sy = 1; }
-    }
-    if (v.atterrato >= 0) {
-      v.atterrato += deltaMS;
-      if (v.atterrato < 120) { sx *= 1.2; sy = 0.8; } else v.atterrato = -1;
-    }
-    let tremolio = 0;
-    if (v.colpito >= 0) {
-      v.colpito += deltaMS;
-      v.lampo.alpha = v.colpito < LAMPO_MS ? 1 : 0;
-      tremolio = v.colpito < 250 ? (Math.floor(v.colpito / 30) % 2 ? 3 : -3) : 0;
-      if (v.colpito > 250) v.colpito = -1;
-    } else v.lampo.alpha = 0;
-    v.corpo.scale.set(sx, sy);
-    v.corpo.rotation = rot;
-    v.corpo.position.set(tremolio, dy);
+    let verso: 1 | -1 = p.verso;
+    if (attivo && attivo !== p && p.aTerra && Math.abs(p.vx) < 0.01 && Math.abs(dx) < 0.01 && Math.abs(attivo.x - p.x) > 4) verso = attivo.x > p.x ? 1 : -1;
+    v.verso = verso;
 
-    // braccio con l'arma: segue l'angolo di mira
-    v.braccio.visible = mira;
-    if (mira) {
+    // posa: dalla mossa della sim; finché la sim della Fase 1 non la scrive si ricava dallo stato (mossaDaStato)
+    const ko = p.vita <= 0;
+    const appiglio = p.appeso >= 0 ? this.s.appigli.find((a) => a.id === p.appeso)?.tipo ?? null : null;
+    const mossa = mossaDaStato(p, v.velX, appiglio);
+    const tiene = !ko && (mira || (v.sparo >= 0 && p.id === this.s.turno.pirata));
+    let arma: ArmaPosa | null = null;
+    if (tiene) {
       const a = this.s.turno.mira.mezziGradi;
-      v.braccio.rotation = Math.atan2(-seno(a), coseno(a));
-      v.braccio.scale.y = coseno(a) < 0 ? -1 : 1;
+      arma = armaPosa(this.s.turno.arma);
+      const m = this.miraPosa;
+      m.alzo = Math.atan2(seno(a), Math.abs(coseno(a))); m.potenza = this.s.turno.mira.potenza / 100; m.arma = arma;
+      st.mira = m;
+    }
+    const chiave = `${mossa}|${ko ? 1 : 0}|${arma ?? ''}|${v.sbalzato ? 1 : 0}|${p.aTerra ? 1 : 0}`;
+    if (chiave !== v.chiavePosa) {
+      // posa nuova: si parte da com'è adesso e ci si arriva in 90 ms (400 per rialzarsi da terra)
+      if (v.chiavePosa) { v.parDa.set(v.parOra); v.sfumaMs = 0; v.sfumaDurata = v.mossa === 'aTerra' && mossa !== 'aTerra' ? RIALZATA_MS : SFUMA_MS; }
+      if (mossa !== v.mossa) { v.mossa = mossa; v.mossaMs = 0; }
+      v.chiavePosa = chiave;
+    }
+    v.mossaMs += deltaMS; v.sfumaMs += deltaMS;
+    st.mossa = mossa;
+    st.daMs = p.mossaDa !== undefined ? ((this.s.tick - p.mossaDa) * 1000) / TICK_AL_SECONDO : v.mossaMs;
+    st.cammino = v.cammino; st.salita = v.salita;
+    st.sparo = v.sparo; st.colpito = v.colpito; st.atterrato = v.atterrato;
+    st.sbalzato = v.sbalzato; st.suolo = p.aTerra; st.ko = ko;
+    bersaglio(st, v.parA);
+    if (v.sfumaMs < v.sfumaDurata) sfuma(v.parDa, v.parA, v.sfumaMs, v.parOra, v.sfumaDurata); else v.parOra.set(v.parA);
+    risolvi(v.parOra, arma, v.posa);
+
+    // da lontano lo sprite unico (foto del pupazzo a riposo) al posto dei 15 pezzi
+    const lontano = this.scala < SCALA_MIN_PUPAZZO;
+    v.rig.radice.visible = !lontano; v.sagoma.visible = lontano;
+    if (lontano) {
+      v.sagoma.scale.x = verso;
+      v.sagoma.y = mossa === 'passo' || mossa === 'corsa' ? -1.5 * Math.abs(Math.sin((v.cammino / BIL.movimento.passoPx) * Math.PI)) : 0;
+      v.sagoma.rotation = ko ? -verso * (Math.PI / 2) : 0;
+    } else {
+      v.rig.lampo(v.colpito >= 0 && v.colpito < LAMPO_MS);
+      v.rig.applica(v.posa, verso, arma, p.aTerra);
+    }
+
+    // a 0 PV il pirata resta 'vivo' e seduto a terra fino alla lapide di fine risoluzione (README della sim)
+    if (ko) {
+      const e = aSchermo(p.x, piedi - 24);
+      v.etichetta.position.set(Math.round(e.x), Math.round(e.y));
+      return;
     }
 
     // etichetta (nome, barra e PV) sopra la testa, in px CSS; da lontano il nome si nasconde (si sovrapporrebbe)
@@ -705,5 +796,6 @@ export class ScenaBattaglia {
     this.mondo.destroy({ children: true });
     this.schermo.destroy({ children: true });
     this.forme.distruggi();
+    this.pezzi.distruggi();
   }
 }

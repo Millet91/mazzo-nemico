@@ -48,10 +48,14 @@ export interface MemoriaAudio {
   ultimaVocePriorita: number;
   /** il prossimo ticchettio è un "tac" */
   tac: boolean;
+  /** Fase 3: grandezza (px del rettangolo) dei pezzi che stanno cadendo, per il suono delle loro macerie */
+  pezzi: Map<number, number>;
+  /** suoni in ciclo accesi da qui (scivolata, masso, fuoco): a turno nuovo si fermano tutti tranne i fuochi */
+  cicli: Set<string>;
 }
 
 export function memoriaNuova(): MemoriaAudio {
-  return { ultimaVoceMs: -Infinity, ultimaVocePriorita: 0, tac: false };
+  return { ultimaVoceMs: -Infinity, ultimaVocePriorita: 0, tac: false, pezzi: new Map(), cicli: new Set() };
 }
 
 /**
@@ -62,11 +66,6 @@ export const MUTI_PER_SCELTA: Partial<Record<EventoBattaglia['t'], string>> = {
   fase: 'cambio di fase interno: i momenti che contano hanno già il loro evento (sparo, turnoIniziato, fine)',
   timerAvviato: 'il timer parte in silenzio; suona solo negli ultimi 5 secondi (tic-tac dalla VistaBattaglia)',
   cratere: 'serve al disegno del terreno: il botto è già nell\'evento esplosione',
-  crollo: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
-  macerie: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
-  fuoco: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
-  frana: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
-  ponteCalato: 'Fase 3, contratto nuovo del Lead (22/11): muto finché Audio non collega i suoni di crolli, fuoco e sabbia',
   maschera: 'serve al disegno del terreno: il suono è già negli eventi crollo, fuoco e frana',
 };
 
@@ -87,6 +86,29 @@ const IMPATTI: Record<number, { id: IdSuono; intonazione?: number }> = {
   [MATERIALE.ghiaccio]: { id: 'imp_ghiaccio' },
   [MATERIALE.ferro]: { id: 'imp_ferro' },
 };
+
+/** Fase 3: le tre famiglie di suono dei crolli. Ghiaccio e ferro suonano come roccia più acuta o più cupa, la terra come sabbia cupa. */
+type Famiglia = 'legno' | 'roccia' | 'sabbia';
+function famiglia(materiale: number): { f: Famiglia; intonazione: number } {
+  switch (materiale) {
+    case MATERIALE.legno: return { f: 'legno', intonazione: 1 };
+    case MATERIALE.roccia: return { f: 'roccia', intonazione: 1 };
+    case MATERIALE.ghiaccio: return { f: 'roccia', intonazione: 1.35 };
+    case MATERIALE.ferro: return { f: 'roccia', intonazione: 0.85 };
+    case MATERIALE.terra: return { f: 'sabbia', intonazione: 0.8 };
+    default: return { f: 'sabbia', intonazione: 1 };
+  }
+}
+
+/** px del rettangolo di un pezzo: sotto PEZZO_PICCOLO è piccolo, da PEZZO_GRANDE è grande (pezzoMaxPx è 6000) */
+export const PEZZO_PICCOLO = 800;
+export const PEZZO_GRANDE = 3000;
+/** grandezza → intonazione e volume: i pezzi grandi suonano più cupi e più forti, e abbassano la musica */
+function taglia(area: number): { intonazione: number; volume: number; attenua?: IdAttenua } {
+  if (area >= PEZZO_GRANDE) return { intonazione: 0.82, volume: 1, attenua: 'botto_medio' };
+  if (area >= PEZZO_PICCOLO) return { intonazione: 1, volume: 0.85 };
+  return { intonazione: 1.18, volume: 0.65 };
+}
 
 /** Suono dello sparo per arma. Pistola e sciabola suonano con i loro eventi (colpoPistola, colpoSciabola). */
 function suonoSparo(arma: IdArma): IdSuono | null {
@@ -135,8 +157,10 @@ export function suoniPerEventi(eventi: readonly EventoBattaglia[], vista: VistaB
     switch (e.t) {
       case 'turnoIniziato': {
         const mio = vista ? vista.squadre[e.squadra].controllo === 'umano' : e.squadra === 0;
-        // rete di sicurezza: a turno nuovo nessun suono in ciclo (scivolata) resta acceso
-        az.ferma.push('*');
+        // rete di sicurezza: a turno nuovo nessun suono in ciclo (scivolata, masso) resta acceso. I fuochi sì: bruciano
+        // anche nel turno dopo e si spengono col loro evento
+        for (const k of [...mem.cicli]) if (!k.startsWith('fuoco:')) { az.ferma.push(k); mem.cicli.delete(k); }
+        mem.pezzi.clear();
         una({ id: mio ? 'turno_mio' : 'turno_nemico', attenua: 'segnale' });
         parla(e.pirata, 'tocca', 1, 0.45);
         break;
@@ -201,8 +225,10 @@ export function suoniPerEventi(eventi: readonly EventoBattaglia[], vista: VistaB
         if (e.inizio) {
           const intonazione = e.materiale === MATERIALE.ghiaccio ? 1.35 : e.materiale === MATERIALE.roccia ? 1.12 : 1;
           una({ id: 'scivola_ciclo', ciclo: chiave, intonazione });
+          mem.cicli.add(chiave);
         } else {
           az.ferma.push(chiave);
+          mem.cicli.delete(chiave);
           una({ id: 'scivola_fine' });
         }
         break;
@@ -212,16 +238,60 @@ export function suoniPerEventi(eventi: readonly EventoBattaglia[], vista: VistaB
         parla(e.pirata, 'sforzo', 2);
         break;
       case 'fatto': una({ id: 'ui_fatto' }); break;
+      // ── Fase 3: il campo si spezza ──
+      case 'crollo': {
+        const area = e.w * e.h;
+        mem.pezzi.set(e.pezzo, area);
+        const m = famiglia(e.materiale), g = taglia(area);
+        const pan = panDaX(e.x + e.w / 2);
+        una({ id: `crollo_${m.f}`, pan, intonazione: m.intonazione * g.intonazione, volume: g.volume, attenua: g.attenua });
+        if (e.tipo === 'masso') {
+          const chiave = `masso:${e.pezzo}`;
+          una({ id: 'masso_rotola', ciclo: chiave, pan, ritardo: 0.1 });
+          mem.cicli.add(chiave);
+        }
+        break;
+      }
+      case 'macerie': {
+        const area = mem.pezzi.get(e.pezzo) ?? PEZZO_PICCOLO;
+        mem.pezzi.delete(e.pezzo);
+        const chiave = `masso:${e.pezzo}`;
+        if (mem.cicli.delete(chiave)) az.ferma.push(chiave);
+        const pan = panDaX(e.x);
+        if (e.inMare) una({ id: area >= PEZZO_GRANDE ? 'splash_grande' : 'splash_piccolo', pan });
+        else {
+          const m = famiglia(e.materiale), g = taglia(area);
+          una({ id: `macerie_${m.f}`, pan, intonazione: m.intonazione * g.intonazione, volume: g.volume, attenua: g.attenua });
+        }
+        break;
+      }
+      case 'fuoco': {
+        const chiave = `fuoco:${e.fuoco}`;
+        const pan = panDaX(e.x);
+        if (e.inizio) {
+          una({ id: 'fuoco_accende', pan });
+          una({ id: 'fuoco_ciclo', ciclo: chiave, pan, ritardo: 0.15 }, 3);
+          mem.cicli.add(chiave);
+        } else {
+          az.ferma.push(chiave);
+          mem.cicli.delete(chiave);
+          una({ id: 'fuoco_spegne', pan });
+        }
+        break;
+      }
+      case 'frana': una({ id: 'frana', pan: panDaX(e.x) }); break;
+      case 'ponteCalato': una({ id: 'ponte_calato', attenua: 'botto_medio' }); break;
       case 'bandieraPresa': una({ id: 'bandiera_presa', attenua: 'segnale' }); break;
       case 'fine': {
         const vinta = vista ? e.esito.vincitore === squadraUmana(vista) : e.esito.vincitore === 0;
         una({ id: vinta ? 'mus_vittoria' : 'mus_sconfitta', ritardo: 0.35 });
         az.musica.push('fine');
         az.ferma.push('*');
+        mem.cicli.clear();
+        mem.pezzi.clear();
         break;
       }
-      case 'fase': case 'timerAvviato': case 'cratere': break;
-      case 'crollo': case 'macerie': case 'maschera': case 'fuoco': case 'frana': case 'ponteCalato': break; // Fase 3: li collega Audio
+      case 'fase': case 'timerAvviato': case 'cratere': case 'maschera': break;
       default: {
         // un evento nuovo nei contratti deve passare da qui: il compilatore si ferma su questa riga
         const mai: never = e;

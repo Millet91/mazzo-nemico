@@ -14,12 +14,14 @@ export interface Conservato { dati: Int16Array; freq: number }
 
 /** Chiave del cassetto: il file della build (con l'impronta nel nome). Nel server di sviluppo e nei test: niente cassetto. */
 export function chiaveBuild(): string | null {
-  return chiaveDa(import.meta.url, import.meta.env?.DEV === true);
+  // fuori da Vite (banco d'ascolto impacchettato con esbuild) import.meta può essere vuoto: niente cassetto
+  const url: unknown = import.meta.url;
+  return typeof url === 'string' ? chiaveDa(url, import.meta.env?.DEV === true) : null;
 }
 
 /** Solo i file con l'impronta della build (es. index-CkCNdGze.js): un file senza impronta non dice se è cambiato. */
-export function chiaveDa(url: string, sviluppo: boolean): string | null {
-  if (sviluppo) return null;
+export function chiaveDa(url: string | undefined, sviluppo: boolean): string | null {
+  if (sviluppo || typeof url !== 'string') return null;
   const file = url.split('?')[0].split('#')[0].split('/').pop() ?? '';
   return /-[A-Za-z0-9_-]{6,}\.js$/.test(file) ? file : null;
 }

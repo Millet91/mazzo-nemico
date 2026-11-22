@@ -9,6 +9,8 @@ describe('Audio · cassetto dei suoni pronti', () => {
     expect(chiaveDa('https://localhost/assets/index-CkCNdGze.js', true)).toBeNull();
     expect(chiaveDa('http://localhost:5173/src/audio/cache.ts', false)).toBeNull();
     expect(chiaveDa('file:///app/assets/index.js', false)).toBeNull();
+    // impacchettato fuori da Vite (banco d'ascolto) import.meta.url non c'è
+    expect(chiaveDa(undefined, false)).toBeNull();
   });
 
   it('a 16 bit il suono torna uguale a meno di un trentamillesimo, e il picco resta dentro', () => {

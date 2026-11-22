@@ -6,7 +6,7 @@ Chi sta fuori da questa cartella usa solo `avviaAudio()` (una volta, all'avvio) 
 | File | Cosa c'è |
 |---|---|
 | `registro.ts` | `AUDIO`: ogni suono con canale, volume, varianti e ricetta sintetica. Compilando `sample` si userà il file (08 §4). |
-| `ricette/*.ts` | le ricette sintetiche (segnaposto fatti in casa, niente file) |
+| `ricette/*.ts` | le ricette sintetiche (segnaposto fatti in casa, niente file); `crolli.ts` = Fase 3: crolli, macerie, masso, fuoco, frana, ponte |
 | `sintesi.ts` | gli attrezzi delle ricette: toni, rumore filtrato, corpi che risuonano (legno, ferro, campane), voce a formanti |
 | `eventi.ts` | **funzioni pure**: eventi della sim e `VistaBattaglia` → richieste di suono. Qui si decide "quale suono per quale evento" |
 | `polifonia.ts` | funzioni pure: massimo 24 voci, 3 per suono (si ruba la più vecchia) |
@@ -38,4 +38,7 @@ Come si lavora:
   partito (lo usano `tests/e2e/audio.spec.ts` e la QA per "nessun evento senza suono").
 - **Ascoltare senza telefono**: `npx tsx tests/audio/ascolto.ts` scrive in `test-results/audio/` un file WAV per suono,
   una battaglia finta di 40 s (`battaglia.wav`) e la tabella dei livelli.
+- **Fase 3** (crolli): il crollo suona per famiglia di materiale (legno, roccia, sabbia) e per grandezza (`PEZZO_PICCOLO`,
+  `PEZZO_GRANDE` in `eventi.ts`); masso e fuoco girano in ciclo. A turno nuovo si fermano i cicli tranne i fuochi
+  (bruciano anche nel turno dopo e si spengono col loro evento). Ascolto: `/mnt/project-files/audio-p1/fase3-crolli-fuoco-frane-23s.mp3`.
 - Niente "boing" e "sproing": i pirati non sono vermi (decisione dello studio v2).

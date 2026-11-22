@@ -152,6 +152,39 @@ export function vola(t: Terreno, c: Corpo): number {
   return -1;
 }
 
+/**
+ * Un tick di volo "da pirata" (salto, Balzo, caduta dal ciglio del pirata di turno): niente rimbalzi. Contro una
+ * parete resta accostato e, superato lo spigolo, passa oltre; contro un soffitto smette di salire; appena tocca il
+ * suolo atterra in piedi. Restituisce il danno da caduta se è atterrato in questo tick, −1 se è ancora in volo.
+ * `vx` resta quella del volo: chi chiama decide se il pirata riparte di corsa o si ferma.
+ */
+export function volaPulito(t: Terreno, c: Corpo): number {
+  c.vy += G;
+  const passi = Math.max(1, Math.ceil(Math.max(Math.abs(c.vx), Math.abs(c.vy))));
+  const dx = c.vx / passi, dy = c.vy / passi;
+  for (let i = 0; i < passi; i++) {
+    const nx = c.x + dx, ny = c.y + dy;
+    if (!capsulaUrta(t, nx, ny)) {
+      c.x = nx; c.y = ny;
+    } else if (!capsulaUrta(t, c.x, ny)) {
+      c.y = ny; // parete (o spigolo) di lato: scorre accostato
+    } else if (dy > 0) {
+      // suolo sotto i piedi: atterra
+      c.aTerra = true; c.vy = 0;
+      const danno = dannoCaduta(c.y - c.yInizioCaduta);
+      c.yInizioCaduta = c.y;
+      return danno;
+    } else {
+      // soffitto: smette di salire, se può continua di lato
+      c.vy = 0;
+      if (!capsulaUrta(t, nx, c.y)) c.x = nx;
+      break;
+    }
+    if (c.y < c.yInizioCaduta) c.yInizioCaduta = c.y;
+  }
+  return -1;
+}
+
 /** Un pirata fermo a terra controlla di avere ancora il suolo sotto (il cratere può toglierlo). */
 export function controllaAppoggio(t: Terreno, c: Corpo): void {
   if (c.aTerra && !capsulaUrta(t, c.x, c.y + 1)) { stacca(c); c.vx = 0; c.vy = 0; }

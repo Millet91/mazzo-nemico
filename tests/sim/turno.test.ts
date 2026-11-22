@@ -189,7 +189,7 @@ describe('Comandi di mira e movimento', () => {
     expect(s.turno.mira.mezziGradi).toBe(normalizza(daGradi(150)));
   });
 
-  it('camminata e salto avanti/indietro del pirata attivo', () => {
+  it('camminata, corsa e Balzo del pirata attivo', () => {
     const s = battagliaPiatta([800], [1400]);
     inAzione(s);
     const p = pirata(s);
@@ -205,10 +205,11 @@ describe('Comandi di mira e movimento', () => {
     avanzaFinche(s, () => p.aTerra);
     expect(p.x).toBeGreaterThan(900);
     const x = p.x;
+    // il salto alto all'indietro non esiste più: lontano da una parete `indietro` è un salto normale
     eseguiComando(s, { t: 'salta', indietro: true });
     avanza(s, 1);
     avanzaFinche(s, () => p.aTerra);
-    expect(p.x).toBeLessThan(x);
+    expect(p.x).toBeGreaterThan(x + 60);
     expect(p.vita).toBe(BIL.pirata.pv); // i salti non fanno male
   });
 

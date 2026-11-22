@@ -49,19 +49,22 @@ describe('Scale e liane', () => {
     expect(s.tick).toBeLessThan(260);
   });
 
-  it('sale a 40 px/s e scende a 60 px/s, scala e liana uguali', () => {
+  it('sale e scende a 90 px/s (in un tocco), scala e liana uguali', () => {
     for (const tipo of ['scala', 'liana'] as const) {
       const s = conScala(882, SUOLO, tipo);
       inAzione(s);
       eseguiComando(s, { t: 'arrampica', dir: -1 });
       avanza(s, 2); // si aggrappa e fa il primo passo
       const y0 = pirata(s, 0).y;
-      avanza(s, 60);
-      expect(y0 - pirata(s, 0).y).toBeCloseTo(40, 6);
-      eseguiComando(s, { t: 'arrampica', dir: 1 });
+      avanza(s, 40);
+      expect(y0 - pirata(s, 0).y).toBeCloseTo(40 * BIL.movimento.scalaVel, 6);
+      eseguiComando(s, { t: 'arrampica', dir: 1 }); // il tasto opposto ferma
       const y1 = pirata(s, 0).y;
-      avanza(s, 30);
-      expect(pirata(s, 0).y - y1).toBeCloseTo(30, 6);
+      avanza(s, 10);
+      expect(pirata(s, 0).y).toBe(y1);
+      eseguiComando(s, { t: 'arrampica', dir: 1 }); // di nuovo: scende
+      avanza(s, 20);
+      expect(pirata(s, 0).y - y1).toBeCloseTo(20 * BIL.movimento.scalaVel, 6);
     }
   });
 

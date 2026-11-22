@@ -1,9 +1,9 @@
-// Esplosioni e spinte (00 §1.2 e precisazioni del Lead design): danno max(1, round(D × (1 − d/r))) dentro il raggio, spinta D × 7 px/s con la
+// Esplosioni e spinte (00 §1.2 e precisazioni del Lead design): danno max(1, round(D × (1 − d/r))) dentro il raggio, spinta D × 7 px/s (cannone e granata: `spintaEsplosione`) con la
 // stessa attenuazione, chi spara si fa male. d è la distanza dalla capsula del pirata (0 se l'esplosione è dentro).
 
 import type { EventoBattaglia, IdArma, IdCiurma, StatoBattaglia } from '../../core/tipi';
 import { ARMA } from '../../contenuti/armi';
-import { BIL } from '../../contenuti/bilanciamento';
+import { BIL, TICK_AL_SECONDO } from '../../contenuti/bilanciamento';
 import { distanza2Capsula, scavaCratere, MEZZA_LARGHEZZA_PIRATA } from './terreno';
 import { danneggia, staccaPirata } from './pirata';
 import { tagliaAppigli } from './appigli';
@@ -31,6 +31,18 @@ export function direzioneSpinta(ox: number, oy: number, px: number, py: number):
     dx /= k; dy /= k;
   }
   return { x: dx, y: dy };
+}
+
+/**
+ * Spinta al centro, in px/tick, dell'esplosione di un'arma sparata da `ciurma` (null = nessun tratto).
+ * Se l'arma ha `spintaEsplosione` (cannone, granata) vale quella, cresciuta come il danno (Teschio +10%);
+ * altrimenti danno × BIL.fisica.spintaPerDanno. La usano `esplodi`, `simulaColpo` e il generatore delle coste.
+ */
+export function spintaAlCentro(arma: IdArma, ciurma: IdCiurma | null): number {
+  const a = ARMA[arma];
+  const danno = ciurma ? dannoArma(arma, ciurma) : a.danno;
+  if (a.spintaEsplosione !== undefined && a.danno > 0) return (a.spintaEsplosione / TICK_AL_SECONDO) * (danno / a.danno);
+  return danno * BIL.fisica.spintaPerDanno;
 }
 
 export interface EffettoEsplosione { danno: number; vx: number; vy: number }
@@ -65,8 +77,9 @@ export function esplodi(
   const p = parametri ?? (arma === 'cassa' ? BIL.casse.esplosione : parametriEsplosione(arma));
   const raggio = p.raggio;
   const base = p.danno;
-  const danno = parametri || arma === 'lapide' || arma === 'cassa' || arma === 'barile' || !ciurma ? base : dannoArma(arma, ciurma);
-  const spinta = base * BIL.fisica.spintaPerDanno;
+  const diArma = !(parametri || arma === 'lapide' || arma === 'cassa' || arma === 'barile');
+  const danno = diArma && ciurma ? dannoArma(arma, ciurma) : base;
+  const spinta = diArma ? spintaAlCentro(arma, ciurma) : base * BIL.fisica.spintaPerDanno;
   eventi.push({ t: 'esplosione', x, y, raggio, arma });
   scavaCratere(s.terreno, x, y, raggio, eventi);
   // tiro vicino: `risparmia` = id di chi ha sparato contro il terreno lì accanto; si salva solo se il colpo è sprecato

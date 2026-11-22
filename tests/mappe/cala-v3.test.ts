@@ -9,7 +9,8 @@ import { spinto } from '../../src/battaglia/gen/spawn';
 import { avanzaTick, balzoPossibile, creaBattaglia, eseguiComando } from '../../src/battaglia/sim';
 import type { EventoBattaglia } from '../../src/core/tipi';
 import { config } from '../sim/aiuti';
-import { APPOGGI, TORRI_X, DISTANZA_CROLLO, costruisciMaschera, type Variante } from '../../scripts/mappe/cala-v3-forma';
+import { existsSync, readFileSync } from 'node:fs';
+import { APPOGGI, BRICIOLA, TORRI_X, DISTANZA_CROLLO, costruisciMaschera, type Variante } from '../../scripts/mappe/cala-v3-forma';
 
 const BASE = 'cala-pappagallo-v3', PROLOGO = 'cala-pappagallo-v3-prologo';
 /** colpo diretto del cannone col +10% del Teschio: il caso peggiore (PIANO §7: danno 60) */
@@ -80,6 +81,22 @@ describe('Cala Pappagallo v3', () => {
       }
     });
 
+    it(`${id}: niente briciole sospese (ogni pezzo di solido staccato è grande almeno ${BRICIOLA} px)`, () => {
+      const { w, h, maschera: m } = mappaFatta(id)!.terreno;
+      const vis = new Uint8Array(w * h), pila: number[] = [], piccoli: string[] = [];
+      for (let i = 0; i < w * h; i++) {
+        if (!m[i] || vis[i]) continue;
+        let n = 0; vis[i] = 1; pila.push(i);
+        while (pila.length) {
+          const j = pila.pop()!; n++;
+          const x = j % w;
+          for (const k of [x > 0 ? j - 1 : -1, x < w - 1 ? j + 1 : -1, j - w, j + w]) if (k >= 0 && k < w * h && m[k] && !vis[k]) { vis[k] = 1; pila.push(k); }
+        }
+        if (n < BRICIOLA) piccoli.push(`(${i % w}, ${Math.floor(i / w)}): ${n} px`);
+      }
+      expect(piccoli).toEqual([]);
+    });
+
     it(`${id}: un colpo diretto del cannone non butta in mare chi parte`, () => {
       const mappa = mappaFatta(id)!;
       const { maschera: m, mare } = mappa.terreno;
@@ -104,6 +121,23 @@ describe('Cala Pappagallo v3', () => {
     const sx = ap.filter((a) => a.x < 1024), dx = ap.filter((a) => a.x >= 1024);
     expect(sx.map((a) => a.tipo).sort()).toEqual(['liana', 'scala', 'scala']);
     expect(dx.map((a) => a.tipo).sort()).toEqual(['liana', 'liana', 'scala']);
+  });
+
+  it('terreno HD (Fase 2): tessere nel formato concordato con Render, il Prologo solo quelle che cambiano', () => {
+    const cartella = 'public/assets/mappe/cala-pappagallo-v3';
+    const hd = JSON.parse(readFileSync(`${cartella}/hd/indice.json`, 'utf8'));
+    expect({ ...hd, tessere: undefined }).toEqual({ scala: 2, lato: 512, bordo: 2, colonne: 8, righe: 4, tessere: undefined });
+    expect(hd.tessere.length).toBeGreaterThan(0);
+    for (const n of hd.tessere) {
+      const [c, r] = n.slice(2).split('-').map(Number);
+      expect(n).toBe(`t-${c}-${r}`);
+      expect(c >= 0 && c < 8 && r >= 0 && r < 4, n).toBe(true);
+      expect(existsSync(`${cartella}/hd/${n}.webp`), n).toBe(true);
+    }
+    const pr = JSON.parse(readFileSync(`${cartella}/hd-prologo/indice.json`, 'utf8'));
+    expect(pr.base).toBe('hd');
+    expect(pr.tessere.length).toBeLessThan(hd.tessere.length);
+    for (const n of pr.tessere) expect(existsSync(`${cartella}/hd-prologo/${n}.webp`), n).toBe(true);
   });
 
   it('Prologo: i marinai stanno ad almeno 300 px dai pirati del giocatore', () => {

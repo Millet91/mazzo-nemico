@@ -119,7 +119,7 @@ export const BALCONI = [
 export const NIDO = { x0: 938, x1: 978, y: 430 };
 /** Cengie: piccole mensole di roccia sui fianchi della Rocca e sul dirupo (contorni, riparo dai tiri tesi). [x0, x1, y, spessore] */
 export const CENGE: [number, number, number, number][] = [
-  [892, 908, 706, 10], [1142, 1160, 664, 10],     // fianchi bassi della Rocca, a quote diverse
+  [892, 908, 706, 10], [1134, 1156, 664, 10],     // fianchi bassi della Rocca, a quote diverse (attaccate al fianco)
   [803, 822, 772, 12],                             // tettoia sopra lo sbocco della galleria sinistra
 ];
 /**
@@ -351,5 +351,24 @@ export function costruisciMaschera(variante: Variante = 'base'): { m: Uint8Array
     const n = Math.sin(x * 0.7) * 0.08 + Math.cos(y * 0.9) * 0.08;
     if (((x - b.x) / b.rx) ** 2 + ((y - b.y) / b.ry) ** 2 <= 1 + n) metti(x, y, MATERIALE.terra, TAG.foglie);
   }
+  // ── niente briciole sospese: i pezzetti di solido staccati da tutto (meno di BRICIOLA px, per esempio le
+  //    colonnine di 1 px che restano tra il dirupo e la bocca di una galleria) tornano aria ──
+  togliBriciole(m, tag);
   return { m, sup, tag };
+}
+
+/** Pezzi di solido più piccoli di così, staccati dal resto (4 vicini), sono briciole da togliere. */
+export const BRICIOLA = 400;
+function togliBriciole(m: Uint8Array, tag: Uint8Array): void {
+  const vis = new Uint8Array(W * H), pila: number[] = [], pezzo: number[] = [];
+  for (let i = 0; i < W * H; i++) {
+    if (!m[i] || vis[i]) continue;
+    pezzo.length = 0; vis[i] = 1; pila.push(i);
+    while (pila.length) {
+      const j = pila.pop()!; pezzo.push(j);
+      const x = j % W;
+      for (const k of [x > 0 ? j - 1 : -1, x < W - 1 ? j + 1 : -1, j - W, j + W]) if (k >= 0 && k < W * H && m[k] && !vis[k]) { vis[k] = 1; pila.push(k); }
+    }
+    if (pezzo.length < BRICIOLA) for (const j of pezzo) { m[j] = MATERIALE.aria; tag[j] = 0; }
+  }
 }

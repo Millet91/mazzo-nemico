@@ -161,5 +161,5 @@ describe('Fase 3 · strutture e sostegni della Cala v3', () => {
       expect(g.sostegni, `seme ${seme}`).toBeUndefined();
       expect(pezziStaccati(g), `seme ${seme} ${bioma}`).toEqual([]);
     }
-  });
+  }, 30_000);   // 18 isole da generare: 2,4 s qui, oltre i 5 s predefiniti sul runner dell'apk
 });

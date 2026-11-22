@@ -12,10 +12,10 @@ import { memoriaNuova, MUTI_PER_SCELTA, suoniPerEventi, type MemoriaAudio } from
 import { AUDIO } from '../../src/audio/registro';
 import { POLIFONIA_MAX, VOCE_OGNI_MS } from '../../src/audio/mix';
 import { battagliaPiatta, config, inAzione, mappa, pirata, rettangolo, SUOLO, terrenoPiatto } from '../sim/aiuti';
-import { configCaso, nuovaBattaglia, pilotaIa, pilotaScalatore, TICK_MAX, type Pilota } from '../qa/banco';
+import { conAppigli, configCaso, mappaPer, nuovaBattaglia, pilotaIa, pilotaScalatore, TICK_MAX, type Pilota } from '../qa/banco';
 import { vistaFinta } from './copione';
 
-/** Un suono sentito: quando (secondi dal via), quale, e gli eventi che l'hanno chiesto. */
+/** Un suono sentito: quando si sente (secondi dal via, ritardo compreso), quale, e gli eventi che l'hanno chiesto. */
 interface Sentito { s: number; id: string; eventi: string[] }
 
 /** Avanza la sim tick per tick passando gli eventi all'audio, come fa il gioco (un frame = un tick). */
@@ -36,7 +36,8 @@ class Orecchio {
     const quando = (this.s.tick - this.t0) / TICK_AL_SECONDO;
     for (const r of az.suoni) {
       if (r.ciclo) this.cicliAccesi.add(r.ciclo);
-      this.sentiti.push({ s: quando, id: r.id, eventi: ev.map((e) => e.t) });
+      // l'istante in cui si sente davvero: con il ritardo chiesto (la voce di vittoria arriva 0,9 s dopo il jingle)
+      this.sentiti.push({ s: quando + (r.ritardo ?? 0), id: r.id, eventi: ev.map((e) => e.t) });
     }
     return ev;
   }
@@ -183,16 +184,19 @@ describe('Audio · scale e liane in un tocco con la sim vera', () => {
 
 
 describe('Audio · battaglie intere sulla Cala v3, ogni tick passa dall\'audio', () => {
-  const partite: { nome: string; pilota: () => Pilota; seme: number }[] = [
-    ...[1, 2, 3].map((seme) => ({ nome: 'comandi a caso con scale e liane', pilota: () => pilotaScalatore(seme * 7), seme })),
-    ...[1, 2, 3].map((seme) => ({ nome: 'due IA', pilota: () => pilotaIa(), seme })),
+  // con i comandi a caso si aggiunge una scala o una liana sopra ogni punto di partenza (conAppigli del QA): così
+  // le arrampicate ci sono sempre, qualunque cosa cambi nella fisica o nella mappa
+  const partite: { nome: string; pilota: () => Pilota; seme: number; appigli: boolean }[] = [
+    ...[1, 2, 3].map((seme) => ({ nome: 'comandi a caso con scale e liane', pilota: () => pilotaScalatore(seme * 7), seme, appigli: true })),
+    ...[1, 2, 3].map((seme) => ({ nome: 'due IA', pilota: () => pilotaIa(), seme, appigli: false })),
   ];
   const visti: Record<string, number> = {};
   const sentitiDa: Record<string, number> = {};
 
-  for (const { nome, pilota, seme } of partite) {
+  for (const { nome, pilota, seme, appigli } of partite) {
     it(`${nome}, seme ${seme}: ogni suono esiste, niente raffiche, voci distanziate, nessun ciclo acceso alla fine`, () => {
-      const s = nuovaBattaglia(configCaso(seme, [3, 3], 'cala-pappagallo-v3'));
+      const cfg = configCaso(seme, [3, 3], 'cala-pappagallo-v3');
+      const s = nuovaBattaglia(cfg, appigli ? conAppigli(mappaPer(cfg)) : undefined);
       const p = pilota();
       const o = new Orecchio(s);
       const perSecondo = new Map<number, number>();
@@ -213,7 +217,7 @@ describe('Audio · battaglie intere sulla Cala v3, ogni tick passa dall\'audio',
       expect(piuInUnFrame).toBeLessThanOrEqual(8);
       expect(Math.max(...perSecondo.values())).toBeLessThanOrEqual(POLIFONIA_MAX);
       // le voci dei pirati: mai due nello stesso istante, e al più 2 al secondo (una importante può scavalcare l'attesa)
-      const voci = o.sentiti.filter((x) => x.id.startsWith('vox_'));
+      const voci = o.sentiti.filter((x) => x.id.startsWith('vox_')).sort((a, b) => a.s - b.s);
       for (let i = 1; i < voci.length; i++) expect(voci[i].s).toBeGreaterThan(voci[i - 1].s);
       const vociAlSecondo = new Map<number, number>();
       for (const v of voci) vociAlSecondo.set(Math.floor(v.s), (vociAlSecondo.get(Math.floor(v.s)) ?? 0) + 1);
@@ -224,7 +228,7 @@ describe('Audio · battaglie intere sulla Cala v3, ogni tick passa dall\'audio',
 
   it('le battaglie hanno toccato davvero salti, scale, passi e botti (altrimenti i controlli sopra non dicono niente)', () => {
     for (const t of ['salto', 'atterrato', 'aggrappato', 'staccato', 'passo', 'esplosione', 'turnoIniziato', 'fine']) expect(visti[t] ?? 0, t).toBeGreaterThan(0);
-    for (const id of ['salto', 'atterra', 'presa', 'stacco', 'passo_sabbia', 'arma_cannone', 'esp_coda']) expect(sentitiDa[id] ?? 0, id).toBeGreaterThan(0);
+    for (const id of ['salto', 'atterra', 'presa', 'stacco', 'piolo_legno', 'passo_sabbia', 'arma_cannone', 'esp_coda']) expect(sentitiDa[id] ?? 0, id).toBeGreaterThan(0);
   });
 
   it.skipIf(!HA_SCIVOLATA)('scivolata vera: ogni ciclo che parte si ferma (col suo evento o a turno nuovo)', () => {

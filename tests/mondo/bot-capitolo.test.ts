@@ -1,6 +1,7 @@
 // Il bot del cap. 1 (bot-capitolo.ts) in piccolo, a ogni push: 3 partite con battaglie vere nel simulatore.
 // Controlla che nessuna battaglia si blocchi o superi i 4 minuti stimati e che il capitolo arrivi sempre in fondo.
 import { describe, expect, it } from 'vitest';
+import { CAPITOLO_1 as C } from '../../src/contenuti/capitolo-1';
 import { giocaCapitolo, MINUTI_BATTAGLIA_MAX } from './bot-capitolo';
 
 describe('bot del cap. 1 con battaglie vere', () => {
@@ -12,7 +13,7 @@ describe('bot del cap. 1 con battaglie vere', () => {
         expect(b.bloccata, `${b.isola} bloccata`).toBe(false);
         expect(b.minuti, `${b.isola} lunga`).toBeLessThanOrEqual(MINUTI_BATTAGLIA_MAX);
       }
-      expect(p.round).toBeLessThanOrEqual(8);
+      expect(p.round).toBeLessThanOrEqual(C.limiteRound);
     }
   }, 60_000);
 });

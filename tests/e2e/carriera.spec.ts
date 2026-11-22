@@ -57,8 +57,9 @@ test('round 1 con la Marina, poi l\'ultima isola: fine capitolo, stelle e salvat
   await chiudiAvvisi(page);
 
   // round 1: rinforzi, conquista di 1C da Porto Teschio, fine turno (round protetto)
+  // 4 rinforzi a Mozzo (3 + 1 della difficoltà)
   await tocca(page, '1A');
-  for (let n = 0; n < 2; n++) await tocca(page, '1B');
+  for (let n = 0; n < 3; n++) await tocca(page, '1B');
   await expect(page.getByTestId('car-attacco')).toBeVisible();
   await tocca(page, '1A');
   await tocca(page, '1C');
@@ -100,6 +101,7 @@ test('battaglia lasciata a metà: si torna a prima dell\'attacco', async ({ page
   await page.click('#carriera');
   await chiudiAvvisi(page);
   for (let n = 0; n < 3; n++) await tocca(page, '1B');
+  await tocca(page, '1A');
   const prima = await stato(page);
   await tocca(page, '1C');
   await page.click('#car-arrembaggio');
@@ -117,8 +119,9 @@ test('i pannelli della carriera stanno nello schermo a 800×360', async ({ page 
   await apri(page);
   await page.click('#carriera');
   await chiudiAvvisi(page);
+  // 4 rinforzi a Mozzo (3 + 1 della difficoltà)
   await tocca(page, '1A');
-  for (let n = 0; n < 2; n++) await tocca(page, '1B');
+  for (let n = 0; n < 3; n++) await tocca(page, '1B');
   await tocca(page, '1C');
   const pannello = page.getByTestId('car-pannello-attacco');
   await expect(pannello).toBeVisible();
@@ -142,8 +145,9 @@ test('giro: menu → Carriera → attacco a 1D sulla mappa vera → vittoria →
   const animazioni: { t: string; isola?: string }[] = [];
   await page.exposeFunction('registraAnimazione', (a: { t: string; isola?: string }) => animazioni.push(a));
   await page.evaluate(() => (window as unknown as { __kaboom: K }).__kaboom.bus.animaMondo.ascolta((a: unknown) => (window as unknown as { registraAnimazione(a: unknown): void }).registraAnimazione(a)));
-  // 3 rinforzi su Baia dei Corvi, toccando lo schermo
+  // 3 rinforzi su Baia dei Corvi e 1 su Porto Teschio (Mozzo: 4), toccando lo schermo
   for (let n = 0; n < 3; n++) await toccaSchermo(page, '1B');
+  await toccaSchermo(page, '1A');
   await expect(page.getByTestId('car-attacco')).toBeVisible();
   expect((await stato(page)).isole['1B'].pirati).toBe(5);
   await toccaSchermo(page, '1D');

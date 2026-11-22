@@ -10,7 +10,7 @@ import { piratiInCampo } from './regole';
 /** Battaglie del capitolo col timer lungo di Mozzo (15 §5: 30 s nelle prime 2, poi 20). */
 const BATTAGLIE_TIMER_LUNGO = 2;
 
-/** Config della battaglia per l'attacco in corso. `seme` varia la partita (vento, casse) se la mappa è fissa. */
+/** Config della battaglia per l'attacco in corso. `seme` è nuovo a ogni battaglia: varia vento, casse e IA. */
 export function battagliaDaAttacco(cap: DefCapitolo, s: StatoCarriera, seme: number): { carriera: BattagliaCarriera; config: ConfigBattaglia } | null {
   const a = s.attacco;
   if (!a) return null;
@@ -21,8 +21,10 @@ export function battagliaDaAttacco(cap: DefCapitolo, s: StatoCarriera, seme: num
   const giocatoreAttacca = !a.difesa;
   const config: ConfigBattaglia = {
     versioneRegole: VERSIONE_REGOLE,
-    // mappa generata: il seme dell'isola (validato dai Livelli) decide il terreno
-    seme: 'seme' in isola.mappa ? isola.mappa.seme >>> 0 : seme >>> 0,
+    // il seme della battaglia cambia a ogni tentativo (vento, casse, IA); la forma dell'isola la decide semeMappa,
+    // il seme validato dai Livelli, così chi riprova trova la stessa isola ma una partita nuova
+    seme: seme >>> 0,
+    ...('seme' in isola.mappa ? { semeMappa: isola.mappa.seme >>> 0 } : {}),
     ...('fissa' in isola.mappa ? { mappaFissa: isola.mappa.fissa } : {}),
     bioma: isola.bioma,
     squadre: [

@@ -136,6 +136,17 @@ describe('attacco', () => {
     expect(perso.perditeSfide).toBe(2);
   });
 
+  it('un\'isola di partenza ripresa dalla Marina si riconquista (Assalto, senza premio)', () => {
+    const s = rinforzaTutto(nuovaCarriera(C));
+    s.isole['1B'] = { padrone: 'marina', pirati: 1, presa: false };
+    expect(bersagli(C, s)).toContain('1B');
+    const p = preparaAttacco(C, s, '1B', [{ isola: '1A', pirati: 2 }]);
+    expect(p.attacco).not.toBeNull();
+    const r = applicaEsito(C, p, vinta([2, 0]));
+    expect(r.stato.isole['1B'].padrone).toBe('giocatore');
+    expect(r.eventi[0]).toMatchObject({ t: 'conquista', premi: [] });
+  });
+
   it('i premi si danno una volta sola', () => {
     let s = rinforzaTutto(nuovaCarriera(C));
     s = conquista(s, '1C');

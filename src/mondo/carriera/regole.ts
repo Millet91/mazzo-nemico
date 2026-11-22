@@ -184,7 +184,8 @@ export function imbarcoProposto(cap: DefCapitolo, s: StatoCarriera, verso: IdIso
 export function controllaAttacco(cap: DefCapitolo, s: StatoCarriera, verso: IdIsola, da: { isola: IdIsola; pirati: number }[]): string {
   if (s.fase !== 'attacco' || s.attacco) return 'fase';
   const v = s.isole[verso];
-  if (!v || v.padrone === 'giocatore' || !def(cap, verso).scontro) return 'bersaglio';
+  // un'isola di partenza ripresa dalla Marina (scontro null) si riattacca con un Assalto
+  if (!v || v.padrone === 'giocatore') return 'bersaglio';
   const usate = da.filter((d) => d.pirati > 0);
   if (usate.length === 0) return 'nessuno';
   if (usate.length > CAMPAGNA.partenzeMax) return 'troppePartenze';

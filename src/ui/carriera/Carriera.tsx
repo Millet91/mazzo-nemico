@@ -83,8 +83,8 @@ function PannelloFase() {
 
 function DettagliScontro({ isola }: { isola: string }) {
   const d = defIsola(isola);
-  const sc = d.scontro;
-  if (!sc) return null;
+  // le isole di partenza riprese dalla Marina si riattaccano con un Assalto
+  const sc = d.scontro ?? { tipo: 'assalto' as const };
   return (
     <ul class="car-scontro">
       <li>{C.scontri[sc.tipo]}</li>

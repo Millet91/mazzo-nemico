@@ -53,12 +53,18 @@ export interface Partita {
 
 /** Il giocatore: l'IA del livello scelto, con un errore di mira suo (seminato), così ogni partita è diversa. */
 function pilotaGiocatore(livello: LivelloIa, r: ConRng, squadra: 0 | 1) {
-  let fatto = -1;
+  // come pilotaIa di tests/qa/banco.ts: spara appena entra in 'azione', poi in fuga corre nella direzione dell'IA
+  let fatto = -1, corre = -1, fuga: -1 | 0 | 1 = 0;
   return (s: StatoBattaglia): Comando[] => {
+    if (s.turno.fase === 'fuga' && fatto === s.turno.numero && corre !== s.turno.numero && fuga !== 0) {
+      corre = s.turno.numero;
+      return [{ t: 'muovi', dir: fuga }];
+    }
     if (s.turno.fase !== 'azione' || fatto === s.turno.numero) return [];
     fatto = s.turno.numero;
     const umano = s.turno.squadra === squadra;
     const p = decidi(s, umano ? livello : s.squadre[s.turno.squadra].livelloIa ?? 'mozzo');
+    fuga = p.fuga;
     let mezzi = p.mezziGradi, potenza = p.potenza;
     if (umano) {
       // ±4° e ±8% di potenza: una persona non è precisa come la simulazione

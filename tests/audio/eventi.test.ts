@@ -322,6 +322,17 @@ describe('Audio · Fase 3: crolli, macerie, fuoco, frane e ponti', () => {
     expect(id(suoni(ev).suoni)).toEqual(['macerie_roccia']);
   });
 
+  it('il distacco si sente dopo il botto; un pezzo già arrivato giù nello stesso frame suona solo con le macerie', () => {
+    const conBotto = suoni([{ t: 'esplosione', x: 1024, y: 500, raggio: 70, arma: 'cannone' }, crollo(MATERIALE.roccia, 30, 30)]).suoni;
+    const distacco = conBotto.find((r) => r.id === 'crollo_roccia')!;
+    expect(distacco.ritardo).toBeGreaterThanOrEqual(0.1);
+    expect(suoni([crollo(MATERIALE.roccia, 30, 30)]).suoni[0].ritardo).toBeUndefined();
+    const mem = memoriaNuova();
+    const subito = suoniPerEventi([crollo(MATERIALE.sabbia, 6, 6, 'blocco', 11), macerie(11, MATERIALE.sabbia)], vistaFinta(), mem, 0);
+    expect(id(subito.suoni)).toEqual(['macerie_sabbia']);
+    expect(mem.pezzi.size).toBe(0);
+  });
+
   it('il masso rotola in ciclo dal distacco fino alle sue macerie', () => {
     const mem = memoriaNuova();
     const via = suoniPerEventi([crollo(MATERIALE.roccia, 40, 40, 'masso', 8)], vistaFinta(), mem, 0);

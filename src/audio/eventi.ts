@@ -152,6 +152,10 @@ export function suoniPerEventi(eventi: readonly EventoBattaglia[], vista: VistaB
 
   // più esplosioni nello stesso frame: suona la più grossa
   let botto: Extract<EventoBattaglia, { t: 'esplosione' }> | null = null;
+  // Fase 3 (misurato con la sim vera): un pezzo piccolo può staccarsi e arrivare giù nello stesso frame, e quasi
+  // sempre si stacca nel frame del botto. Il distacco si sente dopo il botto, e se è già arrivato giù suonano solo le macerie
+  const scoppio = eventi.some((e) => e.t === 'esplosione');
+  const giaGiu = new Set(eventi.filter((e) => e.t === 'macerie').map((e) => (e as { pezzo: number }).pezzo));
 
   for (const e of eventi) {
     switch (e.t) {
@@ -242,12 +246,14 @@ export function suoniPerEventi(eventi: readonly EventoBattaglia[], vista: VistaB
       case 'crollo': {
         const area = e.w * e.h;
         mem.pezzi.set(e.pezzo, area);
+        if (giaGiu.has(e.pezzo)) break;
         const m = famiglia(e.materiale), g = taglia(area);
         const pan = panDaX(e.x + e.w / 2);
-        una({ id: `crollo_${m.f}`, pan, intonazione: m.intonazione * g.intonazione, volume: g.volume, attenua: g.attenua });
+        const dopo = scoppio ? 0.15 : 0;
+        una({ id: `crollo_${m.f}`, pan, intonazione: m.intonazione * g.intonazione, volume: g.volume, attenua: g.attenua, ritardo: dopo || undefined });
         if (e.tipo === 'masso') {
           const chiave = `masso:${e.pezzo}`;
-          una({ id: 'masso_rotola', ciclo: chiave, pan, ritardo: 0.1 });
+          una({ id: 'masso_rotola', ciclo: chiave, pan, ritardo: dopo + 0.1 });
           mem.cicli.add(chiave);
         }
         break;

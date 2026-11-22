@@ -6,7 +6,7 @@ import { CAPITOLO_1 } from '../../src/contenuti/capitolo-1';
 import { generaMappa } from '../../src/battaglia/gen';
 import { validaMappa } from '../../src/battaglia/gen/valida';
 import { misura, mareMassimo } from '../../scripts/mappe/isole/misure';
-import { PROFILI } from '../../scripts/mappe/isole/profili';
+import { ATTACCANTE_Y_MAX, PROFILI, SCARTO_MAX } from '../../scripts/mappe/isole/profili';
 
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -26,7 +26,13 @@ describe('isole del cap. 1', () => {
       expect(validaMappa(m)).toEqual([]);
       const profilo = PROFILI.find((p) => p.id === isola.id && p.trucco === isola.trucco);
       expect(profilo, `nessun profilo per ${isola.id} ${isola.trucco}`).toBeDefined();
-      expect(profilo!.adatto(misura(m))).toBe(true);
+      const mi = misura(m);
+      // partenze eque (bot della Campagna, 22/11): l'attaccante non parte più in basso del difensore, con qualsiasi n
+      expect(mi.scartoPeggiore).toBeLessThanOrEqual(SCARTO_MAX);
+      expect(mi.attaccantePiuBasso).toBeLessThanOrEqual(ATTACCANTE_Y_MAX);
+      if (isola.id === '1A' || isola.id === '1B') expect(mi.scartoPeggioreDifensore).toBeLessThanOrEqual(SCARTO_MAX);
+      if (isola.scontro?.tipo === 'bandiera') expect(mi.vettaRaggiungibile).toBe(true);
+      expect(profilo!.adatto(mi)).toBe(true);
     });
   }
 

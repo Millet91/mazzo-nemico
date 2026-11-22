@@ -23,18 +23,18 @@ const isole: DefIsola[] = [
   },
   {
     id: '1B', nome: 'baiaDeiCorvi', regione: 'costa', adiacenti: ['1A', '1C', '1D'],
-    pos: { x: 420, y: 640 }, raggio: 90, bioma: 'porto', mappa: { seme: 467 }, trucco: 'gru',
+    pos: { x: 420, y: 640 }, raggio: 90, bioma: 'porto', mappa: { seme: 256 }, trucco: 'gru',
     padroneIniziale: 'giocatore', piratiIniziali: 2, scontro: null, premi: [],
   },
   {
     id: '1C', nome: 'forteRampino', regione: 'costa', adiacenti: ['1A', '1B', '1D', '1F'],
-    pos: { x: 1420, y: 520 }, raggio: 100, bioma: 'porto', mappa: { seme: 650 }, trucco: 'bastione',
+    pos: { x: 1420, y: 520 }, raggio: 100, bioma: 'porto', mappa: { seme: 2103 }, trucco: 'bastione',
     padroneIniziale: 'marina', piratiIniziali: 2, scontro: { tipo: 'assalto' },
     premi: [{ t: 'arma', arma: 'rampino' }, { t: 'mossa', mossa: 'dondolo' }],
   },
   {
     id: '1D', nome: 'scoglioDellaVedetta', regione: 'costa', adiacenti: ['1B', '1C'],
-    pos: { x: 800, y: 300 }, raggio: 75, bioma: 'isola', mappa: { seme: 2002 }, trucco: 'torre',
+    pos: { x: 800, y: 300 }, raggio: 75, bioma: 'isola', mappa: { seme: 2452 }, trucco: 'torre',
     padroneIniziale: 'marina', piratiIniziali: 1, scontro: { tipo: 'bandiera' },
     premi: [{ t: 'mossa', mossa: 'saltoAppoggio' }],
   },
@@ -46,7 +46,7 @@ const isole: DefIsola[] = [
   },
   {
     id: '1F', nome: 'lagunaNera', regione: 'lagune', adiacenti: ['1C', '1E', '1G'],
-    pos: { x: 2300, y: 740 }, raggio: 95, bioma: 'grotta', mappa: { seme: 334 }, trucco: 'stalattiti',
+    pos: { x: 2300, y: 740 }, raggio: 95, bioma: 'grotta', mappa: { seme: 1420 }, trucco: 'stalattiti',
     padroneIniziale: 'marina', piratiIniziali: 2, scontro: { tipo: 'assalto', notte: true },
     premi: [{ t: 'arma', arma: 'ancora' }, { t: 'mossa', mossa: 'scivolata' }],
   },
@@ -58,7 +58,7 @@ const isole: DefIsola[] = [
   },
   {
     id: '1H', nome: 'isolottoDelleCozze', regione: 'lagune', adiacenti: ['1E', '1G'],
-    pos: { x: 2200, y: 1420 }, raggio: 70, bioma: 'isola', mappa: { seme: 165 }, trucco: 'palmaPonte',
+    pos: { x: 2200, y: 1420 }, raggio: 70, bioma: 'isola', mappa: { seme: 140 }, trucco: 'palmaPonte',
     padroneIniziale: 'marina', piratiIniziali: 1, scontro: { tipo: 'duello', capo: 'Rigidini' },
     premi: [{ t: 'mossa', mossa: 'tuffo' }, { t: 'bandiera', id: 'teschioFumante' }],
   },

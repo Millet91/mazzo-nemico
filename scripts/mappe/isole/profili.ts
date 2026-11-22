@@ -52,11 +52,11 @@ function grottaGrande(mappa: MappaGenerata) {
   return { x: bx, y: by, r: 70 };
 }
 
-export const PROFILI: Profilo[] = [
+const PROFILI_TRUCCO: Profilo[] = [
   {
     // torre di vedetta in cima, Bandiera: una sola cima alta e stretta, più scale e liane possibili
     id: '1D', trucco: 'torre',
-    adatto: (m) => m.colline.length === 1,
+    adatto: (m) => m.colline.length === 1 && m.vettaRaggiungibile,
     voto: (m) => (600 - m.cima) * 2 - m.larghezzaCima + m.appigli * 40,
     descrivi: testo, punto: cima,
   },
@@ -111,3 +111,21 @@ export const PROFILI: Profilo[] = [
     descrivi: testo, punto: () => ({ x: 160, y: 900, r: 110 }),
   },
 ];
+
+/** Partenze eque (bot della Campagna, 22/11/2026): con qualsiasi numero di pirati per lato l'attaccante non parte
+ *  più in basso del difensore di oltre 20 px (media delle y dei primi n posti usati), e nessun attaccante parte
+ *  sotto y 790 (il mare che sale dal turno 12 arriva a ~825 nelle battaglie lunghe). */
+export const SCARTO_MAX = 20;
+export const ATTACCANTE_Y_MAX = 790;
+export const partenzeEque = (m: Misure) => m.scartoPeggiore <= SCARTO_MAX && m.attaccantePiuBasso <= ATTACCANTE_Y_MAX;
+/** 1A e 1B sono del giocatore: la Marina le attacca (il giocatore difende) e lui le riprende (attacca).
+ *  Lì il vincolo vale nei due sensi. */
+const DUE_SENSI = new Set(['1A', '1B']);
+
+/** Tutti i profili con il vincolo comune delle partenze eque; a pari forma vince chi fa partire l'attaccante più in alto. */
+export const PROFILI: Profilo[] = PROFILI_TRUCCO.map((p) => ({
+  ...p,
+  adatto: (m) => partenzeEque(m) && (!DUE_SENSI.has(p.id) || m.scartoPeggioreDifensore <= SCARTO_MAX) && p.adatto(m),
+  voto: (m) => p.voto(m) + (SCARTO_MAX - m.scartoPeggiore) * 0.5,
+  descrivi: (m) => `${p.descrivi(m)}, partenze: scarto ${m.scartoPeggiore} (media ${m.scartoMedia}), attaccante più basso y ${m.attaccantePiuBasso}${m.vettaRaggiungibile ? ', vetta raggiungibile' : ''}`,
+}));

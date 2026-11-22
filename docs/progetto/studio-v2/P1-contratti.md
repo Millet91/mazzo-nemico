@@ -78,7 +78,50 @@ Motore nuovo con registro e bus (musica, effetti, voci, UI), ogni evento a un su
 | Fase | Stato |
 |---|---|
 | 0 · Scale e bug | consegnata il 21/11/2026 (PR #71, APK build 204), in prova dal proprietario |
-| 1 · Movimento da pirata e ritmo | contratti congelati; parte con i thread degli agenti |
-| 2 · Cala Pappagallo HD | preparazione con Mappa e livelli |
+| 1 · Movimento da pirata e ritmo | quasi finita: unite #74, #75, #76, #78, #79, #80. Mancano scivolata e bordo (Fisica), HUD (Render), generatore sulla spinta vera (Mappa) |
+| 2 · Cala Pappagallo HD | formato delle tessere concordato (§6); arte e shader da fare |
 | 3 · Il campo si spezza | da fare (il Pacchetto 2 la aspetta) |
 | 4 · Rampino, armi, due spari, Prologo | da fare (il Pacchetto 2 la aspetta) |
+
+## 6. Ripresa con Opus (22/11/2026)
+
+Il Lead Fable e i quattro agenti Fable si sono fermati il 22/11 alle 03:40 UTC per limite d'uso. Il **nuovo Lead P1** è il thread "Finire prima mappa e combattimento (Opus)"; i nuovi agenti (Opus) prendono le stesse cartelle e gli stessi rami del §4. **Il lavoro che i vecchi agenti non avevano spinto è perso**: si rifà, seguendo le decisioni già prese qui sotto.
+
+**Prima di tutto:** ripartite da `claude/p1-integrazione` aggiornato (`git fetch` e `git merge origin/claude/p1-integrazione` nel vostro ramo). Leggete la memoria del progetto (`p1-pacchetto1`, `p1-come-lavorare`, `p1-cala-v3`, `p1-generatore-cannone-v2`, `p1-fisica`). PR piccole, una per punto, verso `claude/p1-integrazione`; avvisate il Lead nel suo thread con numero della PR e prove verdi.
+
+### Cosa c'è già sul ramo di integrazione (61505b7)
+Numeri v2 e ritmo (fuga 1,5 s dallo sparo, comando `fatto`, fasi azione → fuga → volo → risoluzione); corsa a falcate, scavalco fino a 28 px, `Pirata.mossa`/`mossaDa`, eventi `passo` e `scavalco`; **Balzo** (`StatoTurno.richiesta`, `balzoPossibile(s)` e `spintaAlCentro(arma, ciurma)` esportate da `sim`), salto senza rimbalzi, scale in un tocco; spinta di cannone e granata da `armi.ts` › `spintaEsplosione`; pirata a pezzi disegnato nel codice con contorno bianco; Cala v3 e variante del Prologo (in Schermaglia "Cala nuova (bozza)"); motore audio nuovo (`src/audio/`, 71 suoni sintetici, due cursori).
+
+### Fisica e combattimento · `claude/p1-fisica`
+Fase 1, da finire:
+1. Scivolata sui pendii oltre 25° (solo il pirata di turno in discesa o atterrando; da fermi non si scivola; chi è spinto da un'esplosione NON scivola), evento `scivola`, mossa `scivolata`.
+2. Salvataggio al bordo: entro 0,5 s, una volta per battaglia (`Pirata.bordi`), evento `bordo`, mossa `bordo`.
+3. Esploratore `tests/qa/raggiungibilita.ts` aggiornato alle mosse nuove; replay in commit a parte.
+4. Misure di uscita: turno umano ≤ 10 s, 3 contro 3 col bot della QA in 2-4 minuti. Scrivetele nella PR.
+Poi Fase 3 (sostegno strutturale, crolli, legno che brucia, sabbia, anteprima con `simulaColpo`) e Fase 4 (rampino, 4 armi, due spari, Mozzo Tutorial): il Lead manda il brief di fase quando la Fase 1 è chiusa.
+
+### Render e HD · `claude/p1-render`
+Fase 1, seconda PR (era pronta ma non spinta, va rifatta):
+1. Timer da `BIL.ritmo` in `src/ui/battaglia/logica.ts` (12 s, 25 con Mozzo e nel Prologo, 45 Timer lungo).
+2. Tasto "fatto" in fuga (`VistaBattaglia.puoFinire` = fase 'fuga' nel turno umano, senza esito), almeno 44 px, dal lato di FUOCO.
+3. Tasto Balzo contestuale (`VistaBattaglia.balzo` da `balzoPossibile(s)`; con 'muro' manda `salta` con `indietro: true`); sali e scendi non mandano più `arrampica 0` al rilascio.
+4. Suggerimento del mirino su due righe corte, senza coprire la scritta del turno.
+5. Frecce rosse sul bordo per i nemici fuori vista, panoramica di 1,2 s a inizio turno, camera che segue il colpo anche in fase 'fuga', compagni mai sotto i tasti.
+6. PV su pillola scura, teschio o àncora sopra la testa.
+7. Misura dei tempi di disegno con 5 contro 5 ("Prova 60 fps" della Diagnostica): budget 8 ms, sotto zoom 0,6 lo sprite unico. Numeri nella PR.
+8. Controllo a vista: posa di corsa dopo 0,4 s, mano sul bordo nello scavalco, frenata di 6 px.
+Suoni: l'HUD usa solo `suona('tocco')`; i suoni li sceglie `src/audio/eventi.ts`.
+Poi Fase 2: terreno HD con shader che legge la maschera della sim (tessere sotto).
+
+### Mappa e livelli · `claude/p1-mappa`
+Fase 1, da finire:
+1. Generatore: in `gen/spawn.ts` usa `spintaAlCentro('cannone', 'teschio')` al posto di `REGOLE.cannoneDanno × spintaPerDanno`; `REGOLE.cannoneRaggio` a 70 solo se le impronte restano identiche, altrimenti resta 55 con una riga di commento. Impronte e soglie di "costa aperta" invariate; se un seme cambia, dirlo al Lead prima della PR. Chiudi anche il buco in `gen/index.ts`: dopo le spianate dei barili ricontrolla `controllaPosto`, non solo `controllaInsieme`.
+2. Cala v3 ripassata con corsa, scavalco e Balzo: ogni muretto e cassa si supera davvero (il vecchio agente aveva accorciato il tetto della Vedetta, non spinto: rifallo se serve).
+Fase 2, subito dopo:
+3. Arte della Cala v3 a 4096×2048 col pittore in Chromium, stile cartone dipinto (contorno marrone caldo dentro il bordo, ombre dipinte, niente oggetti sospesi). **Formato concordato con Render:** `public/assets/mappe/cala-pappagallo-v3/hd/t-<colonna>-<riga>.webp`, 8×4 tessere, contenuto 512×512 con **2 px di margine per lato** (file 516×516, contenuto da (2,2); sul bordo del mondo si ripete l'ultimo pixel); **l'arte sborda** a colore pieno (alfa 255) fino a 8 px oltre la maschera, trasparente più in là; **WebP senza perdita**; `hd/indice.json` = `{ scala: 2, lato: 512, bordo: 2, colonne: 8, righe: 4, tessere: [...] }` con le sole tessere non vuote; `hd-prologo/` con le sole tessere che cambiano e il suo `indice.json`. Resta `terreno.webp` a 1×.
+
+### Audio · `claude/p1-audio`
+1. Quando Fisica unisce scivolata e bordo: riprova i suoni di Balzo, scale, scivolata e bordo con gli eventi veri di una battaglia.
+2. Misura sul profilo lento (CPU ×4 di Chromium) la preparazione all'avvio e i frame persi al menu: sopra 6 s o se scatta, prepara a pezzi più piccoli.
+3. Una riga in Diagnostica con `statoAudio()` (pronti/totale, contesto).
+Poi Fase 3 (crolli, fuoco, sabbia) e Fase 4 (rampino, armi nuove). La taratura a orecchio la dà il proprietario (MP3 in `/mnt/project-files/audio-p1/`).

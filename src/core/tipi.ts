@@ -383,6 +383,10 @@ export interface StatoBattaglia {
   frane?: Frana[];
   /** strutture della mappa col loro stato (copiate da MappaGenerata.strutture) */
   strutture?: Struttura[];
+  /** ancoraggi del sostegno (copia di MappaGenerata.sostegni, fatta in creaBattaglia) */
+  sostegni?: Rettangolo[];
+  /** piedi di ogni pirata alla nascita, tutti e due i lati: per il rispetto della zona di caduta */
+  partenze?: Punto[];
 }
 
 // ─── Comandi (input del giocatore o dell'IA) ──────────────────────────────────────────────────────

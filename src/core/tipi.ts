@@ -87,6 +87,11 @@ export interface StrutturaMappa extends Rettangolo {
   tipo: TipoStruttura;
   /** solo 'ponte': i due ancoraggi (da sinistra a destra). Tagliato un capo, il ponte resta appeso all'altro */
   ancoraggi?: [Rettangolo, Rettangolo];
+  /**
+   * Il pezzo staccato cade in blocco e, dove tocca, si ferma e torna terreno col suo materiale invece di frantumarsi
+   * (palma-ponte, carico della gru: Pacchetto 2). Per ora solo su mappe senza arte HD: lo shader non sposta l'arte.
+   */
+  riappoggia?: boolean;
 }
 
 export interface Struttura extends StrutturaMappa { stato: 'intera' | 'caduta' | 'calata' }

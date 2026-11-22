@@ -1,6 +1,6 @@
 // Mappe fatte a mano (06 §6): caricatore PURO e deterministico (lo usano sim, worker dell'IA e test).
 // Proprietario: agente Arte/livelli (ramo claude/m1-mappa-arte). I dati li scrive scripts/mappe/costruisci.ts.
-import type { MappaGenerata, RichiestaMappa } from '../../core/tipi';
+import type { MappaGenerata, Rettangolo, RichiestaMappa } from '../../core/tipi';
 import { decodificaMaschera } from './rle';
 import type { DatiMappaFatta } from './tipi';
 import { DATI as CALA_PAPPAGALLO } from './cala-pappagallo.dati';
@@ -39,5 +39,7 @@ export function mappaFatta(id: string, r?: Pick<RichiestaMappa, 'bioma' | 'varia
     barili: d.barili.map((p) => ({ ...p })),
     ...(d.appigli ? { appigli: d.appigli.map((a) => ({ ...a })) } : {}),
     arte: d.arte,
+    ...(d.sostegni ? { sostegni: d.sostegni.map((r) => ({ ...r })) } : {}),
+    ...(d.strutture ? { strutture: d.strutture.map((st) => ({ ...st, ...(st.ancoraggi ? { ancoraggi: [{ ...st.ancoraggi[0] }, { ...st.ancoraggi[1] }] as [Rettangolo, Rettangolo] } : {}) })) } : {}),
   };
 }

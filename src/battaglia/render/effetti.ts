@@ -127,6 +127,17 @@ export class Effetti {
     }
   }
 
+  /** sbuffi di polvere chiara ai piedi (atterraggio, corsa, scivolata): bassi e brevi */
+  polvere(x: number, y: number, n = 3): void {
+    for (let i = 0; i < n; i++) {
+      const lato = n === 1 ? caso(-0.5, 0.5) : (i / (n - 1)) * 2 - 1;
+      this.particella(x + lato * 5, y - 1, {
+        vx: lato * caso(0.02, 0.05), vy: -caso(0.005, 0.02), durata: caso(260, 380),
+        r0: 1.6, r1: caso(3.5, 5), a0: 0.6, a1: 0, gravita: 0, tinta: 0xe8dcc0,
+      });
+    }
+  }
+
   /** splash: 3 gocce (piccolo) o 20 (grande, in mare) */
   splash(x: number, y: number, grande: boolean): void {
     const n = grande ? 20 : 3;

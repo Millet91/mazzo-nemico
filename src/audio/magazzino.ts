@@ -68,10 +68,14 @@ export async function sintetizza(id: string, v: VoceAudio, variante: number, Off
 }
 
 const pronti = new Map<string, Float32Array[]>();
-let lavoro: Promise<void> | null = null;
-/** per la Diagnostica: quanto ci è voluto a preparare tutto, e quanti suoni sono venuti dal cassetto */
-const info = { inizio: 0, ms: null as number | null, daCassetto: 0 };
-export function infoPreparazione(): { ms: number | null; daCassetto: number } { return { ms: info.ms, daCassetto: info.daCassetto }; }
+/**
+ * Per la Diagnostica: quanto ci è voluto a preparare i suoni del menu (dall'apertura) e tutti gli altri (dall'entrata
+ * in battaglia), e quanti suoni sono venuti dal cassetto.
+ */
+const info = { inizio: 0, msMenu: null as number | null, ms: null as number | null, daCassetto: 0 };
+export function infoPreparazione(): { msMenu: number | null; ms: number | null; daCassetto: number } {
+  return { msMenu: info.msMenu, ms: info.ms, daCassetto: info.daCassetto };
+}
 
 export function campioni(id: IdSuono): Float32Array[] | undefined { return pronti.get(id); }
 export function quantiPronti(): number { return pronti.size; }
@@ -80,6 +84,10 @@ function offline(): CostruttoreOffline | null {
   const g = globalThis as { OfflineAudioContext?: CostruttoreOffline; webkitOfflineAudioContext?: CostruttoreOffline };
   return g.OfflineAudioContext ?? g.webkitOfflineAudioContext ?? null;
 }
+
+/** I suoni che servono nel menu: i tasti. Tutto il resto si prepara entrando in battaglia (vedi `preparaSuoni`). */
+export const SUONI_MENU: readonly IdSuono[] = ID_SUONI.filter((id) => id.startsWith('ui_'));
+export function quantiProntiMenu(): number { return SUONI_MENU.filter((id) => pronti.has(id)).length; }
 
 /** In che ordine preparare: prima quello che serve subito (tasti, campana e voce d'inizio turno, sparo, botti). */
 export function ordineDiPreparazione(): IdSuono[] {
@@ -95,45 +103,69 @@ export function ordineDiPreparazione(): IdSuono[] {
 /** quanti suoni si calcolano insieme (ognuno su un filo suo, fuori dal filo principale) */
 const IN_PARALLELO = 3;
 
-/**
- * Prepara tutti i suoni senza bloccare il gioco, i più urgenti per primi. Si può chiamare più volte: il lavoro
- * parte una volta sola. Se il telefono non ha OfflineAudioContext il gioco resta muto, non si rompe.
- */
-export function preparaSuoni(): Promise<void> {
-  if (lavoro) return lavoro;
-  const Offline = offline();
-  if (!Offline) return (lavoro = Promise.resolve());
-  info.inizio = performance.now();
-  lavoro = (async () => {
-    const chiave = chiaveBuild();
-    // dal secondo avvio: i suoni sono già nel cassetto del telefono
-    const cassetto = await leggi('suoni', chiave).catch(() => null);
-    const coda: IdSuono[] = [];
-    for (const id of ordineDiPreparazione()) {
-      const n = (AUDIO[id] as VoceAudio).varianti ?? 1;
-      const salvate = cassetto ? Array.from({ length: n }, (_, k) => cassetto.get(`${id}#${k}`)) : [];
-      if (salvate.length === n && salvate.every((c) => c && c.freq === freqDi(AUDIO[id]))) { pronti.set(id, salvate.map((c) => da16(c!.dati))); info.daCassetto++; }
-      else coda.push(id);
+let lavoroMenu: Promise<void> | null = null;
+let lavoroTutti: Promise<void> | null = null;
+
+/** Sintetizza i suoni in `coda` (nell'ordine), tre alla volta, poi mette nel cassetto tutto quello che è pronto. */
+async function sintetizzaCoda(coda: IdSuono[], Offline: CostruttoreOffline, chiave: string | null): Promise<void> {
+  if (!coda.length) return;
+  const operaio = async (): Promise<void> => {
+    for (let id = coda.shift(); id; id = coda.shift()) {
+      if (pronti.has(id)) continue;
+      const v: VoceAudio = AUDIO[id];
+      const varianti: Float32Array[] = [];
+      try {
+        for (let k = 0; k < (v.varianti ?? 1); k++) varianti.push(await sintetizza(id, v, k, Offline));
+        pronti.set(id, varianti);
+      } catch (e) {
+        console.warn('audio: suono non sintetizzato', id, e);
+      }
     }
-    if (!coda.length) { info.ms = performance.now() - info.inizio; return; }
-    const operaio = async (): Promise<void> => {
-      for (let id = coda.shift(); id; id = coda.shift()) {
-        const v: VoceAudio = AUDIO[id];
-        const varianti: Float32Array[] = [];
-        try {
-          for (let k = 0; k < (v.varianti ?? 1); k++) varianti.push(await sintetizza(id, v, k, Offline));
-          pronti.set(id, varianti);
-        } catch (e) {
-          console.warn('audio: suono non sintetizzato', id, e);
+  };
+  await Promise.all(Array.from({ length: IN_PARALLELO }, operaio));
+  // nel cassetto per il prossimo avvio (in sottofondo: il gioco non lo aspetta)
+  const voci = new Map<string, Conservato>();
+  for (const [id, varianti] of pronti) varianti.forEach((d, k) => voci.set(`${id}#${k}`, { dati: a16(d), freq: freqDi(AUDIO[id as IdSuono]) }));
+  void scrivi('suoni', chiave, voci);
+}
+
+/**
+ * Prepara i suoni senza bloccare il gioco. Il primo avvio dopo un'installazione costa (costruire le ricette sul filo
+ * principale fa scattare il menu), quindi a due tempi:
+ * - `'menu'` (all'apertura): tutto quello che c'è nel cassetto del telefono, e si calcolano solo i tasti;
+ * - `'tutti'` (entrando in battaglia, dietro la schermata di caricamento): il resto, i più urgenti per primi.
+ *   Se la battaglia parte prima, i suoni non ancora pronti restano muti: non si aspetta mai.
+ * Si può chiamare più volte: ogni lavoro parte una volta sola. Senza OfflineAudioContext il gioco resta muto.
+ */
+export function preparaSuoni(quali: 'menu' | 'tutti' = 'tutti'): Promise<void> {
+  const Offline = offline();
+  if (!Offline) return Promise.resolve();
+  const chiave = chiaveBuild();
+  if (!lavoroMenu) {
+    info.inizio = performance.now();
+    // dal secondo avvio: i suoni sono già nel cassetto del telefono, prenderli costa poco anche nel menu
+    lavoroMenu = (async () => {
+      const salvati = await leggi('suoni', chiave).catch(() => null);
+      if (salvati) {
+        for (const id of ordineDiPreparazione()) {
+          const n = (AUDIO[id] as VoceAudio).varianti ?? 1;
+          const v = Array.from({ length: n }, (_, k) => salvati.get(`${id}#${k}`));
+          if (v.every((c) => c && c.freq === freqDi(AUDIO[id]))) { pronti.set(id, v.map((c) => da16(c!.dati))); info.daCassetto++; }
         }
       }
-    };
-    await Promise.all(Array.from({ length: IN_PARALLELO }, operaio));
-    info.ms = performance.now() - info.inizio;
-    // nel cassetto per il prossimo avvio (in sottofondo: il gioco non lo aspetta)
-    const voci = new Map<string, Conservato>();
-    for (const [id, varianti] of pronti) varianti.forEach((d, k) => voci.set(`${id}#${k}`, { dati: a16(d), freq: freqDi(AUDIO[id as IdSuono]) }));
-    void scrivi('suoni', chiave, voci);
-  })();
-  return lavoro;
+      await sintetizzaCoda(SUONI_MENU.filter((id) => !pronti.has(id)), Offline, chiave);
+      info.msMenu = performance.now() - info.inizio;
+      if (pronti.size === ID_SUONI.length) info.ms = info.msMenu;
+    })();
+  }
+  if (quali === 'menu') return lavoroMenu;
+  if (!lavoroTutti) {
+    lavoroTutti = lavoroMenu.then(async () => {
+      if (pronti.size === ID_SUONI.length) return;
+      const t0 = performance.now();
+      await sintetizzaCoda(ordineDiPreparazione().filter((id) => !pronti.has(id)), Offline, chiave);
+      info.ms = performance.now() - t0;
+    });
+  }
+  return lavoroTutti;
 }

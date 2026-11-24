@@ -7,7 +7,7 @@ import { Motore } from './motore';
 import { Musica } from './musica';
 import { Ambiente } from './ambiente';
 import { memoriaNuova, suoniPerEventi, suoniPerVista, type AzioniAudio, type Richiesta } from './eventi';
-import { infoPreparazione, preparaSuoni, quantiPronti } from './magazzino';
+import { infoPreparazione, preparaSuoni, quantiPronti, quantiProntiMenu, SUONI_MENU } from './magazzino';
 import { creaSuonatore, preparaNote } from './note';
 import { caricaPreferenzeAudio, volumeEffetti, volumeMusica } from './preferenze';
 import { ID_SUONI } from './registro';
@@ -97,9 +97,17 @@ function applicaScena(forza = false): void {
   }
 }
 
-/** Prima le note della musica (poche e veloci), poi gli effetti. */
+/**
+ * Nel menu: prima le note della musica del menu, poi i tasti (e tutto quello che il cassetto ha già).
+ * Gli altri effetti e le note della musica di battaglia si preparano entrando in battaglia (`preparaTutto`): il primo avvio del menu resta fluido.
+ */
 function prepara(): Promise<void> {
-  return preparaNote().then(() => preparaSuoni());
+  return preparaNote('menu').then(() => preparaSuoni('menu'));
+}
+function preparaTutto(): Promise<void> {
+  // prima gli effetti (il primo turno ne ha bisogno subito), poi le note della musica di battaglia, che intanto si
+  // suonano dal vivo
+  return prepara().then(() => preparaSuoni('tutti')).then(() => preparaNote('tutte'));
 }
 
 /** I browser e la WebView avviano l'audio solo dopo un tocco: si chiama dal primo gesto (e a ogni rientro). */
@@ -142,8 +150,12 @@ export interface StatoAudio {
   /** stato del contesto WebAudio: 'assente' finché non c'è un tocco, poi 'running', 'suspended' (app in pausa)... */
   contesto: string;
   pronti: number; totale: number;
-  /** ms dall'avvio a tutti i suoni pronti (null: non ancora); quanti sono venuti dal cassetto del telefono */
-  msPronti: number | null; daCassetto: number;
+  /** i suoni del menu (i tasti): si preparano all'apertura; gli altri entrando in battaglia */
+  prontiMenu: number; totaleMenu: number;
+  /** ms dall'apertura ai suoni del menu pronti; ms dall'entrata in battaglia a tutti pronti (null: non ancora) */
+  msMenu: number | null; msPronti: number | null;
+  /** quanti suoni sono venuti dal cassetto del telefono */
+  daCassetto: number;
   brano: string | null; scena: Scena | null; ambiente: boolean; percussioni: boolean;
   chiesti: string[]; suonati: number; voci: number;
 }
@@ -152,7 +164,8 @@ export interface StatoAudio {
 export function statoAudio(): StatoAudio {
   const p = infoPreparazione();
   return {
-    contesto: ctx?.state ?? 'assente', pronti: quantiPronti(), totale: ID_SUONI.length, msPronti: p.ms, daCassetto: p.daCassetto,
+    contesto: ctx?.state ?? 'assente', pronti: quantiPronti(), totale: ID_SUONI.length,
+    prontiMenu: quantiProntiMenu(), totaleMenu: SUONI_MENU.length, msMenu: p.msMenu, msPronti: p.ms, daCassetto: p.daCassetto,
     brano: musica?.inCorso ?? null, scena, ambiente: ambiente?.attivo ?? false, percussioni: musica?.stratoAcceso ?? false,
     chiesti: [...chiesti], suonati, voci: motore?.vociAttive ?? 0,
   };
@@ -162,7 +175,7 @@ export function avviaAudio(): void {
   if (avviato || typeof window === 'undefined') return;
   avviato = true;
   void caricaPreferenzeAudio();
-  // suoni e note si preparano subito, in sottofondo: al primo tocco sono già pronti
+  // note e tasti si preparano subito, in sottofondo: al primo tocco sono già pronti
   void prepara();
   for (const tipo of ['pointerdown', 'keydown'] as const) window.addEventListener(tipo, sbloccaAudio, { capture: true, passive: true });
   document.addEventListener('click', suClic, { capture: true });
@@ -188,8 +201,10 @@ export function avviaAudio(): void {
 
   // schermata: menu, attesa, battaglia, fine
   effect(() => {
-    void bus.battaglia.value;
-    void bus.richiestaBattaglia.value;
+    const inBattaglia = bus.battaglia.value !== null || bus.richiestaBattaglia.value !== null;
+    // entrando in battaglia (dietro la schermata di caricamento) si prepara il resto; se la battaglia parte prima,
+    // i suoni non ancora pronti restano muti finché non arrivano: niente aspetta l'audio
+    if (inBattaglia) void preparaTutto();
     applicaScena();
   });
 
@@ -208,6 +223,6 @@ export function avviaAudio(): void {
 
   // gancio per i test Playwright e per la QA: con ?prova l'audio racconta cosa ha suonato
   if (new URLSearchParams(location.search).has('prova')) {
-    (window as unknown as { __kaboomAudio: unknown }).__kaboomAudio = { stato: statoAudio, pronto: prepara };
+    (window as unknown as { __kaboomAudio: unknown }).__kaboomAudio = { stato: statoAudio, pronto: preparaTutto };
   }
 }

@@ -2,7 +2,8 @@
 //   npm run build && npx vite preview --port 4173 &
 //   PW_CHROME=/opt/pw-browsers/chromium npx tsx tests/audio/misura-avvio.ts [rallentamento=4] [giri=3]
 // Apre il menu in Chromium con il processore rallentato (CPU ×4 dei DevTools, circa un telefono di fascia media) e
-// misura quanto ci vuole perché tutti i suoni siano pronti e i frame del menu nei primi secondi (frame oltre 33 e
+// misura quanto ci vuole perché i suoni del menu siano pronti (i tasti; il resto si prepara entrando in battaglia,
+// misurato a parte) e i frame del menu nei primi secondi (frame oltre 33 e
 // oltre 50 ms, il più lungo, i "long task" del filo principale). Ogni giro si fa due volte: con l'audio e SENZA
 // (OfflineAudioContext tolto: niente si prepara), così si vede quanto scatto aggiunge l'audio e quanto è del menu.
 // Poi il SECONDO avvio (stessa pagina ricaricata): i suoni pronti vengono dal cassetto del telefono (cache.ts).
@@ -31,12 +32,13 @@ async function misura(pagina: Page, conAudio: boolean): Promise<{ msPronti: numb
   await pagina.waitForFunction(() => (window as any).__kaboomAudio !== undefined);
   let msPronti: number | null = null;
   if (conAudio) {
-    await pagina.waitForFunction(() => { const s = (window as any).__kaboomAudio.stato(); return s.pronti === s.totale; }, undefined, { timeout: 120000, polling: 50 });
+    // nel menu si preparano i tasti (e, dal secondo avvio, tutto quello che c'è nel cassetto)
+    await pagina.waitForFunction(() => { const s = (window as any).__kaboomAudio.stato(); return s.prontiMenu === s.totaleMenu; }, undefined, { timeout: 120000, polling: 50 });
     msPronti = Math.round(await pagina.evaluate(() => performance.now()));
   }
   const ora = await pagina.evaluate(() => performance.now());
   if (ora < FINESTRA_MS) await pagina.waitForTimeout(FINESTRA_MS - ora);
-  const totale = await pagina.evaluate(() => (window as any).__kaboomAudio.stato().totale as number);
+  const totale = await pagina.evaluate(() => (window as any).__kaboomAudio.stato().pronti as number);
   const finestra = await pagina.evaluate((fine) => {
     const w = window as unknown as { __frame: number[]; __lunghi: { t: number; d: number }[] };
     // solo i frame dentro la finestra (somma dei tempi)
@@ -50,7 +52,7 @@ async function misura(pagina: Page, conAudio: boolean): Promise<{ msPronti: numb
 }
 
 /** Primo avvio (e, con l'audio, secondo avvio ricaricando la pagina: il cassetto è pieno). */
-async function giro(conAudio: boolean): Promise<{ primo: Awaited<ReturnType<typeof misura>>; secondo?: Awaited<ReturnType<typeof misura>> }> {
+async function giro(conAudio: boolean): Promise<{ primo: Awaited<ReturnType<typeof misura>>; secondo?: Awaited<ReturnType<typeof misura>>; msBattaglia?: number }> {
   const browser = await chromium.launch({ executablePath: process.env.PW_CHROME || undefined });
   const pagina = await browser.newPage({ viewport: { width: 1080, height: 486 } });
   const cdp = await pagina.context().newCDPSession(pagina);
@@ -58,14 +60,16 @@ async function giro(conAudio: boolean): Promise<{ primo: Awaited<ReturnType<type
   await pagina.addInitScript(REGISTRO + (conAudio ? '' : SENZA_AUDIO));
   await pagina.goto(URL);
   const primo = await misura(pagina, conAudio);
-  let secondo;
+  let secondo, msBattaglia;
   if (conAudio) {
+    // come entrando in battaglia: si prepara il resto (e così il cassetto si riempie per il secondo avvio)
+    msBattaglia = await pagina.evaluate('(async () => { const t = performance.now(); await window.__kaboomAudio.pronto(); return Math.round(performance.now() - t); })()') as number;
     await pagina.waitForTimeout(1500); // il cassetto si scrive in sottofondo
     await pagina.reload();
     secondo = await misura(pagina, true);
   }
   await browser.close();
-  return { primo, secondo };
+  return { primo, secondo, msBattaglia };
 }
 
 async function main(): Promise<void> {
@@ -74,7 +78,7 @@ async function main(): Promise<void> {
   for (let i = 0; i < GIRI; i++) {
     const con = await giro(true);
     const senza = await giro(false);
-    console.log(`giro ${i + 1}: ${con.primo.totale} suoni pronti a ${((con.primo.msPronti ?? 0) / 1000).toFixed(1)} s dall'apertura; al secondo avvio a ${((con.secondo?.msPronti ?? 0) / 1000).toFixed(1)} s`);
+    console.log(`giro ${i + 1}: menu pronto (${con.primo.totale} suoni) a ${((con.primo.msPronti ?? 0) / 1000).toFixed(1)} s dall'apertura; il resto in ${((con.msBattaglia ?? 0) / 1000).toFixed(1)} s entrando in battaglia; al secondo avvio ${con.secondo?.totale} suoni a ${((con.secondo?.msPronti ?? 0) / 1000).toFixed(1)} s`);
     console.log(`   primo avvio:    ${f(con.primo.finestra)}`);
     console.log(`   secondo avvio:  ${f(con.secondo!.finestra)}`);
     console.log(`   senza audio:    ${f(senza.primo.finestra)}`);

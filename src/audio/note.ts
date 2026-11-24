@@ -1,7 +1,7 @@
 // Note pronte della musica segnaposto. Sintetizzare ogni nota dal vivo (oscillatori e filtri) costava troppo
 // processore in battaglia; qui ogni nota che i due brani usano si calcola UNA volta fuori linea, e il sequencer
 // la suona come un campione: due nodi per nota invece di otto, nessun oscillatore acceso durante la partita.
-import { BRANI, type Nota } from './musica';
+import { BRANI, type IdBrano, type Nota } from './musica';
 import { suonaNota, type Strumento } from './strumenti';
 import { a16, chiaveBuild, da16, leggi, scrivi, type Conservato } from './cache';
 
@@ -22,9 +22,9 @@ const INTONATI: readonly Strumento[] = ['basso', 'fisa', 'pizzico'];
 export const chiaveNota = (s: Strumento, midi: number): string => (INTONATI.includes(s) ? `${s}:${midi}` : s);
 
 /** Tutte le note diverse che i brani possono chiedere (la melodia cambia a ogni giro: se ne guardano 32). */
-export function noteNecessarie(): { s: Strumento; m: number }[] {
+export function noteNecessarie(brani: readonly IdBrano[] = Object.keys(BRANI) as IdBrano[]): { s: Strumento; m: number }[] {
   const viste = new Map<string, { s: Strumento; m: number }>();
-  for (const brano of Object.values(BRANI)) {
+  for (const brano of brani.map((b) => BRANI[b])) {
     for (let giro = 0; giro < 32; giro++) for (const n of brano.note(giro)) viste.set(chiaveNota(n.s, n.m), { s: n.s, m: n.m });
   }
   return [...viste.values()];
@@ -37,45 +37,61 @@ export function byteNote(): number {
 
 interface NotaPronta { dati: Float32Array; freq: number }
 const pronte = new Map<string, NotaPronta>();
-let lavoro: Promise<void> | null = null;
+let lavoroMenu: Promise<void> | null = null;
+let lavoroTutte: Promise<void> | null = null;
+let cassettoNote: Promise<Map<string, Conservato> | null> | null = null;
 
 type CostruttoreOffline = new (canali: number, campioni: number, freq: number) => OfflineAudioContext;
 
 export function quanteNotePronte(): number { return pronte.size; }
 
-/** Calcola tutte le note, una alla volta e senza bloccare il gioco. Si può chiamare più volte. */
-export function preparaNote(): Promise<void> {
-  if (lavoro) return lavoro;
+/** Calcola le note che mancano, una alla volta, e mette nel cassetto tutte quelle pronte. */
+async function calcola(note: { s: Strumento; m: number }[], Offline: CostruttoreOffline, chiave: string | null, cassetto: Map<string, Conservato> | null): Promise<void> {
+  let calcolate = 0;
+  for (const n of note) {
+    const k = chiaveNota(n.s, n.m);
+    if (pronte.has(k)) continue;
+    const f = FORME[n.s];
+    const salvata = cassetto?.get(k);
+    if (salvata && salvata.freq === f.freq) { pronte.set(k, { dati: da16(salvata.dati), freq: f.freq }); continue; }
+    calcolate++;
+    try {
+      const off = new Offline(1, Math.ceil(f.durata * f.freq), f.freq);
+      // volume 1: il volume vero lo mette il sequencer quando la suona
+      suonaNota(off, off.destination, n.s, n.m, 0, f.tenuta ? f.durata - 0.1 : 0, 1);
+      const reso = await off.startRendering();
+      pronte.set(k, { dati: reso.getChannelData(0).slice(), freq: f.freq });
+    } catch (e) {
+      console.warn('audio: nota non calcolata', n, e);
+    }
+  }
+  if (calcolate) {
+    const voci = new Map<string, Conservato>();
+    for (const [k, p] of pronte) voci.set(k, { dati: a16(p.dati), freq: p.freq });
+    void scrivi('note', chiave, voci);
+  }
+}
+
+/**
+ * Calcola le note senza bloccare il gioco, una alla volta. Come per i suoni (magazzino.ts), a due tempi: `'menu'`
+ * all'apertura (le note del brano del menu, e quelle che il cassetto ha già), `'tutte'` entrando in battaglia.
+ * Una nota non ancora pronta si suona dal vivo (vedi `creaSuonatore`). Si può chiamare più volte.
+ */
+export function preparaNote(quali: 'menu' | 'tutte' = 'tutte'): Promise<void> {
   const g = globalThis as { OfflineAudioContext?: CostruttoreOffline; webkitOfflineAudioContext?: CostruttoreOffline };
   const Offline = g.OfflineAudioContext ?? g.webkitOfflineAudioContext;
-  if (!Offline) return (lavoro = Promise.resolve());
-  lavoro = (async () => {
-    const chiave = chiaveBuild();
-    // dal secondo avvio le note sono già nel cassetto del telefono (cache.ts)
-    const cassetto = await leggi('note', chiave).catch(() => null);
-    let calcolate = 0;
-    for (const n of noteNecessarie()) {
-      const f = FORME[n.s];
-      const salvata = cassetto?.get(chiaveNota(n.s, n.m));
-      if (salvata && salvata.freq === f.freq) { pronte.set(chiaveNota(n.s, n.m), { dati: da16(salvata.dati), freq: f.freq }); continue; }
-      calcolate++;
-      try {
-        const off = new Offline(1, Math.ceil(f.durata * f.freq), f.freq);
-        // volume 1: il volume vero lo mette il sequencer quando la suona
-        suonaNota(off, off.destination, n.s, n.m, 0, f.tenuta ? f.durata - 0.1 : 0, 1);
-        const reso = await off.startRendering();
-        pronte.set(chiaveNota(n.s, n.m), { dati: reso.getChannelData(0).slice(), freq: f.freq });
-      } catch (e) {
-        console.warn('audio: nota non calcolata', n, e);
-      }
-    }
-    if (calcolate) {
-      const voci = new Map<string, Conservato>();
-      for (const [k, p] of pronte) voci.set(k, { dati: a16(p.dati), freq: p.freq });
-      void scrivi('note', chiave, voci);
-    }
-  })();
-  return lavoro;
+  if (!Offline) return Promise.resolve();
+  const chiave = chiaveBuild();
+  // dal secondo avvio le note sono già nel cassetto del telefono (cache.ts): si prendono tutte subito
+  cassettoNote ??= leggi('note', chiave).catch(() => null);
+  const cassetto = cassettoNote;
+  lavoroMenu ??= cassetto.then((c) => {
+    const nelCassetto = noteNecessarie().filter((n) => c?.has(chiaveNota(n.s, n.m)));
+    return calcola([...nelCassetto, ...noteNecessarie(['menu'])], Offline, chiave, c);
+  });
+  if (quali === 'menu') return lavoroMenu;
+  lavoroTutte ??= lavoroMenu.then(() => cassetto).then((c) => calcola(noteNecessarie(), Offline, chiave, c));
+  return lavoroTutte;
 }
 
 /**
